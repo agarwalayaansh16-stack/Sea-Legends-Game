@@ -1,0 +1,22 @@
+{
+  "name": "sea-legends",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "serve:static": "node server.js",
+    "check": "node --check game.js && node --check server.js"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.176.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.1.0"
+  }
+}

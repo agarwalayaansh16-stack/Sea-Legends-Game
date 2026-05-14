@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sea Legends: Pirates vs Marines</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game"></canvas>
+
+      <section id="faction-screen" class="overlay">
+        <div class="panel hero-panel">
+          <p class="eyebrow">Sea Legends</p>
+          <h1>Choose Your Path</h1>
+          <p class="intro">
+            Sail the seas, clear islands, master weapons, and uncover a special ability questline.
+          </p>
+          <div class="avatar-studio">
+            <div class="avatar-header">
+              <div>
+                <strong>Avatar Studio</strong>
+                <span>Choose, preview, edit, create, or delete your human avatar.</span>
+              </div>
+              <button id="preview-avatar" type="button">Preview Avatar</button>
+            </div>
+            <div class="avatar-layout">
+              <div>
+                <p class="section-label">Saved Avatars</p>
+                <div id="avatar-list" class="avatar-list"></div>
+              </div>
+              <div class="avatar-preview-card">
+                <div id="avatar-preview" class="avatar-preview">
+                  <span class="preview-hair"></span>
+                  <span class="preview-head">
+                    <i class="preview-eye left"></i>
+                    <i class="preview-eye right"></i>
+                  </span>
+                  <span class="preview-neck"></span>
+                  <span class="preview-body"></span>
+                  <span class="preview-arm left"></span>
+                  <span class="preview-arm right"></span>
+                  <span class="preview-belt"></span>
+                  <span class="preview-leg left"></span>
+                  <span class="preview-leg right"></span>
+                </div>
+                <strong id="preview-name">Wave Runner</strong>
+                <small>Live preview</small>
+                <p id="avatar-traits" class="avatar-traits">Balanced bulk.</p>
+              </div>
+              <div class="avatar-editor">
+                <p class="section-label">Customize</p>
+                <input id="avatar-name" maxlength="18" placeholder="Avatar name" value="Rookie">
+                <div class="editor-grid">
+                  <label>Skin <input id="skin-color" type="color" value="#c98b62"></label>
+                  <label>Shirt <input id="shirt-color" type="color" value="#1b85aa"></label>
+                  <label>Pants <input id="pants-color" type="color" value="#26364f"></label>
+                  <label>Hair <input id="hair-color" type="color" value="#2a1710"></label>
+                  <label>Eyes <input id="eye-color" type="color" value="#101820"></label>
+                  <label>Boots <input id="boot-color" type="color" value="#23170f"></label>
+                  <label>
+                    Hair Style
+                    <select id="hair-style">
+                      <option value="short">Short</option>
+                      <option value="spiky">Spiky</option>
+                      <option value="cap">Captain Cap</option>
+                    </select>
+                  </label>
+                  <label>
+                    Outfit
+                    <select id="outfit-style">
+                      <option value="sailor">Sailor</option>
+                      <option value="coat">Long Coat</option>
+                      <option value="armor">Light Armor</option>
+                    </select>
+                  </label>
+                  <label>Height <input id="height-scale" type="range" min="85" max="125" value="100"></label>
+                  <label>Bulk <input id="build-scale" type="range" min="80" max="130" value="100"></label>
+                </div>
+                <div class="avatar-actions">
+                  <button id="save-avatar" type="button">Save Changes</button>
+                  <button id="create-avatar" type="button">Create New</button>
+                  <button id="delete-avatar" class="danger-button" type="button">Delete Selected</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="section-label path-label">Choose Your Side</p>
+          <div class="faction-grid">
+            <button class="faction-card pirate" data-faction="Pirates">
+              <span>Pirates</span>
+              <small>Earn extra money from quests.</small>
+            </button>
+            <button class="faction-card marine" data-faction="Marines">
+              <span>Marines</span>
+              <small>Gain bonus defense from training.</small>
+            </button>
+            <button class="faction-card neutral" data-faction="Neutral">
+              <span>Neutral</span>
+              <small>No allegiance. Balanced progression.</small>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="hud" class="hud hidden">
+        <div class="top-row">
+          <div class="stat-block">
+            <strong id="player-title">Neutral Rookie</strong>
+            <span id="level-readout">Level 1</span>
+          </div>
+          <div class="bars">
+            <label>Health <span id="health-readout"></span></label>
+            <div class="bar"><span id="health-bar"></span></div>
+            <label>XP <span id="xp-readout"></span></label>
+            <div class="bar xp"><span id="xp-bar"></span></div>
+          </div>
+          <div class="wallet">
+            <span id="money-readout">$0</span>
+            <span id="sea-readout">First Sea</span>
+          </div>
+        </div>
+
+        <div id="settings-bar" class="settings-bar">
+          <div class="settings-section settings-bar-left">
+            <button id="settings-collapse-button" class="settings-collapse-button" type="button" aria-expanded="true">
+              <span class="settings-gear" aria-hidden="true">⚙</span>
+              <strong>Game Settings</strong>
+              <span class="collapse-chevron" aria-hidden="true">▾</span>
+            </button>
+            <button id="home-teleport-button" type="button">
+              <span class="home-icon" aria-hidden="true">⌂</span>
+              <span class="home-label">Home</span>
+            </button>
+          </div>
+          <div class="settings-section settings-bar-right">
+            <span id="teleport-status">Teleport ready</span>
+            <label class="toggle">
+              <input id="shiftlock-toggle" type="checkbox" checked>
+              <span>Shiftlock enabled</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="quest-card">
+          <strong id="quest-title">Find the Quest Giver</strong>
+          <p id="quest-detail">Walk to the gold marker on Starter Island and press E.</p>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-header">
+            <strong>Stats</strong>
+            <span id="points-readout">0 points</span>
+          </div>
+          <div id="stats-list"></div>
+        </div>
+
+        <button id="inventory-button" class="inventory-button" type="button">Inventory</button>
+
+        <div id="inventory-panel" class="inventory-panel hidden">
+          <div class="inventory-header">
+            <strong>Inventory</strong>
+            <button id="inventory-close" type="button">Close</button>
+          </div>
+          <div id="inventory-tabs" class="inventory-tabs">
+            <button class="active" data-inventory-tab="melee" type="button">Melee</button>
+            <button data-inventory-tab="swords" type="button">Swords</button>
+            <button data-inventory-tab="guns" type="button">Guns</button>
+            <button data-inventory-tab="special" type="button">Special</button>
+          </div>
+          <div id="inventory-list" class="inventory-list"></div>
+        </div>
+
+        <div id="prompt" class="prompt hidden"></div>
+        <div id="message-log" class="message-log"></div>
+
+        <div id="boat-menu" class="boat-menu hidden">
+          <strong>Boat Dock</strong>
+          <p>Choose a vessel to summon:</p>
+          <div class="boat-options">
+            <button class="boat-option" data-boat="dinghy" type="button">Dinghy</button>
+            <button class="boat-option" data-boat="sailor" type="button">Sailor Boat</button>
+            <button class="boat-option" data-boat="brigade" type="button">Brigade</button>
+          </div>
+          <button id="boat-menu-close" type="button">Cancel</button>
+        </div>
+
+        <div class="controls">
+          <strong>Controls</strong>
+          <span>WASD move</span>
+          <span>Right mouse drag rotate</span>
+          <span>Left click attack</span>
+          <span>Space jump</span>
+          <span>1 melee</span>
+          <span>2 sword</span>
+          <span>3 gun</span>
+          <span>4 special</span>
+          <span>E interact</span>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
