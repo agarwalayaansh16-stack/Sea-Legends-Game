@@ -1,3 +1,212 @@
+// Procedural Sound Manager using browser Web Audio API
+const audio = {
+  ctx: null,
+  enabled: false,
+  init() {
+    if (this.ctx) return;
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.enabled = true;
+      this.playFanfare();
+    } catch (e) {
+      console.warn("Web Audio API not supported", e);
+    }
+  },
+  playSlash() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const bufferSize = ctx.sampleRate * 0.12;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.setValueAtTime(1200, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(8000, ctx.currentTime + 0.1);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start();
+  },
+  playShot() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(180, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.2);
+    const bufferSize = ctx.sampleRate * 0.15;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5, ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    noise.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start();
+  },
+  playImpact() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(100, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(20, ctx.currentTime + 0.25);
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  },
+  playHaki() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(440, ctx.currentTime);
+    osc1.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+    osc2.type = "sawtooth";
+    osc2.frequency.setValueAtTime(220, ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+    osc1.start();
+    osc2.start();
+    osc1.stop(ctx.currentTime + 0.35);
+    osc2.stop(ctx.currentTime + 0.35);
+  },
+  playLevelUp() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+      gain.gain.setValueAtTime(0.18, now + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.08);
+      osc.stop(now + idx * 0.08 + 0.35);
+    });
+  },
+  playQuestComplete() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const chord = [392.00, 493.88, 587.33, 783.99];
+    chord.forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.85);
+    });
+  },
+  playSpecial() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(150, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.45);
+  },
+  playFanfare() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+      gain.gain.setValueAtTime(0.12, now + idx * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.05 + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.05);
+      osc.stop(now + idx * 0.05 + 0.22);
+    });
+  }
+};
+
+const masterySkills = {
+  melee: [
+    { name: "Falcon Punch", req: 50, desc: "Normal hits have 15% chance to deal 2.5x damage + high knockback." },
+    { name: "Ground Slam", req: 200, desc: "Air attack (Space + Left Click) slams ground dealing AOE damage." },
+    { name: "Gatling Flurry", req: 500, desc: "Hold Click down for rapid-fire 0.1s strikes." }
+  ],
+  defense: [
+    { name: "Perfect Parry", req: 50, desc: "Blocking within 0.2s of attack reflects 40% damage." },
+    { name: "Iron Bastion", req: 200, desc: "Blocking slowly regenerates +3.5 health/second." },
+    { name: "Armored Will", req: 500, desc: "Fatal hits leave you at 1 HP + 3s shield (90s CD)." }
+  ],
+  sword: [
+    { name: "Piercing Thrust", req: 50, desc: "Sword gain +12 attack range & pierce armor." },
+    { name: "Cyclone Spin", req: 200, desc: "Press Q to spin the blade, hitting all nearby for 1.8x." },
+    { name: "Dimensional Blade", req: 500, desc: "Every slash fires a giant flying air blade forward." }
+  ],
+  gun: [
+    { name: "Double Tap", req: 50, desc: "Gun attacks automatically fire two bullets sequentially." },
+    { name: "Buckshot Cone", req: 200, desc: "Press Q to fire a spread of 3 bullets in a 30-degree arc." },
+    { name: "Sniper Focus", req: 500, desc: "Double range and zoom out camera view when standing still." }
+  ],
+  special: [
+    { name: "Pulse Bubble", req: 50, desc: "Unleashes an expanding bubble pushing away enemies." },
+    { name: "Storm Call", req: 200, desc: "Press Q to summon lightning on all nearby enemies." },
+    { name: "Grand Awakening", req: 500, desc: "Vaporizes minor enemies below 20% health and heals 50 HP." }
+  ]
+};
+
+// Day-Night & Weather states
+let timeOfDay = 8.0;
+let weatherActive = false;
+let weatherTimer = 100.0;
+let rainParticles = null;
+
+// Sailing states
+let isHelming = false;
+let boatVelocity = 0;
+let boatYaw = 0;
+
 const canvas = document.querySelector("#game");
 const factionScreen = document.querySelector("#faction-screen");
 const hud = document.querySelector("#hud");
@@ -166,6 +375,16 @@ const player = {
     gun: 1,
     special: 0,
   },
+  mastery: {
+    melee: 0,
+    defense: 0,
+    sword: 0,
+    gun: 0,
+    special: 0,
+  },
+  armoredWillCooldown: 0,
+  blockStartTime: 0,
+  shieldTimer: 0,
   weapon: "melee",
   hasSword: false,
   hasGun: false,
@@ -456,9 +675,23 @@ window.addEventListener("keydown", (event) => {
   }
   if (code === "KeyF") {
     player.isBlocking = true;
+    player.blockStartTime = performance.now();
   }
   if (code === "KeyQ") {
-    dash();
+    const hasSwordQ = player.weapon === "sword" && player.mastery.sword >= 200;
+    const hasGunQ = player.weapon === "gun" && player.mastery.gun >= 200;
+    const hasSpecialQ = player.weapon === "special" && player.mastery.special >= 200;
+    
+    if (hasSwordQ || hasGunQ || hasSpecialQ) {
+      if (hasSwordQ) triggerSwordQ();
+      if (hasGunQ) triggerGunQ();
+      if (hasSpecialQ) triggerSpecialQ();
+    } else {
+      dash();
+    }
+  }
+  if (code === "KeyG") {
+    toggleHelm();
   }
   if (code === "KeyH") {
     toggleHaki();
@@ -531,7 +764,12 @@ sprintToggle?.addEventListener("click", () => setMovementMode("sprint"));
 hakiToggle?.addEventListener("click", toggleHaki);
 dialogueClose?.addEventListener("click", hideQuestDialogue);
 
+window.addEventListener("pointerdown", () => {
+  audio.init();
+}, { once: true });
+
 function startGame(faction) {
+  audio.init();
   player.faction = faction;
   if (faction === "Marines") {
     player.stats.defense += 1;
@@ -561,6 +799,7 @@ function toggleHaki() {
   player.haki.active = !player.haki.active;
   hakiToggle?.classList.toggle("active", player.haki.active);
   applyHakiVisuals();
+  audio.playHaki();
   log(player.haki.active ? `Armament Haki level ${player.haki.level} activated.` : "Armament Haki released.");
 }
 
@@ -586,6 +825,42 @@ function renderInventory() {
   inventoryTabs.querySelectorAll("[data-inventory-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.inventoryTab === inventoryState.tab);
   });
+
+  if (inventoryState.tab === "mastery") {
+    inventoryList.innerHTML = `
+      <div class="mastery-container" style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 8px; max-height: 380px; overflow-y: auto; pointer-events: auto;">
+        ${Object.keys(player.mastery).map(stat => {
+          const val = player.mastery[stat];
+          const skills = masterySkills[stat];
+          return `
+            <div class="mastery-card" style="border: 1px solid rgba(255,247,230,0.15); border-radius: 14px; padding: 12px; background: rgba(5,18,26,0.85); box-shadow: 0 4px 10px rgba(0,0,0,0.4); text-shadow: none;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <strong style="color: var(--gold); text-transform: uppercase; font-size: 13px;">${statLabels[stat]} Mastery</strong>
+                <span style="color: #7ce0b4; font-weight: bold; font-size: 12px;">Lv. ${Math.floor(val / 100) + 1} (${val} MP)</span>
+              </div>
+              <div class="bar" style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; margin-bottom: 10px;">
+                <div style="height: 100%; width: ${Math.min(100, (val % 100))}%; background: linear-gradient(90deg, #7ce0b4, #0d7892); transition: width 0.3s ease;"></div>
+              </div>
+              <div class="mastery-skills" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                ${skills.map(skill => {
+                  const unlocked = val >= skill.req;
+                  return `
+                    <div style="border: 1px solid ${unlocked ? "rgba(124,224,180,0.3)" : "rgba(255,255,255,0.05)"}; border-radius: 10px; padding: 6px; background: ${unlocked ? "rgba(124,224,180,0.06)" : "rgba(0,0,0,0.25)"}; text-align: center; font-size: 10px;">
+                      <strong style="color: ${unlocked ? "#7ce0b4" : "rgba(255,255,255,0.45)"}; display: block; margin-bottom: 2px; font-size: 11px;">${skill.name}</strong>
+                      <small style="color: rgba(255,247,230,0.45); display: block; margin-bottom: 4px;">Req: ${skill.req} MP</small>
+                      <span style="color: rgba(255,255,255,0.65); display: block; font-size: 8.5px; line-height: 1.2; min-height: 38px;">${skill.desc}</span>
+                      <b style="color: ${unlocked ? "#ffcf5a" : "#ef6048"}; display: block; margin-top: 4px; font-size: 9px; letter-spacing: 0.05em;">${unlocked ? "ACTIVE" : "LOCKED"}</b>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+    return;
+  }
 
   const items = inventoryItems[inventoryState.tab] || [];
   inventoryList.innerHTML = "";
@@ -2352,7 +2627,7 @@ function spawnAdvancedEnemy(position, index, type) {
   }, { showSword: !isBrute, showName: false, bandanaColor: isBoss ? "#ff3131" : "#b92832" }));
   if (isBrute) addMaceToEnemy(group);
   scene.add(group);
-  enemies.push({
+  const enemyObj = {
     id: `${type}-${index}`,
     type,
     mesh: group,
@@ -2370,7 +2645,11 @@ function spawnAdvancedEnemy(position, index, type) {
       slam: 3.2,
       dodge: 1.5,
     },
-  });
+  };
+  if (isBoss) {
+    enemyObj.parts = group.children[0]?.userData?.parts;
+  }
+  enemies.push(enemyObj);
 }
 
 function spawnBuggyBoss(position) {
@@ -2657,6 +2936,11 @@ function loop(time) {
   hitStopTimer = Math.max(0, hitStopTimer - dt);
 
   if (gameStarted) {
+    // Day-Night progression (1 full cycle in 160 seconds)
+    timeOfDay = (timeOfDay + stepDt * 0.15) % 24;
+    updateDayNightLighting(stepDt);
+    updateWeather(stepDt);
+
     updatePlayer(stepDt);
     updateEnemies(stepDt);
     updateHazards(stepDt);
@@ -2705,6 +2989,34 @@ function updateWorldAnimations(time) {
 }
 
 function updatePlayer(dt) {
+  if (isHelming) {
+    updateBoat(dt);
+    return;
+  }
+
+  // Gatling Flurry rapid melee punches
+  if (isPointerDown && player.weapon === "melee" && player.mastery.melee >= 500 && attackCooldown <= 0) {
+    attack();
+  }
+
+  // Active parry Iron Bastion heal
+  if (player.isBlocking && player.mastery.defense >= 200) {
+    player.health = Math.min(player.maxHealth, player.health + dt * 3.5);
+    if (Math.random() < 0.05) {
+      createBubbleEffect(playerMesh.position.clone().add(new THREE.Vector3(0, 4, 0)));
+    }
+  }
+
+  // Armored Will tick
+  player.armoredWillCooldown = Math.max(0, player.armoredWillCooldown - dt);
+  if (player.shieldTimer > 0) {
+    player.shieldTimer -= dt;
+    player.health = Math.max(player.health, 1);
+    if (Math.random() < 0.15) {
+      createWallHitEffect(playerMesh.position.clone().add(new THREE.Vector3(0, 4, 0)), false);
+    }
+  }
+
   const previousPosition = playerMesh.position.clone();
   const input = new THREE.Vector3(
     Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft")),
@@ -3014,6 +3326,37 @@ function updateEnemies(dt) {
     }
 
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+
+    // Captain Buggy chop-chop dismemberment animation
+    if (enemy.type === "buggy" && enemy.parts) {
+      const parts = enemy.parts;
+      const t = performance.now() * 0.015;
+      
+      const isAttacking = enemy.ai.rush > 1.2 || enemy.ai.slash > 1.6;
+      const isDamaged = enemy.hitTimer > 0;
+      
+      if (isAttacking) {
+        parts.leftArm.position.set(-6 + Math.sin(t) * 8, 5.9, Math.cos(t) * 8);
+        parts.rightArm.position.set(6 + Math.cos(t) * 8, 5.9, Math.sin(t) * 8);
+        parts.leftLeg.position.set(-2, 2.45 + Math.sin(t * 2) * 3, 0);
+        parts.rightLeg.position.set(2, 2.45 + Math.cos(t * 2) * 3, 0);
+        parts.head.position.y = 8.65 + Math.sin(t) * 4;
+      } else if (isDamaged) {
+        parts.head.position.y = 14 + Math.sin(t) * 3;
+        parts.head.rotation.y += 0.5;
+        parts.leftArm.position.set(-2.25, 5.9, 0);
+        parts.rightArm.position.set(2.25, 5.9, 0);
+        parts.leftLeg.position.set(-0.85, 2.45, 0);
+        parts.rightLeg.position.set(0.85, 2.45, 0);
+      } else {
+        parts.head.position.y = 8.65 + Math.sin(t * 0.4) * 0.7;
+        parts.leftArm.position.set(-2.25, 5.9, 0);
+        parts.rightArm.position.set(2.25, 5.9, 0);
+        parts.leftLeg.position.set(-0.85, 2.45, 0);
+        parts.rightLeg.position.set(0.85, 2.45, 0);
+      }
+    }
+
     enemy.ai = enemy.ai || { cooldown: 0, rush: 1, slash: 1, slam: 1, dodge: 1 };
     enemy.ai.cooldown = Math.max(0, enemy.ai.cooldown - dt);
     enemy.ai.rush = Math.max(0, enemy.ai.rush - dt);
@@ -3057,14 +3400,68 @@ function updateEnemies(dt) {
 }
 
 function damagePlayer(amount, source) {
-  const block = player.isBlocking ? 0.45 : 1;
+  if (player.shieldTimer > 0) return; // Invulnerable shield active!
+
+  // Play synthesized impact sound
+  audio.playImpact();
+  triggerHitFlash(playerMesh);
+
+  // Defense Mastery gain on hit/block
+  const masteryGained = player.isBlocking ? 8 : 2;
+  player.mastery.defense += masteryGained;
+  masterySkills.defense.forEach((skill) => {
+    if (player.mastery.defense === skill.req || (player.mastery.defense >= skill.req && player.mastery.defense - masteryGained < skill.req)) {
+      log(`🌟 SKILL UNLOCKED: ${skill.name} (Defense skill)!`);
+      audio.playQuestComplete();
+    }
+  });
+
+  let block = player.isBlocking ? 0.45 : 1;
+  let parried = false;
+
+  // Perfect Parry: Block within 0.25s of keydown
+  if (player.isBlocking && player.mastery.defense >= 50 && (performance.now() - player.blockStartTime < 250)) {
+    block = 0; // Immune!
+    parried = true;
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "PERFECT PARRY!", "#7ce0b4");
+    audio.playHaki(); // Clang sound effect
+
+    // Reflect 40% damage to closest enemy
+    const closest = enemies
+      .filter((e) => e.alive && e.mesh.position.distanceTo(playerMesh.position) < 80)
+      .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
+    if (closest) {
+      const reflectedDmg = Math.round(amount * 0.4);
+      closest.health -= reflectedDmg;
+      triggerHitFlash(closest.mesh);
+      createFloatingText(closest.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Reflected -${reflectedDmg}`, "#7ce0b4");
+      if (closest.health <= 0) defeatEnemy(closest);
+    }
+  }
+
   const haki = player.haki.active ? Math.max(0.35, 1 - player.haki.level * 0.1) : 1;
-  const finalDamage = Math.max(1, Math.round(amount * block * haki));
+  const finalDamage = Math.max(0, Math.round(amount * block * haki));
+
+  // Armored Will: Prevents fatal damage once on 90s CD
+  if (player.health - finalDamage <= 0 && player.mastery.defense >= 500 && player.armoredWillCooldown <= 0) {
+    player.health = 1;
+    player.armoredWillCooldown = 90;
+    player.shieldTimer = 3.0; // 3s invulnerable shield
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "ARMORED WILL TRIGGERED!", "#ffdb88");
+    audio.playQuestComplete();
+    updateHud();
+    return;
+  }
+
   player.health = Math.max(0, player.health - finalDamage);
   cameraShake = Math.max(cameraShake, finalDamage / 25);
-  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `-${finalDamage}`, "#ff6b4a");
+  if (finalDamage > 0) {
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `-${finalDamage}`, "#ff6b4a");
+  }
+
   if (player.health <= 0) {
     player.health = player.maxHealth;
+    if (isHelming) unhelmBoat();
     playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
     jumpOffset = 0;
     verticalVelocity = 0;
@@ -3074,27 +3471,32 @@ function damagePlayer(amount, source) {
 }
 
 function updateCamera() {
-  const targetYaw = shiftLockEnabled ? playerMesh.rotation.y : cameraYaw;
-  const distance = 58;
+  const targetYaw = isHelming ? boatYaw : (shiftLockEnabled ? playerMesh.rotation.y : cameraYaw);
+  const isSniper = player.weapon === "gun" && player.mastery.gun >= 500 && player.lastMoveSpeed === 0;
+  const distance = isHelming ? 100 : (isSniper ? 98 : 58);
   const horizontalDistance = Math.cos(cameraPitch) * distance;
-  const height = 14 + Math.sin(cameraPitch) * distance;
+  const height = (isHelming ? 24 : 14) + Math.sin(cameraPitch) * distance;
   const island = getIslandUnderPlayer();
   const floorY = (island ? island.surfaceY : OCEAN_SURFACE_Y) + 4.5;
+  
+  const targetPos = isHelming ? activeBoat.position : playerMesh.position;
   const offset = new THREE.Vector3(
     Math.sin(targetYaw) * horizontalDistance,
-    Math.max(height, floorY - playerMesh.position.y),
+    Math.max(height, floorY - targetPos.y),
     Math.cos(targetYaw) * horizontalDistance,
   );
-  camera.position.lerp(playerMesh.position.clone().add(offset), 0.12);
+  
+  camera.position.lerp(targetPos.clone().add(offset), 0.12);
   if (camera.position.y < floorY) camera.position.y = floorY;
+  
   if (cameraShake > 0) {
     camera.position.x += (Math.random() - 0.5) * cameraShake;
     camera.position.y += (Math.random() - 0.5) * cameraShake * 0.65;
     camera.position.z += (Math.random() - 0.5) * cameraShake;
     cameraShake = Math.max(0, cameraShake - 0.08);
   }
-  camera.lookAt(playerMesh.position.x, playerMesh.position.y + 7, playerMesh.position.z);
-  if (shiftLockEnabled) {
+  camera.lookAt(targetPos.x, targetPos.y + (isHelming ? 4 : 7), targetPos.z);
+  if (shiftLockEnabled && !isHelming) {
     cameraYaw = targetYaw;
   }
 }
@@ -3218,14 +3620,64 @@ function purchaseHaki() {
 
 function attack() {
   if (!gameStarted || attackCooldown > 0) return;
-  attackCooldown = player.weapon === "gun" ? 0.55 : 0.42;
+
+  // Melee Ground Slam in Air!
+  if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 200) {
+    jumpOffset = 0;
+    verticalVelocity = -100; // Slam down!
+    playerMesh.position.y = (getIslandUnderPlayer()?.surfaceY || STARTER_SURFACE_Y) + 0.15;
+    isGrounded = true;
+    createGroundSlam(playerMesh.position.clone(), { type: "player" });
+    audio.playImpact();
+
+    // Damage all targets in massive AOE
+    enemies.forEach((enemy) => {
+      if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 45) {
+        const dmg = Math.round(getDamage() * 1.5);
+        enemy.health -= dmg;
+        triggerHitFlash(enemy.mesh);
+        createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `GroundSlam -${dmg}`, "#ffcf5a");
+        if (enemy.health <= 0) defeatEnemy(enemy);
+      }
+    });
+    attackCooldown = 0.5;
+    return;
+  }
+
+  // Set attack cooldown
+  const isGatling = player.weapon === "melee" && player.mastery.melee >= 500;
+  attackCooldown = isGatling ? 0.11 : (player.weapon === "gun" ? 0.55 : 0.42);
+
   if (playerMesh?.userData?.animation) {
     playerMesh.userData.animation.attackTimer = playerMesh.userData.animation.attackDuration;
   }
 
+  // Procedural Sound triggers
+  if (player.weapon === "sword") audio.playSlash();
+  else if (player.weapon === "gun") audio.playShot();
+  else if (player.weapon === "special") audio.playSpecial();
+  else audio.playSlash(); // Melee swing sound
+
   const traits = getAvatarTraits();
-  const range = (player.weapon === "gun" ? 85 : 11) * traits.rangeMultiplier;
-  const damage = getDamage();
+  
+  // Sword Piercing Thrust: +12 range
+  const swordBonus = (player.weapon === "sword" && player.mastery.sword >= 50) ? 12 : 0;
+  // Sniper Focus: Double gun range when standing still
+  const isSniper = player.weapon === "gun" && player.mastery.gun >= 500 && player.lastMoveSpeed === 0;
+  const gunRange = isSniper ? 170 : 85;
+
+  const baseRange = (player.weapon === "gun" ? gunRange : (11 + swordBonus));
+  const range = baseRange * traits.rangeMultiplier;
+
+  let damage = getDamage();
+  let isFalcon = false;
+
+  // Falcon Punch: 15% chance for double damage + knockback
+  if (player.weapon === "melee" && player.mastery.melee >= 50 && Math.random() < 0.15) {
+    isFalcon = true;
+    damage = Math.round(damage * 2.5);
+  }
+
   const target = enemies
     .filter((enemy) => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range)
     .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
@@ -3235,15 +3687,71 @@ function attack() {
   }
   createCombatEffect(player.weapon, target);
 
+  // Sword Dimensional Blade: Fires giant air slash forward!
+  if (player.weapon === "sword" && player.mastery.sword >= 500) {
+    const dir = getAttackDirection(target);
+    createAirSlash(playerMesh.position.clone().setY(playerMesh.position.y + 6), dir, { type: "player" });
+  }
+
+  // Gun Double Tap: Fires a second bullet quickly
+  if (player.weapon === "gun" && player.mastery.gun >= 50) {
+    setTimeout(() => {
+      if (player.weapon === "gun") {
+        audio.playShot();
+        createGunShot(target);
+        if (target && target.alive) {
+          const dmgDouble = Math.round(getDamage() * 0.85);
+          target.health -= dmgDouble;
+          triggerHitFlash(target.mesh);
+          createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `DoubleTap -${dmgDouble}`, "#9defff");
+          if (target.health <= 0) defeatEnemy(target);
+        }
+      }
+    }, 110);
+  }
+
+  // Pulse Bubble repel for Special Mastery 50
+  if (player.weapon === "special" && player.mastery.special >= 50) {
+    enemies.forEach((enemy) => {
+      if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 48) {
+        const pushDir = enemy.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
+        enemy.mesh.position.addScaledVector(pushDir, 28);
+        enemy.health -= Math.round(getDamage() * 0.4);
+        triggerHitFlash(enemy.mesh);
+        if (enemy.health <= 0) defeatEnemy(enemy);
+      }
+    });
+  }
+
   if (!target) {
     log(`${weaponName()} attack missed.`);
+    return;
+  }
+
+  // Grand Awakening: instantly vaporizes minor enemies below 20% health
+  const isGrandAwakening = player.weapon === "special" && player.mastery.special >= 500;
+  if (isGrandAwakening && target.health < target.maxHealth * 0.20) {
+    createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "VAPORIZED!", "#a775ff");
+    target.health = 0;
+    defeatEnemy(target);
+    player.health = Math.min(player.maxHealth, player.health + 50); // Heal 50 HP on direct vaporize
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), "+50 HP", "#7ce0b4");
+    audio.playQuestComplete();
     return;
   }
 
   target.health -= damage;
   target.mesh.scale.setScalar(1.08);
   setTimeout(() => target.mesh.scale.setScalar(1), 90);
-  log(`${weaponName()} hit a bandit for ${damage} damage.`);
+  triggerHitFlash(target.mesh);
+
+  if (isFalcon) {
+    const pushDir = target.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
+    target.mesh.position.addScaledVector(pushDir, 35);
+    createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `FALCON PUNCH! -${damage}`, "#ff8a3d");
+  } else {
+    log(`${weaponName()} hit a bandit for ${damage} damage.`);
+  }
 
   if (target.health <= 0) {
     defeatEnemy(target);
@@ -3664,6 +4172,34 @@ function defeatEnemy(enemy) {
   player.materials.ironwood += enemy.type ? 2 : 1;
   player.materials.scrap += enemy.type === "brute" ? 3 : 1;
 
+  // Mastery Reward!
+  const masteryGained = enemy.type === "buggy" ? 800 : enemy.type === "brute" ? 90 : enemy.type === "pirate" ? 45 : 5;
+  const currentWeapon = player.weapon;
+  player.mastery[currentWeapon] += masteryGained;
+  log(`Mastered ${statLabels[currentWeapon]}: +${masteryGained} Mastery Points!`);
+
+  // Mastery skill unlock check
+  masterySkills[currentWeapon].forEach((skill) => {
+    if (player.mastery[currentWeapon] === skill.req || (player.mastery[currentWeapon] >= skill.req && player.mastery[currentWeapon] - masteryGained < skill.req)) {
+      log(`🌟 SKILL UNLOCKED: ${skill.name} (${statLabels[currentWeapon]} skill)!`);
+      audio.playQuestComplete();
+    }
+  });
+
+  // Grand Awakening execution check for other nearby enemies
+  if (player.weapon === "special" && player.mastery.special >= 500) {
+    enemies.forEach((e) => {
+      if (e.alive && e !== enemy && e.health < e.maxHealth * 0.20 && e.mesh.position.distanceTo(playerMesh.position) < 120) {
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "VAPORIZED!", "#a775ff");
+        e.health = 0;
+        defeatEnemy(e);
+        player.health = Math.min(player.maxHealth, player.health + 10);
+        createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), "+10 HP", "#7ce0b4");
+        audio.playQuestComplete();
+      }
+    });
+  }
+
   if (quest.active && !quest.complete) {
     quest.defeated += 1;
     if (quest.defeated >= quest.target) {
@@ -3698,6 +4234,7 @@ function completeMajorQuest() {
   if (!activeQuest) return;
   player.money += activeQuest.rewardMoney;
   addXp(activeQuest.rewardXp);
+  audio.playQuestComplete();
   log(`Quest complete: ${activeQuest.title}. +$${activeQuest.rewardMoney}, +${activeQuest.rewardXp} XP.`);
   activeQuest.active = false;
   activeQuest = null;
@@ -3712,6 +4249,7 @@ function completeQuest() {
   player.specialUnlocked = true;
   player.stats.special = Math.max(1, player.stats.special);
   player.materials.jungleCore += 1;
+  audio.playQuestComplete();
   log(`Quest complete: +$${moneyReward}, +${quest.rewardXp} XP. Special abilities unlocked on key 4.`);
   renderInventory();
 }
@@ -3724,6 +4262,7 @@ function addXp(amount) {
     player.statPoints += 3;
     player.xpToNext = Math.round(player.xpToNext * 1.35);
     player.health = player.maxHealth;
+    audio.playLevelUp();
     log(`Level up! You reached level ${player.level} and gained 3 stat points.`);
   }
 }
@@ -3916,4 +4455,292 @@ function resize() {
   renderer.setSize(width, height, false);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+}
+
+function triggerHitFlash(group) {
+  group.traverse((child) => {
+    if (child.isMesh && child.material) {
+      if (!child.userData.baseEmissive) {
+        child.userData.baseEmissive = child.material.emissive ? child.material.emissive.clone() : new THREE.Color(0);
+        child.userData.baseEmissiveInt = child.material.emissiveIntensity || 0;
+      }
+      if (child.material.emissive) {
+        child.material.emissive.setHex(0xffffff);
+        child.material.emissiveIntensity = 1.0;
+        setTimeout(() => {
+          if (child.material) {
+            child.material.emissive.copy(child.userData.baseEmissive);
+            child.material.emissiveIntensity = child.userData.baseEmissiveInt;
+          }
+        }, 110);
+      }
+    }
+  });
+}
+
+function updateDayNightLighting(dt) {
+  let skyColor, fogColor, sunIntensity, sunColor;
+  
+  if (timeOfDay >= 6 && timeOfDay < 9) {
+    const p = (timeOfDay - 6) / 3;
+    skyColor = new THREE.Color(0xffa07a).lerp(new THREE.Color(0x8bd8ff), p);
+    fogColor = skyColor.clone();
+    sunIntensity = 0.5 + p * 1.7;
+    sunColor = new THREE.Color(0xffd8b5).lerp(new THREE.Color(0xfff1c7), p);
+  } else if (timeOfDay >= 9 && timeOfDay < 17) {
+    skyColor = new THREE.Color(0x8bd8ff);
+    fogColor = skyColor.clone();
+    sunIntensity = 2.2;
+    sunColor = new THREE.Color(0xfff1c7);
+  } else if (timeOfDay >= 17 && timeOfDay < 20) {
+    const p = (timeOfDay - 17) / 3;
+    skyColor = new THREE.Color(0x8bd8ff).lerp(new THREE.Color(0xff5533), p);
+    fogColor = skyColor.clone();
+    sunIntensity = 2.2 - p * 1.8;
+    sunColor = new THREE.Color(0xfff1c7).lerp(new THREE.Color(0xffaa44), p);
+  } else {
+    let p = 0;
+    if (timeOfDay >= 20) p = (timeOfDay - 20) / 4;
+    else p = 1 - (timeOfDay / 6);
+    skyColor = new THREE.Color(0xff5533).lerp(new THREE.Color(0x060c12), Math.min(1, p * 1.5));
+    fogColor = skyColor.clone();
+    sunIntensity = 0.4;
+    sunColor = new THREE.Color(0x7a8fa6);
+  }
+
+  if (weatherActive) {
+    skyColor.multiplyScalar(0.35);
+    fogColor.multiplyScalar(0.35);
+    sunIntensity *= 0.25;
+  }
+
+  scene.background.copy(skyColor);
+  scene.fog.color.copy(fogColor);
+  renderer.setClearColor(skyColor);
+  sun.color.copy(sunColor);
+  sun.intensity = sunIntensity;
+
+  const angle = (timeOfDay / 24) * Math.PI * 2 - Math.PI / 2;
+  sun.position.set(Math.cos(angle) * 300, Math.sin(angle) * 300, 100);
+
+  const isNight = timeOfDay >= 19.5 || timeOfDay < 5.5;
+  scene.traverse((child) => {
+    if (child.name === "lanternGlow" || (child.material && child.material.emissive && (child.material.color.getHex() === 0xffd25a))) {
+      child.material.emissiveIntensity = isNight ? (weatherActive ? 3.0 : 2.0) : 0.1;
+    }
+  });
+}
+
+function updateWeather(dt) {
+  weatherTimer -= dt;
+  if (weatherTimer <= 0) {
+    weatherTimer = 80 + Math.random() * 100;
+    weatherActive = Math.random() < 0.25;
+    if (weatherActive) {
+      log("A storm is rolling in from the east!");
+      createRainSystem();
+    } else {
+      if (rainParticles) {
+        scene.remove(rainParticles);
+        rainParticles = null;
+      }
+      log("The sky clears up.");
+    }
+  }
+
+  if (weatherActive) {
+    if (rainParticles) {
+      const positions = rainParticles.geometry.attributes.position.array;
+      for (let i = 1; i < positions.length; i += 3) {
+        positions[i] -= dt * 250;
+        if (positions[i] < -50) {
+          positions[i] = 120 + Math.random() * 80;
+        }
+      }
+      rainParticles.geometry.attributes.position.needsUpdate = true;
+    }
+
+    if (Math.random() < 0.005) {
+      log("⚡ Thunder rumbles across the ocean!");
+      audio.playImpact();
+      sun.intensity = 5.0;
+      scene.background.setHex(0xffffff);
+      scene.fog.color.setHex(0xffffff);
+      setTimeout(() => {
+        updateDayNightLighting(0);
+      }, 70);
+    }
+  }
+}
+
+function createRainSystem() {
+  if (rainParticles) scene.remove(rainParticles);
+
+  const count = 1200;
+  const material = new THREE.LineBasicMaterial({
+    color: 0x8ebdd1,
+    transparent: true,
+    opacity: 0.4,
+  });
+
+  const linePositions = [];
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random() - 0.5) * 800;
+    const y = Math.random() * 200;
+    const z = (Math.random() - 0.5) * 800;
+    linePositions.push(x, y, z);
+    linePositions.push(x, y - 6, z);
+  }
+
+  const lineGeometry = new THREE.BufferGeometry();
+  lineGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+  rainParticles = new THREE.LineSegments(lineGeometry, material);
+  scene.add(rainParticles);
+}
+
+function toggleHelm() {
+  if (!activeBoat) {
+    log("Spawn a boat near the water first! Visit the Boat Dealer at the dock.");
+    return;
+  }
+
+  if (isHelming) {
+    unhelmBoat();
+  } else {
+    const dist = playerMesh.position.distanceTo(activeBoat.position);
+    if (dist > 55) {
+      log("Get closer to your boat to steer it!");
+      return;
+    }
+    helmBoat();
+  }
+}
+
+function helmBoat() {
+  isHelming = true;
+  player.isSwimming = false;
+  player.oxygen = 100;
+  playerMesh.visible = false;
+  boatYaw = activeBoat.rotation.y;
+  log("Helming boat! Use WASD to steer across the ocean. Press G to disembark.");
+  audio.playFanfare();
+}
+
+function unhelmBoat() {
+  isHelming = false;
+  playerMesh.visible = true;
+  playerMesh.position.copy(activeBoat.position).add(new THREE.Vector3(0, 4.5, 0));
+  boatVelocity = 0;
+  log("Disembarked from boat.");
+}
+
+function updateBoat(dt) {
+  const accel = keys.has("KeyW") ? 1 : keys.has("KeyS") ? -1 : 0;
+  const turn = keys.has("KeyD") ? -1 : keys.has("KeyA") ? 1 : 0;
+
+  const drag = 0.965;
+  const maxSpeed = 160;
+  const turnSpeed = 1.35;
+
+  if (accel !== 0) {
+    boatVelocity = clamp(boatVelocity + accel * dt * 45, -maxSpeed * 0.35, maxSpeed);
+  } else {
+    boatVelocity *= Math.pow(drag, dt * 30);
+  }
+
+  if (turn !== 0 && Math.abs(boatVelocity) > 2) {
+    const dir = boatVelocity > 0 ? 1 : -1;
+    boatYaw += turn * turnSpeed * dt * dir;
+  }
+
+  activeBoat.rotation.y = boatYaw;
+  const forward = new THREE.Vector3(Math.sin(boatYaw), 0, Math.cos(boatYaw));
+  activeBoat.position.addScaledVector(forward, boatVelocity * dt);
+  activeBoat.position.y = OCEAN_SURFACE_Y + 0.28 + Math.sin(performance.now() * 0.002) * 0.18;
+
+  playerMesh.position.copy(activeBoat.position);
+
+  islands.forEach((island) => {
+    const flatDist = new THREE.Vector2(activeBoat.position.x - island.position.x, activeBoat.position.z - island.position.z).length();
+    if (flatDist < island.radius + 12) {
+      const pushDirection = activeBoat.position.clone().sub(island.position).setY(0).normalize();
+      activeBoat.position.addScaledVector(pushDirection, 22);
+      boatVelocity = -boatVelocity * 0.35;
+      audio.playImpact();
+      cameraShake = Math.max(cameraShake, 1.1);
+      log(`⚠️ Boat bumped into ${island.index === 0 ? "Starter Island" : `Island ${island.index + 1}`}!`);
+    }
+  });
+
+  if (Math.abs(boatVelocity) > 10 && Math.random() < 0.32) {
+    createSplashEffect(activeBoat.position.clone().addScaledVector(forward, -14));
+  }
+
+  updateCamera();
+}
+
+function triggerSwordQ() {
+  audio.playSlash();
+  createSpecialBurst({ mesh: playerMesh });
+  
+  enemies.forEach((enemy) => {
+    if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 38) {
+      const dmg = Math.round(getDamage() * 1.8);
+      enemy.health -= dmg;
+      triggerHitFlash(enemy.mesh);
+      createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Spin -${dmg}`, "#ffcf5a");
+      if (enemy.health <= 0) defeatEnemy(enemy);
+    }
+  });
+}
+
+function triggerGunQ() {
+  audio.playShot();
+  const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
+  
+  createGunShot();
+  setTimeout(() => {
+    createGunShot();
+  }, 40);
+  
+  let hits = 0;
+  enemies.forEach((enemy) => {
+    if (enemy.alive && hits < 3) {
+      const toEnemy = enemy.mesh.position.clone().sub(playerMesh.position);
+      const dist = toEnemy.length();
+      if (dist < 95) {
+        toEnemy.normalize();
+        const angle = forward.angleTo(toEnemy);
+        if (angle < 0.42) {
+          hits++;
+          const dmg = Math.round(getDamage() * 1.25);
+          enemy.health -= dmg;
+          triggerHitFlash(enemy.mesh);
+          createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Buckshot -${dmg}`, "#ff7a3d");
+          if (enemy.health <= 0) defeatEnemy(enemy);
+        }
+      }
+    }
+  });
+}
+
+function triggerSpecialQ() {
+  audio.playQuestComplete();
+  sun.intensity = 6.0;
+  scene.background.setHex(0xffffff);
+  scene.fog.color.setHex(0xffffff);
+  setTimeout(() => {
+    updateDayNightLighting(0);
+  }, 80);
+  
+  enemies.forEach((enemy) => {
+    if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 140) {
+      const dmg = Math.round(getDamage() * 2.2);
+      enemy.health -= dmg;
+      triggerHitFlash(enemy.mesh);
+      createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡ LIGHTNING -${dmg}`, "#7ce0b4");
+      createWallHitEffect(enemy.mesh.position.clone(), true);
+      if (enemy.health <= 0) defeatEnemy(enemy);
+    }
+  });
 }

@@ -176,6 +176,7 @@ export default function Home() {
               <button {...hyd} data-inventory-tab="swords" type="button">Swords</button>
               <button {...hyd} data-inventory-tab="guns" type="button">Guns</button>
               <button {...hyd} data-inventory-tab="special" type="button">Special</button>
+              <button {...hyd} data-inventory-tab="mastery" type="button">Mastery</button>
             </div>
             <div id="inventory-list" className="inventory-list" />
           </div>
