@@ -1,9 +1,11 @@
 import Script from "next/script";
 
 export default function Home() {
+  const hyd = { suppressHydrationWarning: true };
+
   return (
     <>
-      <main id="game-root" className="min-h-screen">
+      <main id="game-root" className="min-h-screen" suppressHydrationWarning>
         <canvas id="game" />
 
         <section id="faction-screen" className="overlay">
@@ -20,7 +22,7 @@ export default function Home() {
                   <strong>Avatar Studio</strong>
                   <span>Choose, preview, edit, create, or delete your human avatar.</span>
                 </div>
-                <button id="preview-avatar" type="button">Preview Avatar</button>
+                <button {...hyd} id="preview-avatar" type="button">Preview Avatar</button>
               </div>
 
               <div className="avatar-layout">
@@ -51,17 +53,17 @@ export default function Home() {
 
                 <div className="avatar-editor">
                   <p className="section-label">Customize</p>
-                  <input id="avatar-name" maxLength="18" placeholder="Avatar name" defaultValue="Rookie" />
+                  <input {...hyd} id="avatar-name" maxLength="18" placeholder="Avatar name" defaultValue="Rookie" />
                   <div className="editor-grid">
-                    <label>Skin <input id="skin-color" type="color" defaultValue="#c98b62" /></label>
-                    <label>Shirt <input id="shirt-color" type="color" defaultValue="#1b85aa" /></label>
-                    <label>Pants <input id="pants-color" type="color" defaultValue="#26364f" /></label>
-                    <label>Hair <input id="hair-color" type="color" defaultValue="#2a1710" /></label>
-                    <label>Eyes <input id="eye-color" type="color" defaultValue="#101820" /></label>
-                    <label>Boots <input id="boot-color" type="color" defaultValue="#23170f" /></label>
+                    <label>Skin <input {...hyd} id="skin-color" type="color" defaultValue="#c98b62" /></label>
+                    <label>Shirt <input {...hyd} id="shirt-color" type="color" defaultValue="#1b85aa" /></label>
+                    <label>Pants <input {...hyd} id="pants-color" type="color" defaultValue="#26364f" /></label>
+                    <label>Hair <input {...hyd} id="hair-color" type="color" defaultValue="#2a1710" /></label>
+                    <label>Eyes <input {...hyd} id="eye-color" type="color" defaultValue="#101820" /></label>
+                    <label>Boots <input {...hyd} id="boot-color" type="color" defaultValue="#23170f" /></label>
                     <label>
                       Hair Style
-                      <select id="hair-style" defaultValue="short">
+                      <select {...hyd} id="hair-style" defaultValue="short">
                         <option value="short">Short</option>
                         <option value="spiky">Spiky</option>
                         <option value="cap">Captain Cap</option>
@@ -69,19 +71,19 @@ export default function Home() {
                     </label>
                     <label>
                       Outfit
-                      <select id="outfit-style" defaultValue="sailor">
+                      <select {...hyd} id="outfit-style" defaultValue="sailor">
                         <option value="sailor">Sailor</option>
                         <option value="coat">Long Coat</option>
                         <option value="armor">Light Armor</option>
                       </select>
                     </label>
-                    <label>Height <input id="height-scale" type="range" min="85" max="125" defaultValue="100" /></label>
-                    <label>Bulk <input id="build-scale" type="range" min="80" max="130" defaultValue="100" /></label>
+                    <label>Height <input {...hyd} id="height-scale" type="range" min="85" max="125" defaultValue="100" /></label>
+                    <label>Bulk <input {...hyd} id="build-scale" type="range" min="80" max="130" defaultValue="100" /></label>
                   </div>
                   <div className="avatar-actions">
-                    <button id="save-avatar" type="button">Save Changes</button>
-                    <button id="create-avatar" type="button">Create New</button>
-                    <button id="delete-avatar" className="danger-button" type="button">Delete Selected</button>
+                    <button {...hyd} id="save-avatar" type="button">Save Changes</button>
+                    <button {...hyd} id="create-avatar" type="button">Create New</button>
+                    <button {...hyd} id="delete-avatar" className="danger-button" type="button">Delete Selected</button>
                   </div>
                 </div>
               </div>
@@ -89,15 +91,15 @@ export default function Home() {
 
             <p className="section-label path-label">Choose Your Side</p>
             <div className="faction-grid">
-              <button className="faction-card pirate" data-faction="Pirates" type="button">
+              <button {...hyd} className="faction-card pirate" data-faction="Pirates" type="button">
                 <span>Pirates</span>
                 <small>Earn extra money from quests.</small>
               </button>
-              <button className="faction-card marine" data-faction="Marines" type="button">
+              <button {...hyd} className="faction-card marine" data-faction="Marines" type="button">
                 <span>Marines</span>
                 <small>Gain bonus defense from training.</small>
               </button>
-              <button className="faction-card neutral" data-faction="Neutral" type="button">
+              <button {...hyd} className="faction-card neutral" data-faction="Neutral" type="button">
                 <span>Neutral</span>
                 <small>No allegiance. Balanced progression.</small>
               </button>
@@ -116,6 +118,8 @@ export default function Home() {
               <div className="bar"><span id="health-bar" /></div>
               <label>XP <span id="xp-readout" /></label>
               <div className="bar xp"><span id="xp-bar" /></div>
+              <label>Stamina <span id="stamina-readout" /></label>
+              <div className="bar stamina"><span id="stamina-bar" /></div>
             </div>
             <div className="wallet">
               <span id="money-readout">$0</span>
@@ -125,20 +129,23 @@ export default function Home() {
 
           <div id="settings-bar" className="settings-bar">
             <div className="settings-section settings-bar-left">
-              <button id="settings-collapse-button" className="settings-collapse-button" type="button" aria-expanded="true">
+              <button {...hyd} id="settings-collapse-button" className="settings-collapse-button" type="button" aria-expanded="true">
                 <span className="settings-gear" aria-hidden="true">⚙</span>
                 <strong>Game Settings</strong>
                 <span className="collapse-chevron" aria-hidden="true">v</span>
               </button>
-              <button id="home-teleport-button" type="button">
+              <button {...hyd} id="home-teleport-button" type="button">
                 <span className="home-icon" aria-hidden="true">⌂</span>
                 <span className="home-label">Home</span>
               </button>
             </div>
             <div className="settings-section settings-bar-right">
+              <button {...hyd} id="walk-toggle" className="mode-button active" type="button">Walk</button>
+              <button {...hyd} id="sprint-toggle" className="mode-button" type="button">Sprint</button>
+              <button {...hyd} id="haki-toggle" className="mode-button" type="button">Haki</button>
               <span id="teleport-status">Teleport ready</span>
               <label className="toggle">
-                <input id="shiftlock-toggle" type="checkbox" defaultChecked />
+                <input {...hyd} id="shiftlock-toggle" type="checkbox" defaultChecked />
                 <span>Shiftlock enabled</span>
               </label>
             </div>
@@ -157,34 +164,44 @@ export default function Home() {
             <div id="stats-list" />
           </div>
 
-          <button id="inventory-button" className="inventory-button" type="button">Inventory</button>
+          <button {...hyd} id="inventory-button" className="inventory-button" type="button">Inventory</button>
 
           <div id="inventory-panel" className="inventory-panel hidden">
             <div className="inventory-header">
               <strong>Inventory</strong>
-              <button id="inventory-close" type="button">Close</button>
+              <button {...hyd} id="inventory-close" type="button">Close</button>
             </div>
             <div id="inventory-tabs" className="inventory-tabs">
-              <button className="active" data-inventory-tab="melee" type="button">Melee</button>
-              <button data-inventory-tab="swords" type="button">Swords</button>
-              <button data-inventory-tab="guns" type="button">Guns</button>
-              <button data-inventory-tab="special" type="button">Special</button>
+              <button {...hyd} className="active" data-inventory-tab="melee" type="button">Melee</button>
+              <button {...hyd} data-inventory-tab="swords" type="button">Swords</button>
+              <button {...hyd} data-inventory-tab="guns" type="button">Guns</button>
+              <button {...hyd} data-inventory-tab="special" type="button">Special</button>
             </div>
             <div id="inventory-list" className="inventory-list" />
           </div>
 
           <div id="prompt" className="prompt hidden" />
           <div id="message-log" className="message-log" />
+          <div id="dialogue-panel" className="dialogue-panel hidden">
+            <strong id="dialogue-title">Quest Board</strong>
+            <p id="dialogue-detail">Choose a quest.</p>
+            <div id="quest-options" className="quest-options" />
+            <button {...hyd} id="dialogue-close" type="button">Decline</button>
+          </div>
+          <div id="boss-bar" className="boss-bar hidden">
+            <strong id="boss-name">Buggy</strong>
+            <span><i id="boss-health-bar" /></span>
+          </div>
 
           <div id="boat-menu" className="boat-menu hidden">
             <strong>Boat Dock</strong>
             <p>Choose a vessel to summon:</p>
             <div className="boat-options">
-              <button className="boat-option" data-boat="dinghy" type="button">Dinghy</button>
-              <button className="boat-option" data-boat="sailor" type="button">Sailor Boat</button>
-              <button className="boat-option" data-boat="brigade" type="button">Brigade</button>
+              <button {...hyd} className="boat-option" data-boat="dinghy" type="button">Dinghy</button>
+              <button {...hyd} className="boat-option" data-boat="sailor" type="button">Sailor Boat</button>
+              <button {...hyd} className="boat-option" data-boat="brigade" type="button">Brigade</button>
             </div>
-            <button id="boat-menu-close" type="button">Cancel</button>
+            <button {...hyd} id="boat-menu-close" type="button">Cancel</button>
           </div>
 
           <div className="controls">

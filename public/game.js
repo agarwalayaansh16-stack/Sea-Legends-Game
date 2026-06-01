@@ -9,6 +9,9 @@ const boatMenuClose = document.querySelector("#boat-menu-close");
 const homeTeleportButton = document.querySelector("#home-teleport-button");
 const teleportStatus = document.querySelector("#teleport-status");
 const shiftlockToggle = document.querySelector("#shiftlock-toggle");
+const walkToggle = document.querySelector("#walk-toggle");
+const sprintToggle = document.querySelector("#sprint-toggle");
+const hakiToggle = document.querySelector("#haki-toggle");
 const settingsBar = document.querySelector("#settings-bar");
 const settingsCollapseButton = document.querySelector("#settings-collapse-button");
 const inventoryButton = document.querySelector("#inventory-button");
@@ -16,6 +19,14 @@ const inventoryPanel = document.querySelector("#inventory-panel");
 const inventoryTabs = document.querySelector("#inventory-tabs");
 const inventoryList = document.querySelector("#inventory-list");
 const inventoryCloseButton = document.querySelector("#inventory-close");
+const dialoguePanel = document.querySelector("#dialogue-panel");
+const dialogueTitle = document.querySelector("#dialogue-title");
+const dialogueDetail = document.querySelector("#dialogue-detail");
+const questOptions = document.querySelector("#quest-options");
+const dialogueClose = document.querySelector("#dialogue-close");
+const bossBar = document.querySelector("#boss-bar");
+const bossName = document.querySelector("#boss-name");
+const bossHealthBar = document.querySelector("#boss-health-bar");
 const avatarList = document.querySelector("#avatar-list");
 const avatarNameInput = document.querySelector("#avatar-name");
 const skinColorInput = document.querySelector("#skin-color");
@@ -43,6 +54,8 @@ const ui = {
   healthBar: document.querySelector("#health-bar"),
   xpText: document.querySelector("#xp-readout"),
   xpBar: document.querySelector("#xp-bar"),
+  staminaText: document.querySelector("#stamina-readout"),
+  staminaBar: document.querySelector("#stamina-bar"),
   money: document.querySelector("#money-readout"),
   sea: document.querySelector("#sea-readout"),
   questTitle: document.querySelector("#quest-title"),
@@ -64,6 +77,8 @@ const STARTER_HEIGHT = 38;
 const STARTER_SURFACE_Y = STARTER_HEIGHT + 0.35;
 const OCEAN_SURFACE_Y = -0.08;
 const JUNGLE_ISLAND_INDEX = 1;
+const OUTPOST_ISLAND_INDEX = 2;
+const DESERT_ISLAND_INDEX = 3;
 
 const avatarState = {
   selectedId: "wave-runner",
@@ -127,6 +142,23 @@ const player = {
   statPoints: 0,
   health: 120,
   maxHealth: 120,
+  stamina: 100,
+  maxStamina: 100,
+  oxygen: 100,
+  movementMode: "walk",
+  isSwimming: false,
+  isBlocking: false,
+  isDashing: false,
+  dashCooldown: 0,
+  lastMoveSpeed: 0,
+  lastFallVelocity: 0,
+  haki: {
+    unlocked: false,
+    active: false,
+    level: 0,
+    kills: 0,
+    nextKills: 8,
+  },
   stats: {
     melee: 1,
     defense: 1,
@@ -209,8 +241,48 @@ const quest = {
   rewardXp: 120,
 };
 
+const questCatalog = {
+  starter: {
+    id: "starter",
+    title: "Bandit Trouble",
+    detail: "Defeat 5 starter bandits.",
+    targetType: "bandit",
+    target: 5,
+    defeated: 0,
+    minLevel: 1,
+    rewardMoney: 180,
+    rewardXp: 120,
+  },
+  pirates30: {
+    id: "pirates30",
+    title: "Pirate Ambush",
+    detail: "Defeat 6 katana pirates at the outpost.",
+    targetType: "pirate",
+    target: 6,
+    defeated: 0,
+    minLevel: 30,
+    rewardMoney: 620,
+    rewardXp: 1900,
+  },
+  brutes40: {
+    id: "brutes40",
+    title: "Iron Mace Brutes",
+    detail: "Defeat 4 brute enforcers.",
+    targetType: "brute",
+    target: 4,
+    defeated: 0,
+    minLevel: 40,
+    rewardMoney: 940,
+    rewardXp: 3300,
+  },
+};
+
+let activeQuest = null;
+
 const keys = new Set();
 const enemies = [];
+const hazards = [];
+const projectiles = [];
 const interactables = [];
 const islands = [];
 const combatEffects = [];
@@ -229,6 +301,8 @@ let lastPointerX = 0;
 let lastPointerY = 0;
 let attackCooldown = 0;
 let wallHitCooldown = 0;
+let cameraShake = 0;
+let hitStopTimer = 0;
 let currentIslandIndex = 0;
 let hasReachedJungle = false;
 let verticalVelocity = 0;
@@ -374,6 +448,18 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     jump();
   }
+  if (code === "ShiftLeft" || code === "ShiftRight") {
+    setMovementMode("sprint");
+  }
+  if (code === "KeyF") {
+    player.isBlocking = true;
+  }
+  if (code === "KeyQ") {
+    dash();
+  }
+  if (code === "KeyH") {
+    toggleHaki();
+  }
   if (code === "KeyE") {
     interact();
   }
@@ -390,6 +476,12 @@ window.addEventListener("keyup", (event) => {
   const mappedCode = movementCodeMap[key] || code;
   if (allowedMovementCodes.has(code) || movementCodeMap[key]) {
     keys.delete(mappedCode);
+  }
+  if (code === "ShiftLeft" || code === "ShiftRight") {
+    setMovementMode("walk");
+  }
+  if (code === "KeyF") {
+    player.isBlocking = false;
   }
 });
 window.addEventListener("resize", resize);
@@ -431,6 +523,11 @@ shiftlockToggle?.addEventListener("change", () => {
   shiftlockToggle.nextElementSibling.textContent = shiftLockEnabled ? "Shiftlock enabled" : "Shiftlock disabled";
 });
 
+walkToggle?.addEventListener("click", () => setMovementMode("walk"));
+sprintToggle?.addEventListener("click", () => setMovementMode("sprint"));
+hakiToggle?.addEventListener("click", toggleHaki);
+dialogueClose?.addEventListener("click", hideQuestDialogue);
+
 function startGame(faction) {
   player.faction = faction;
   if (faction === "Marines") {
@@ -444,6 +541,24 @@ function startGame(faction) {
   log(`You joined as ${faction}. Welcome to the First Sea.`);
   updateDerivedStats();
   updateHud();
+}
+
+function setMovementMode(mode) {
+  player.movementMode = mode;
+  walkToggle?.classList.toggle("active", mode === "walk");
+  sprintToggle?.classList.toggle("active", mode === "sprint");
+  log(mode === "sprint" ? "Sprint mode enabled. High speed increases impact risk." : "Walk mode enabled. Better control, lower impact risk.");
+}
+
+function toggleHaki() {
+  if (!player.haki.unlocked) {
+    log("Armament Haki is locked. Reach level 60, visit Desert Island, and train with the Haki Trainer.");
+    return;
+  }
+  player.haki.active = !player.haki.active;
+  hakiToggle?.classList.toggle("active", player.haki.active);
+  applyHakiVisuals();
+  log(player.haki.active ? `Armament Haki level ${player.haki.level} activated.` : "Armament Haki released.");
 }
 
 function setWeapon(weapon) {
@@ -701,16 +816,21 @@ function applyTemporaryAvatarToPlayer(avatar) {
     playerMesh.remove(playerMesh.children[0]);
   }
   playerMesh.add(createHumanAvatarModel(avatar, { showSword: false }));
+  applyHakiVisuals();
 }
 
 function createWorld() {
   for (let i = 0; i < 10; i += 1) {
     const angle = i * 0.62;
     const distance = i === 0 ? 0 : i === 1 ? 2750 : 5200 + i * 950;
-    const radius = i === 0 ? STARTER_RADIUS : i === 1 ? 1450 : 90 + i * 36;
+    const radius = i === 0 ? STARTER_RADIUS : i === 1 ? 1450 : i === 2 ? 920 : i === 3 ? 1120 : 90 + i * 36;
     const position = i === 1
       ? new THREE.Vector3(2280, 0, -1420)
-      : new THREE.Vector3(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
+      : i === 2
+        ? new THREE.Vector3(-2350, 0, -1850)
+        : i === 3
+          ? new THREE.Vector3(-4550, 0, 980)
+          : new THREE.Vector3(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
     const island = createIsland(position, radius, i);
     islands.push({ index: i, position, radius, mesh: island, surfaceY: getIslandSurfaceY(i) });
   }
@@ -720,7 +840,13 @@ function createWorld() {
   createSwordDealer(new THREE.Vector3(48, STARTER_SURFACE_Y, 104));
   createCrossingDock();
   createTeleporter(new THREE.Vector3(438, STARTER_SURFACE_Y, -310), new THREE.Vector3(islands[1].position.x - 620, islands[1].surfaceY + 0.15, islands[1].position.z + 430));
+  createTeleporter(new THREE.Vector3(-380, STARTER_SURFACE_Y, -360), new THREE.Vector3(islands[2].position.x + 160, islands[2].surfaceY + 0.15, islands[2].position.z + 120));
   createBanditCamp();
+  createOutpostQuestGiver(islands[2].position.clone().add(new THREE.Vector3(-80, islands[2].surfaceY, 40)));
+  createHakiTrainer(islands[3].position.clone().add(new THREE.Vector3(70, islands[3].surfaceY, -60)));
+  spawnPirateCamp(islands[2]);
+  spawnBruteCamp(islands[2]);
+  spawnBuggyBoss(islands[2].position.clone().add(new THREE.Vector3(260, islands[2].surfaceY, -220)));
 }
 
 function createIsland(position, radius, index) {
@@ -760,6 +886,12 @@ function createIsland(position, radius, index) {
   }
   if (index === 1) {
     addJungleIslandDetails(group, radius, height);
+  }
+  if (index === 2) {
+    addOutpostIslandDetails(group, radius, height);
+  }
+  if (index === 3) {
+    addDesertIslandDetails(group, radius, height);
   }
   if (index !== 1) {
     addIslandRocks(group, radius, height);
@@ -805,6 +937,8 @@ function createIsland(position, radius, index) {
 function getIslandHeight(index) {
   if (index === 0) return STARTER_HEIGHT;
   if (index === 1) return 62;
+  if (index === 2) return 48;
+  if (index === 3) return 54;
   return 3 + index * 0.2;
 }
 
@@ -819,6 +953,8 @@ function addCollisionCircle(center, radius, label, options = {}) {
     radius,
     label,
     damage: options.damage ?? 10,
+    material: options.material || "stone",
+    toughness: options.toughness ?? 1,
   });
 }
 
@@ -1074,6 +1210,69 @@ function createTreehouse() {
   group.add(roof);
 
   return group;
+}
+
+function addOutpostIslandDetails(group, radius, height) {
+  addBeachRing(group, radius, height);
+  const dirt = new THREE.MeshStandardMaterial({ color: 0x8b7358, roughness: 0.96 });
+  const stone = new THREE.MeshStandardMaterial({ color: 0x5c5a54, roughness: 0.96, flatShading: true });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x68432c, roughness: 0.9 });
+
+  [[0, 0, 520, 34, 0.6], [-160, 120, 380, 28, -0.35], [180, -160, 340, 28, 1.2]].forEach(([x, z, l, w, r]) => {
+    const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, l), dirt);
+    path.position.set(x, height + 0.6, z);
+    path.rotation.y = r;
+    group.add(path);
+  });
+
+  for (let i = 0; i < 18; i += 1) {
+    const ruin = new THREE.Mesh(new THREE.BoxGeometry(26 + (i % 4) * 8, 24 + (i % 3) * 12, 18), stone);
+    const angle = i * 1.17;
+    const dist = radius * (0.18 + ((i * 41) % 54) / 100);
+    ruin.position.set(Math.cos(angle) * dist, height + ruin.geometry.parameters.height / 2, Math.sin(angle) * dist);
+    ruin.rotation.y = angle;
+    ruin.castShadow = true;
+    ruin.receiveShadow = true;
+    group.add(ruin);
+  }
+
+  for (let i = 0; i < 9; i += 1) {
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(10, 14, 58, 6), stone);
+    const angle = i * 0.7;
+    const dist = radius * 0.58;
+    tower.position.set(Math.cos(angle) * dist, height + 29, Math.sin(angle) * dist);
+    tower.castShadow = true;
+    group.add(tower);
+  }
+
+  const dock = new THREE.Mesh(new THREE.BoxGeometry(42, 2.5, 210), wood);
+  dock.position.set(-radius * 0.54, height + 1.2, radius * 0.62);
+  dock.rotation.y = -0.58;
+  dock.castShadow = true;
+  group.add(dock);
+}
+
+function addDesertIslandDetails(group, radius, height) {
+  const sand = new THREE.Mesh(
+    makeIrregularDiscGeometry(radius * 0.82, 96, 177),
+    new THREE.MeshStandardMaterial({ color: 0xd6aa64, roughness: 0.96 }),
+  );
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.y = height + 0.44;
+  group.add(sand);
+
+  for (let i = 0; i < 28; i += 1) {
+    const obelisk = new THREE.Mesh(
+      new THREE.ConeGeometry(8 + (i % 4) * 2, 48 + (i % 5) * 8, 4),
+      new THREE.MeshStandardMaterial({ color: 0x9d7647, roughness: 0.92, flatShading: true }),
+    );
+    const angle = i * 1.41;
+    const dist = radius * (0.16 + ((i * 29) % 62) / 100);
+    obelisk.position.set(Math.cos(angle) * dist, height + 24, Math.sin(angle) * dist);
+    obelisk.rotation.y = angle;
+    obelisk.castShadow = true;
+    group.add(obelisk);
+  }
 }
 
 function createPalmTree(height) {
@@ -1933,6 +2132,68 @@ function createSwordDealer(position) {
   });
 }
 
+function createOutpostQuestGiver(position) {
+  const giver = new THREE.Group();
+  giver.position.copy(position);
+  giver.add(createHumanAvatarModel({
+    name: "Outpost Captain",
+    skin: "#c98b62",
+    shirt: "#3d5f72",
+    pants: "#2b2624",
+    hair: "#3a2118",
+    eyes: "#101820",
+    boots: "#24160e",
+    hairStyle: "cap",
+    outfit: "coat",
+    height: 106,
+    build: 108,
+  }, { showSword: true, showName: false }));
+  const label = makeLabel("Quest Hub", 1.25);
+  label.position.y = 15;
+  giver.add(label);
+  scene.add(giver);
+  interactables.push({
+    type: "questHub",
+    mesh: giver,
+    prompt: "Press E: View Outpost quests",
+  });
+}
+
+function createHakiTrainer(position) {
+  const trainer = new THREE.Group();
+  trainer.position.copy(position);
+  trainer.add(createHumanAvatarModel({
+    name: "Haki Trainer",
+    skin: "#b68158",
+    shirt: "#111111",
+    pants: "#292929",
+    hair: "#f2f2e8",
+    eyes: "#0a0a0a",
+    boots: "#101010",
+    hairStyle: "spiky",
+    outfit: "armor",
+    height: 112,
+    build: 118,
+  }, { showSword: false, showName: false }));
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(5.5, 0.2, 8, 42),
+    new THREE.MeshBasicMaterial({ color: 0x151515, transparent: true, opacity: 0.75 }),
+  );
+  aura.position.y = 2;
+  aura.rotation.x = Math.PI / 2;
+  trainer.add(aura);
+  const label = makeLabel("Haki Trainer", 1);
+  label.position.y = 15;
+  trainer.add(label);
+  scene.add(trainer);
+  animatedWorldObjects.push({ mesh: aura, type: "teleporter", speed: 0.018, phase: 1.2 });
+  interactables.push({
+    type: "hakiTrainer",
+    mesh: trainer,
+    prompt: "Press E: Learn Armament Haki",
+  });
+}
+
 function createBoat(type) {
   const sizes = {
     dinghy: { length: 18, width: 6, color: 0x8c5c3a, sail: false },
@@ -2033,6 +2294,84 @@ function createBanditCamp() {
   ];
 
   spots.forEach((spot, index) => spawnBandit(new THREE.Vector3(...spot), index));
+}
+
+function spawnPirateCamp(island) {
+  const center = island.position;
+  for (let i = 0; i < 6; i += 1) {
+    const angle = i * 1.05;
+    spawnAdvancedEnemy(center.clone().add(new THREE.Vector3(Math.cos(angle) * 230, island.surfaceY, Math.sin(angle) * 230)), i, "pirate");
+  }
+}
+
+function spawnBruteCamp(island) {
+  const center = island.position.clone().add(new THREE.Vector3(-260, 0, 210));
+  for (let i = 0; i < 4; i += 1) {
+    const angle = i * 1.5;
+    spawnAdvancedEnemy(center.clone().add(new THREE.Vector3(Math.cos(angle) * 150, island.surfaceY, Math.sin(angle) * 150)), i, "brute");
+  }
+}
+
+function spawnAdvancedEnemy(position, index, type) {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  const isBrute = type === "brute";
+  const isBoss = type === "buggy";
+  group.add(createHumanAvatarModel({
+    id: `${type}-${index}`,
+    name: isBoss ? "Buggy" : isBrute ? `Brute ${index + 1}` : `Pirate ${index + 1}`,
+    skin: isBoss ? "#f1c29b" : "#b97852",
+    shirt: isBoss ? "#d74343" : isBrute ? "#3e3430" : "#722b30",
+    pants: isBoss ? "#7a4f9d" : "#222a34",
+    hair: isBoss ? "#1f67c7" : "#1b120d",
+    eyes: "#101010",
+    boots: "#1a120d",
+    hairStyle: isBoss ? "cap" : "short",
+    outfit: isBrute ? "armor" : "coat",
+    height: isBoss ? 118 : isBrute ? 126 : 104,
+    build: isBoss ? 126 : isBrute ? 142 : 108,
+  }, { showSword: !isBrute, showName: false, bandanaColor: isBoss ? "#ff3131" : "#b92832" }));
+  if (isBrute) addMaceToEnemy(group);
+  scene.add(group);
+  enemies.push({
+    id: `${type}-${index}`,
+    type,
+    mesh: group,
+    spawn: position.clone(),
+    health: isBoss ? 850 : isBrute ? 180 : 95,
+    maxHealth: isBoss ? 850 : isBrute ? 180 : 95,
+    alive: true,
+    respawnTimer: 0,
+    hitTimer: 0,
+    ai: {
+      state: "patrol",
+      cooldown: 0.5 + index * 0.2,
+      rush: 1.8,
+      slash: 2.4,
+      slam: 3.2,
+      dodge: 1.5,
+    },
+  });
+}
+
+function spawnBuggyBoss(position) {
+  spawnAdvancedEnemy(position, 0, "buggy");
+}
+
+function addMaceToEnemy(group) {
+  const mace = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.42, 6, 10),
+    new THREE.MeshStandardMaterial({ color: 0x4a4642, roughness: 0.72, metalness: 0.35 }),
+  );
+  mace.position.set(3.5, 5.2, 0.8);
+  mace.rotation.z = -0.72;
+  group.add(mace);
+  const head = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(1.25, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2f2d2b, roughness: 0.82, metalness: 0.5 }),
+  );
+  head.position.set(5.2, 3.5, 0.8);
+  group.add(head);
 }
 
 function spawnBandit(position, index) {
@@ -2293,14 +2632,19 @@ function updateDerivedStats() {
 function loop(time) {
   const dt = Math.min(0.033, (time - (loop.lastTime || time)) / 1000);
   loop.lastTime = time;
+  const stepDt = hitStopTimer > 0 ? dt * 0.12 : dt;
+  hitStopTimer = Math.max(0, hitStopTimer - dt);
 
   if (gameStarted) {
-    updatePlayer(dt);
-    updateEnemies(dt);
-    updateCombatEffects(dt);
+    updatePlayer(stepDt);
+    updateEnemies(stepDt);
+    updateHazards(stepDt);
+    updateProjectiles(stepDt);
+    updateCombatEffects(stepDt);
     updateInteractionPrompt();
-    updateTeleport(dt);
+    updateTeleport(stepDt);
     updateCamera();
+    updateBossHud();
   } else {
     const drift = Math.sin(time * 0.00035) * 7;
     camera.position.set(350 + drift, 210, 560);
@@ -2352,26 +2696,57 @@ function updatePlayer(dt) {
     const forward = new THREE.Vector3(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
     const right = new THREE.Vector3(forward.z, 0, -forward.x);
     const move = forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x)).normalize();
-    playerMesh.position.addScaledVector(move, dt * 95 * getAvatarTraits().speedMultiplier);
+    const staminaFactor = player.stamina <= 1 && player.movementMode === "sprint" ? 0.78 : 1;
+    const modeSpeed = player.movementMode === "sprint" ? 1.55 : 0.72;
+    const swimSpeed = player.isSwimming ? 0.54 : 1;
+    const speed = 95 * getAvatarTraits().speedMultiplier * modeSpeed * staminaFactor * swimSpeed;
+    playerMesh.position.addScaledVector(move, dt * speed);
+    player.lastMoveSpeed = speed * input.length();
     playerMesh.rotation.y = Math.atan2(move.x, move.z);
     resolveWallCollision(previousPosition);
+  } else {
+    player.lastMoveSpeed = 0;
   }
 
   const island = getIslandUnderPlayer();
   if (!island) {
-    playerMesh.position.y = OCEAN_SURFACE_Y + 0.75;
-    isGrounded = false;
+    updateSwimming(dt);
     verticalVelocity = 0;
     jumpOffset = 0;
   } else {
+    if (player.isSwimming) createSplashEffect(playerMesh.position.clone());
+    player.isSwimming = false;
+    player.oxygen = Math.min(100, player.oxygen + dt * 18);
     playerMesh.position.y = island.surfaceY + 0.15;
     updateIslandArrival(island);
     updateJump(dt);
   }
+  updateStamina(dt, input.lengthSq() > 0);
   updatePlayerAnimation(dt);
 
   attackCooldown = Math.max(0, attackCooldown - dt);
   wallHitCooldown = Math.max(0, wallHitCooldown - dt);
+  player.dashCooldown = Math.max(0, player.dashCooldown - dt);
+}
+
+function updateStamina(dt, moving) {
+  if (player.movementMode === "sprint" && moving && !player.isSwimming) {
+    player.stamina = Math.max(0, player.stamina - dt * 16);
+    if (player.stamina <= 0) setMovementMode("walk");
+  } else {
+    player.stamina = Math.min(player.maxStamina, player.stamina + dt * (player.movementMode === "walk" ? 18 : 9));
+  }
+}
+
+function updateSwimming(dt) {
+  player.isSwimming = true;
+  playerMesh.position.y = OCEAN_SURFACE_Y + 0.75 + Math.sin(performance.now() * 0.006) * 0.25;
+  player.oxygen = Math.max(0, player.oxygen - dt * 4.5);
+  if (player.oxygen <= 0 && wallHitCooldown <= 0) {
+    applyImpactDamage(8, playerMesh.position.clone(), new THREE.Vector3(0, 0, 1), "drowning");
+    wallHitCooldown = 1;
+  }
+  if (Math.random() < dt * 4) createBubbleEffect(playerMesh.position.clone());
 }
 
 function updateIslandArrival(island) {
@@ -2401,10 +2776,17 @@ function resolveWallCollision(previousPosition) {
   playerMesh.position.copy(previousPosition);
   playerMesh.position.addScaledVector(hitDirection, 2.5);
 
-  if ((collision.damage ?? 10) > 0 && wallHitCooldown <= 0) {
-    player.health = Math.max(0, player.health - (collision.damage ?? 10));
+  const impactDamage = calculateImpactDamage({
+    speed: player.lastMoveSpeed,
+    verticalVelocity: 0,
+    material: collision.material,
+    toughness: collision.toughness,
+    baseDamage: collision.damage ?? 10,
+  });
+
+  if (impactDamage > 0 && wallHitCooldown <= 0) {
+    applyImpactDamage(impactDamage, playerMesh.position.clone(), hitDirection, collision.label);
     wallHitCooldown = 0.75;
-    triggerWallHitAnimation(hitDirection, collision.label);
     updateHud();
     if (player.health <= 0) {
       player.health = player.maxHealth;
@@ -2412,8 +2794,40 @@ function resolveWallCollision(previousPosition) {
       updateHud();
       log("You crashed into a wall and were returned to the island dock.");
     }
-  } else if ((collision.damage ?? 10) <= 0) {
+  } else {
     triggerWallHitAnimation(hitDirection, collision.label, false);
+  }
+}
+
+function calculateImpactDamage({ speed = 0, verticalVelocity = 0, material = "stone", toughness = 1, baseDamage = 10 }) {
+  const materialMultiplier = {
+    grass: 0.35,
+    sand: 0.45,
+    wood: 0.75,
+    stone: 1.1,
+    metal: 1.45,
+    spikes: 2.2,
+    water: 0.2,
+  }[material] || 1;
+  const sprintRisk = player.movementMode === "sprint" ? 1.45 : 0.72;
+  const blockReduction = player.isBlocking ? 0.55 : 1;
+  const hakiReduction = player.haki.active ? Math.max(0.35, 1 - player.haki.level * 0.12) : 1;
+  const force = Math.max(0, speed - 72) * 0.22 + Math.max(0, Math.abs(verticalVelocity) - 70) * 0.3;
+  if (force < 3) return 0;
+  return Math.round((force + baseDamage * 0.25) * materialMultiplier * toughness * sprintRisk * blockReduction * hakiReduction);
+}
+
+function applyImpactDamage(amount, position, direction, label) {
+  player.health = Math.max(0, player.health - amount);
+  cameraShake = Math.max(cameraShake, Math.min(1.8, amount / 18));
+  hitStopTimer = Math.max(hitStopTimer, Math.min(0.16, amount / 180));
+  triggerWallHitAnimation(direction, label, amount > 0);
+  createFloatingText(position, `-${amount}`, "#ff6b4a");
+  if (amount >= 18) {
+    createDustCloud(position);
+    log(`Major impact with ${label}: ${amount} damage.`);
+  } else {
+    log(`${label} impact: ${amount} damage.`);
   }
 }
 
@@ -2527,13 +2941,38 @@ function jump() {
   isGrounded = false;
 }
 
+function dash() {
+  if (!gameStarted || player.dashCooldown > 0 || player.stamina < 18) return;
+  const direction = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y));
+  playerMesh.position.addScaledVector(direction, 24);
+  player.stamina -= 18;
+  player.dashCooldown = 0.7;
+  player.isDashing = true;
+  setTimeout(() => {
+    player.isDashing = false;
+  }, 180);
+  createDustCloud(playerMesh.position.clone());
+}
+
 function updateJump(dt) {
   if (!isGrounded || jumpOffset > 0) {
     verticalVelocity -= 138 * dt;
     jumpOffset += verticalVelocity * dt;
+    player.lastFallVelocity = Math.min(player.lastFallVelocity, verticalVelocity);
     if (jumpOffset <= 0) {
+      const fallDamage = calculateImpactDamage({
+        verticalVelocity: player.lastFallVelocity,
+        speed: player.lastMoveSpeed * 0.2,
+        material: "grass",
+        toughness: 0.7,
+        baseDamage: 7,
+      });
+      if (fallDamage > 0) {
+        applyImpactDamage(fallDamage, playerMesh.position.clone(), new THREE.Vector3(0, 0, 1), "the ground");
+      }
       jumpOffset = 0;
       verticalVelocity = 0;
+      player.lastFallVelocity = 0;
       isGrounded = true;
     }
   }
@@ -2554,26 +2993,63 @@ function updateEnemies(dt) {
     }
 
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+    enemy.ai = enemy.ai || { cooldown: 0, rush: 1, slash: 1, slam: 1, dodge: 1 };
+    enemy.ai.cooldown = Math.max(0, enemy.ai.cooldown - dt);
+    enemy.ai.rush = Math.max(0, enemy.ai.rush - dt);
+    enemy.ai.slash = Math.max(0, enemy.ai.slash - dt);
+    enemy.ai.slam = Math.max(0, enemy.ai.slam - dt);
+    enemy.ai.dodge = Math.max(0, enemy.ai.dodge - dt);
     const distance = enemy.mesh.position.distanceTo(playerMesh.position);
-    if (distance < 90) {
+    const aggroRange = enemy.type ? 170 : 90;
+    if (distance < aggroRange) {
       const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
-      enemy.mesh.position.addScaledVector(direction, dt * 26);
+      const speed = enemy.type === "brute" ? 18 : enemy.type === "buggy" ? 42 : enemy.type === "pirate" ? 36 : 26;
+      if (enemy.type === "pirate" && enemy.ai.dodge <= 0 && distance < 38) {
+        const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(Math.random() > 0.5 ? 1 : -1);
+        enemy.mesh.position.addScaledVector(side, dt * 80);
+        enemy.ai.dodge = 1.2;
+      } else {
+        enemy.mesh.position.addScaledVector(direction, dt * speed);
+      }
       enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+      if ((enemy.type === "pirate" || enemy.type === "buggy") && enemy.ai.rush <= 0 && distance < 58) {
+        enemy.mesh.position.addScaledVector(direction, 18);
+        enemy.ai.rush = enemy.type === "buggy" ? 1.6 : 2.8;
+        createSwordSlash({ mesh: playerMesh });
+        damagePlayer(enemy.type === "buggy" ? 18 : 12, "Rapid Rush");
+      }
+      if ((enemy.type === "pirate" || enemy.type === "buggy") && enemy.ai.slash <= 0 && distance < 135) {
+        createAirSlash(enemy.mesh.position.clone().setY(enemy.mesh.position.y + 7), direction, enemy);
+        enemy.ai.slash = enemy.type === "buggy" ? 2.1 : 3.3;
+      }
+      if (enemy.type === "brute" && enemy.ai.slam <= 0 && distance < 44) {
+        createGroundSlam(enemy.mesh.position.clone(), enemy);
+        enemy.ai.slam = 4.5;
+      }
     }
     if (distance < 7 && enemy.hitTimer <= 0) {
-      player.health = Math.max(0, player.health - Math.round(8 * getAvatarTraits().incomingDamageMultiplier));
+      damagePlayer(Math.round((enemy.type === "brute" ? 18 : enemy.type === "buggy" ? 22 : 8) * getAvatarTraits().incomingDamageMultiplier), enemy.type === "brute" ? "mace hit" : "enemy strike");
       enemy.hitTimer = 1.0;
-      if (player.health <= 0) {
-        player.health = player.maxHealth;
-        playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
-        jumpOffset = 0;
-        verticalVelocity = 0;
-        isGrounded = true;
-        log("You were knocked out and returned to the island dock.");
-      }
       updateHud();
     }
   });
+}
+
+function damagePlayer(amount, source) {
+  const block = player.isBlocking ? 0.45 : 1;
+  const haki = player.haki.active ? Math.max(0.35, 1 - player.haki.level * 0.1) : 1;
+  const finalDamage = Math.max(1, Math.round(amount * block * haki));
+  player.health = Math.max(0, player.health - finalDamage);
+  cameraShake = Math.max(cameraShake, finalDamage / 25);
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `-${finalDamage}`, "#ff6b4a");
+  if (player.health <= 0) {
+    player.health = player.maxHealth;
+    playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+    jumpOffset = 0;
+    verticalVelocity = 0;
+    isGrounded = true;
+    log(`You were knocked out by ${source} and returned to the island dock.`);
+  }
 }
 
 function updateCamera() {
@@ -2581,12 +3057,21 @@ function updateCamera() {
   const distance = 58;
   const horizontalDistance = Math.cos(cameraPitch) * distance;
   const height = 14 + Math.sin(cameraPitch) * distance;
+  const island = getIslandUnderPlayer();
+  const floorY = (island ? island.surfaceY : OCEAN_SURFACE_Y) + 4.5;
   const offset = new THREE.Vector3(
     Math.sin(targetYaw) * horizontalDistance,
-    height,
+    Math.max(height, floorY - playerMesh.position.y),
     Math.cos(targetYaw) * horizontalDistance,
   );
   camera.position.lerp(playerMesh.position.clone().add(offset), 0.12);
+  if (camera.position.y < floorY) camera.position.y = floorY;
+  if (cameraShake > 0) {
+    camera.position.x += (Math.random() - 0.5) * cameraShake;
+    camera.position.y += (Math.random() - 0.5) * cameraShake * 0.65;
+    camera.position.z += (Math.random() - 0.5) * cameraShake;
+    cameraShake = Math.max(0, cameraShake - 0.08);
+  }
   camera.lookAt(playerMesh.position.x, playerMesh.position.y + 7, playerMesh.position.z);
   if (shiftLockEnabled) {
     cameraYaw = targetYaw;
@@ -2622,6 +3107,10 @@ function interact() {
     updateHud();
   } else if (nearbyInteractable.type === "boat") {
     showBoatMenu();
+  } else if (nearbyInteractable.type === "questHub") {
+    showQuestDialogue();
+  } else if (nearbyInteractable.type === "hakiTrainer") {
+    purchaseHaki();
   } else if (nearbyInteractable.type === "sword") {
     if (player.hasSword) {
       log("You already own a blade. Press 2 to equip the sword.");
@@ -2647,6 +3136,63 @@ function interact() {
     createWallHitEffect(playerMesh.position.clone(), false);
     log("Teleported to Jungle Island.");
   }
+}
+
+function showQuestDialogue() {
+  if (!dialoguePanel || !questOptions) return;
+  dialoguePanel.classList.remove("hidden");
+  dialogueTitle.textContent = "Outpost Quest Hub";
+  dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+  questOptions.innerHTML = "";
+  Object.values(questCatalog).forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quest-option";
+    button.innerHTML = `<strong>${entry.title}</strong><span>Level ${entry.minLevel}+ | ${entry.detail}</span><small>Reward: $${entry.rewardMoney}, ${entry.rewardXp} XP</small>`;
+    button.addEventListener("click", () => acceptMajorQuest(entry.id));
+    questOptions.append(button);
+  });
+}
+
+function hideQuestDialogue() {
+  dialoguePanel?.classList.add("hidden");
+}
+
+function acceptMajorQuest(id) {
+  const template = questCatalog[id];
+  if (!template) return;
+  if (player.level < template.minLevel) {
+    log(`${template.title} recommends level ${template.minLevel}. Train more before accepting.`);
+    return;
+  }
+  activeQuest = { ...template, defeated: 0, active: true };
+  hideQuestDialogue();
+  updateHud();
+  log(`Quest accepted: ${activeQuest.title}.`);
+}
+
+function purchaseHaki() {
+  if (player.haki.unlocked) {
+    log("You already know Armament Haki. Press H or use the Haki button to toggle it.");
+    return;
+  }
+  if (player.level < 60) {
+    log("The Haki Trainer refuses: reach level 60 before training.");
+    return;
+  }
+  if (player.money < 3500) {
+    log("Armament Haki training costs $3500.");
+    return;
+  }
+  player.money -= 3500;
+  player.haki.unlocked = true;
+  player.haki.level = 1;
+  player.haki.nextKills = 8;
+  player.haki.active = true;
+  hakiToggle?.classList.add("active");
+  applyHakiVisuals();
+  updateHud();
+  log("Armament Haki Level 1 unlocked.");
 }
 
 function attack() {
@@ -2679,7 +3225,7 @@ function attack() {
   log(`${weaponName()} hit a bandit for ${damage} damage.`);
 
   if (target.health <= 0) {
-    defeatBandit(target);
+    defeatEnemy(target);
   }
 }
 
@@ -2914,12 +3460,167 @@ function makeSlashTexture() {
   return makeSlashTexture.texture;
 }
 
+function createAirSlash(position, direction, enemy) {
+  const projectile = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: makeSlashTexture(),
+      color: enemy.type === "buggy" ? 0xff4668 : 0x9defff,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    }),
+  );
+  projectile.position.copy(position);
+  projectile.scale.set(16, 8, 1);
+  scene.add(projectile);
+  projectiles.push({ mesh: projectile, direction: direction.clone(), speed: enemy.type === "buggy" ? 118 : 92, damage: enemy.type === "buggy" ? 24 : 14, age: 0, duration: 1.8 });
+}
+
+function updateProjectiles(dt) {
+  for (let i = projectiles.length - 1; i >= 0; i -= 1) {
+    const projectile = projectiles[i];
+    projectile.age += dt;
+    projectile.mesh.position.addScaledVector(projectile.direction, projectile.speed * dt);
+    projectile.mesh.material.rotation += dt * 7;
+    if (projectile.mesh.position.distanceTo(playerMesh.position) < 8) {
+      damagePlayer(projectile.damage, "Air Slash");
+      scene.remove(projectile.mesh);
+      projectiles.splice(i, 1);
+      continue;
+    }
+    if (projectile.age >= projectile.duration) {
+      scene.remove(projectile.mesh);
+      projectiles.splice(i, 1);
+    }
+  }
+}
+
+function createGroundSlam(position, enemy) {
+  cameraShake = Math.max(cameraShake, 1.2);
+  createDustCloud(position);
+  for (let i = 0; i < 9; i += 1) {
+    const angle = (i / 9) * Math.PI * 2;
+    const spike = new THREE.Mesh(
+      new THREE.ConeGeometry(3.5, 22, 5),
+      new THREE.MeshStandardMaterial({ color: 0x6b5f54, roughness: 0.95, flatShading: true }),
+    );
+    spike.position.copy(position).add(new THREE.Vector3(Math.cos(angle) * 22, 9, Math.sin(angle) * 22));
+    spike.rotation.z = Math.sin(i) * 0.25;
+    spike.castShadow = true;
+    scene.add(spike);
+    hazards.push({ mesh: spike, damage: enemy.type === "brute" ? 20 : 28, radius: 8, age: 0, duration: 3.4 });
+  }
+}
+
+function updateHazards(dt) {
+  for (let i = hazards.length - 1; i >= 0; i -= 1) {
+    const hazard = hazards[i];
+    hazard.age += dt;
+    const scale = hazard.age < 0.25 ? hazard.age / 0.25 : 1;
+    hazard.mesh.scale.setScalar(scale);
+    if (hazard.mesh.position.distanceTo(playerMesh.position) < hazard.radius && wallHitCooldown <= 0) {
+      applyImpactDamage(hazard.damage, playerMesh.position.clone(), playerMesh.position.clone().sub(hazard.mesh.position).normalize(), "rock spikes");
+      wallHitCooldown = 0.8;
+    }
+    if (hazard.age >= hazard.duration) {
+      scene.remove(hazard.mesh);
+      hazards.splice(i, 1);
+    }
+  }
+}
+
+function createFloatingText(position, text, color = "#fff7e6") {
+  const label = makeLabel(text, 0.72);
+  label.position.copy(position);
+  label.material.color = new THREE.Color(color);
+  addTimedEffect(label, 0.75, (mesh, progress) => {
+    mesh.position.y += 0.22;
+    mesh.material.opacity = 1 - progress;
+  });
+}
+
+function createDustCloud(position) {
+  for (let i = 0; i < 10; i += 1) {
+    const dust = new THREE.Mesh(
+      new THREE.SphereGeometry(1.8 + (i % 3), 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xb99b72, transparent: true, opacity: 0.34 }),
+    );
+    const angle = i * 1.7;
+    const dir = new THREE.Vector3(Math.cos(angle), 0.15, Math.sin(angle)).normalize();
+    dust.position.copy(position).add(new THREE.Vector3(0, 2, 0));
+    scene.add(dust);
+    addTimedEffect(dust, 0.55, (mesh, progress, dt) => {
+      mesh.position.addScaledVector(dir, dt * 38);
+      mesh.scale.setScalar(1 + progress * 2);
+      mesh.material.opacity = 0.34 * (1 - progress);
+    });
+  }
+}
+
+function createSplashEffect(position) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(5, 0.18, 8, 36),
+    new THREE.MeshBasicMaterial({ color: 0x9defff, transparent: true, opacity: 0.7 }),
+  );
+  ring.position.copy(position);
+  ring.position.y = OCEAN_SURFACE_Y + 0.15;
+  ring.rotation.x = Math.PI / 2;
+  addTimedEffect(ring, 0.38, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 2.4);
+    mesh.material.opacity = 0.7 * (1 - progress);
+  });
+}
+
+function createBubbleEffect(position) {
+  const bubble = new THREE.Mesh(
+    new THREE.SphereGeometry(0.8, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xcff8ff, transparent: true, opacity: 0.45 }),
+  );
+  bubble.position.copy(position);
+  addTimedEffect(bubble, 1.1, (mesh, progress) => {
+    mesh.position.y += 0.18;
+    mesh.material.opacity = 0.45 * (1 - progress);
+  });
+}
+
+function applyHakiVisuals() {
+  const model = playerMesh?.children?.[0];
+  const parts = model?.userData?.parts;
+  if (!parts) return;
+  const covered = player.haki.active ? ["rightArm", "leftArm", "torso", "rightLeg", "leftLeg", "head"].slice(0, Math.min(6, player.haki.level + 1)) : [];
+  Object.entries(parts).forEach(([name, mesh]) => {
+    if (!mesh.material) return;
+    if (!mesh.userData.baseColor) mesh.userData.baseColor = mesh.material.color.clone();
+    if (covered.includes(name)) {
+      mesh.material.color.set(player.haki.level >= 5 ? 0x050505 : 0x181a1e);
+      mesh.material.emissive?.set(player.haki.level >= 4 ? 0x1a0f3a : 0x000000);
+      mesh.material.emissiveIntensity = player.haki.level >= 4 ? 0.25 : 0;
+    } else {
+      mesh.material.color.copy(mesh.userData.baseColor);
+      if (mesh.material.emissive) mesh.material.emissive.set(0x000000);
+      mesh.material.emissiveIntensity = 0;
+    }
+  });
+}
+
+function updateBossHud() {
+  const boss = enemies.find((enemy) => enemy.type === "buggy" && enemy.alive);
+  if (!boss || boss.mesh.position.distanceTo(playerMesh.position) > 260) {
+    bossBar?.classList.add("hidden");
+    return;
+  }
+  bossBar?.classList.remove("hidden");
+  if (bossName) bossName.textContent = "Buggy the Clown Captain";
+  if (bossHealthBar) bossHealthBar.style.width = `${Math.max(0, (boss.health / boss.maxHealth) * 100)}%`;
+}
+
 function getDamage() {
   const traits = getAvatarTraits();
-  if (player.weapon === "sword") return Math.round((12 + player.stats.sword * 5) * traits.damageMultiplier);
-  if (player.weapon === "gun") return Math.round((9 + player.stats.gun * 4) * traits.damageMultiplier);
-  if (player.weapon === "special") return Math.round((20 + player.stats.special * 7) * traits.damageMultiplier);
-  return Math.round((10 + player.stats.melee * 5) * traits.damageMultiplier);
+  const hakiBonus = player.haki.active ? 1 + player.haki.level * 0.12 : 1;
+  if (player.weapon === "sword") return Math.round((12 + player.stats.sword * 5) * traits.damageMultiplier * hakiBonus);
+  if (player.weapon === "gun") return Math.round((9 + player.stats.gun * 4) * traits.damageMultiplier * hakiBonus);
+  if (player.weapon === "special") return Math.round((20 + player.stats.special * 7) * traits.damageMultiplier * hakiBonus);
+  return Math.round((10 + player.stats.melee * 5) * traits.damageMultiplier * hakiBonus);
 }
 
 function weaponName() {
@@ -2928,13 +3629,19 @@ function weaponName() {
 }
 
 function defeatBandit(enemy) {
+  defeatEnemy(enemy);
+}
+
+function defeatEnemy(enemy) {
   enemy.alive = false;
   enemy.mesh.visible = false;
-  enemy.respawnTimer = 6;
-  addXp(18);
-  player.money += 12;
-  player.materials.ironwood += 1;
-  player.materials.scrap += 1;
+  enemy.respawnTimer = enemy.type === "buggy" ? 999 : 6;
+  const xpReward = enemy.type === "buggy" ? 9000 : enemy.type === "brute" ? 950 : enemy.type === "pirate" ? 520 : 18;
+  const moneyReward = enemy.type === "buggy" ? 4200 : enemy.type === "brute" ? 95 : enemy.type === "pirate" ? 62 : 12;
+  addXp(xpReward);
+  player.money += moneyReward;
+  player.materials.ironwood += enemy.type ? 2 : 1;
+  player.materials.scrap += enemy.type === "brute" ? 3 : 1;
 
   if (quest.active && !quest.complete) {
     quest.defeated += 1;
@@ -2942,9 +3649,37 @@ function defeatBandit(enemy) {
       completeQuest();
     }
   }
+  if (activeQuest?.active && (!activeQuest.targetType || activeQuest.targetType === enemy.type)) {
+    activeQuest.defeated += 1;
+    if (activeQuest.defeated >= activeQuest.target) completeMajorQuest();
+  }
+  if (player.haki.active && player.haki.unlocked) {
+    player.haki.kills += 1;
+    if (player.haki.level < 5 && player.haki.kills >= player.haki.nextKills) {
+      player.haki.kills = 0;
+      player.haki.level += 1;
+      player.haki.nextKills *= 2;
+      applyHakiVisuals();
+      log(`Armament Haki reached Level ${player.haki.level}.`);
+    }
+  }
+  if (enemy.type === "buggy") {
+    bossBar?.classList.add("hidden");
+    player.materials.jungleCore += 2;
+    log("Buggy defeated: massive XP, cash, and rare cores acquired.");
+  }
 
   updateHud();
   renderInventory();
+}
+
+function completeMajorQuest() {
+  if (!activeQuest) return;
+  player.money += activeQuest.rewardMoney;
+  addXp(activeQuest.rewardXp);
+  log(`Quest complete: ${activeQuest.title}. +$${activeQuest.rewardMoney}, +${activeQuest.rewardXp} XP.`);
+  activeQuest.active = false;
+  activeQuest = null;
 }
 
 function completeQuest() {
@@ -2980,13 +3715,18 @@ function updateHud() {
   ui.healthBar.style.width = `${(player.health / player.maxHealth) * 100}%`;
   ui.xpText.textContent = `${player.xp}/${player.xpToNext}`;
   ui.xpBar.style.width = `${(player.xp / player.xpToNext) * 100}%`;
+  if (ui.staminaText) ui.staminaText.textContent = `${Math.round(player.stamina)}/${player.maxStamina}`;
+  if (ui.staminaBar) ui.staminaBar.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
   ui.money.textContent = `$${player.money} | Wood ${player.materials.ironwood} | Scrap ${player.materials.scrap} | Core ${player.materials.jungleCore}`;
   if (ui.sea) ui.sea.textContent = hasReachedJungle ? "Jungle Island" : "First Sea";
   ui.points.textContent = `${player.statPoints} points`;
 
-  if (quest.complete) {
+  if (activeQuest?.active) {
+    ui.questTitle.textContent = `${activeQuest.title} | Haki ${player.haki.level || 0}`;
+    ui.questDetail.textContent = `${activeQuest.detail} Progress: ${activeQuest.defeated}/${activeQuest.target}. Haki kills: ${player.haki.kills}/${player.haki.nextKills}.`;
+  } else if (quest.complete) {
     ui.questTitle.textContent = "Starter Island Cleared";
-    ui.questDetail.textContent = "Special ability unlocked. Spend stat points, then prepare for larger islands.";
+    ui.questDetail.textContent = `Special ability unlocked. Haki ${player.haki.unlocked ? `Lv ${player.haki.level}` : "locked until level 60 Desert training"}.`;
   } else if (quest.active) {
     ui.questTitle.textContent = "Bandit Trouble";
     ui.questDetail.textContent = `Defeat bandits: ${quest.defeated}/${quest.target}. Reward: $${quest.rewardMoney}, ${quest.rewardXp} XP.`;
