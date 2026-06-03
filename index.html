@@ -168,12 +168,40 @@
             <button data-inventory-tab="swords" type="button">Swords</button>
             <button data-inventory-tab="guns" type="button">Guns</button>
             <button data-inventory-tab="special" type="button">Special</button>
+            <button data-inventory-tab="mastery" type="button">⭐ Mastery</button>
           </div>
           <div id="inventory-list" class="inventory-list"></div>
         </div>
 
+        <div id="boss-bar" class="boss-bar hidden">
+          <strong id="boss-name">Boss</strong>
+          <span><i id="boss-health-bar"></i></span>
+        </div>
+
         <div id="prompt" class="prompt hidden"></div>
         <div id="message-log" class="message-log"></div>
+
+        <div id="combat-hud" class="combat-hud">
+          <div class="combat-hud-header">
+            <span id="combat-weapon-icon" class="combat-weapon-icon">👊</span>
+            <div class="combat-hud-title">
+              <strong id="combat-weapon-name">COMBAT</strong>
+              <span id="combat-mastery-label">Mastery 0 (Max. 600)</span>
+            </div>
+          </div>
+          <div class="combat-mastery-bar-wrap">
+            <div id="combat-mastery-bar" class="combat-mastery-bar"></div>
+            <span id="combat-mastery-text" class="combat-mastery-text">0/600</span>
+          </div>
+          <div id="combat-skills-list" class="combat-skills-list"></div>
+        </div>
+
+        <div id="quest-compass" class="quest-compass">
+          <div class="compass-ring"></div>
+          <div class="compass-n">N</div>
+          <div id="compass-pointer" class="compass-pointer"></div>
+          <span id="compass-label" class="compass-label">Quest</span>
+        </div>
 
         <div id="boat-menu" class="boat-menu hidden">
           <strong>Boat Dock</strong>
@@ -189,14 +217,26 @@
         <div class="controls">
           <strong>Controls</strong>
           <span>WASD move</span>
-          <span>Right mouse drag rotate</span>
+          <span>Right mouse rotate</span>
           <span>Left click attack</span>
           <span>Space jump</span>
-          <span>1 melee</span>
-          <span>2 sword</span>
-          <span>3 gun</span>
-          <span>4 special</span>
+          <span>1 melee · 2 sword</span>
+          <span>3 gun · 4 special</span>
+          <span>Z/X/C skills</span>
+          <span>V/B special skills</span>
           <span>E interact</span>
+          <span>F block · H Haki</span>
+          <span>Q dash · G helm</span>
+          <span>Shift sprint</span>
+        </div>
+
+        <!-- Low Health & Defeat Screen Overlay -->
+        <div id="low-health-overlay" class="low-health-overlay">
+          <div class="defeat-card">
+            <span class="defeat-title">DEFEATED</span>
+            <span class="defeat-subtitle">You were knocked out in battle</span>
+            <button id="respawn-button" class="respawn-btn" type="button">Respawn</button>
+          </div>
         </div>
       </section>
     </div>

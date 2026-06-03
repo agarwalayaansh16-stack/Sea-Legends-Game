@@ -168,31 +168,28 @@ const audio = {
   }
 };
 
+let skillCooldowns = {};
+
 const masterySkills = {
   melee: [
-    { name: "Falcon Punch", req: 50, desc: "Normal hits have 15% chance to deal 2.5x damage + high knockback." },
-    { name: "Ground Slam", req: 200, desc: "Air attack (Space + Left Click) slams ground dealing AOE damage." },
-    { name: "Gatling Flurry", req: 500, desc: "Hold Click down for rapid-fire 0.1s strikes." }
+    { key: "Z", id: "falcon-punch", name: "Falcon Punch", req: 5, cd: 4, desc: "Active: A very hard punch going 24 units far in the direction you face." },
+    { key: "X", id: "ground-slam", name: "Ground Slam", req: 20, cd: 8, desc: "Active: Slam the ground dealing massive AOE damage around you." }
   ],
   defense: [
-    { name: "Perfect Parry", req: 50, desc: "Blocking within 0.2s of attack reflects 40% damage." },
-    { name: "Iron Bastion", req: 200, desc: "Blocking slowly regenerates +3.5 health/second." },
-    { name: "Armored Will", req: 500, desc: "Fatal hits leave you at 1 HP + 3s shield (90s CD)." }
+    { name: "Perfect Parry", req: 5, desc: "Passive: Blocking within 0.2s of attack reflects 40% damage." },
+    { name: "Iron Bastion", req: 20, desc: "Passive: Blocking slowly regenerates +3.5 health/second." }
   ],
   sword: [
-    { name: "Piercing Thrust", req: 50, desc: "Sword gain +12 attack range & pierce armor." },
-    { name: "Cyclone Spin", req: 200, desc: "Press Q to spin the blade, hitting all nearby for 1.8x." },
-    { name: "Dimensional Blade", req: 500, desc: "Every slash fires a giant flying air blade forward." }
+    { key: "Z", id: "piercing-thrust", name: "Piercing Thrust", req: 5, cd: 5, desc: "Active: A long-range piercing dash strike that bypasses block." },
+    { key: "X", id: "cyclone-spin", name: "Cyclone Spin", req: 20, cd: 7, desc: "Active: Spin your sword rapidly, dealing AOE damage to nearby foes." }
   ],
   gun: [
-    { name: "Double Tap", req: 50, desc: "Gun attacks automatically fire two bullets sequentially." },
-    { name: "Buckshot Cone", req: 200, desc: "Press Q to fire a spread of 3 bullets in a 30-degree arc." },
-    { name: "Sniper Focus", req: 500, desc: "Double range and zoom out camera view when standing still." }
+    { key: "Z", id: "double-tap", name: "Double Tap", req: 5, cd: 4, desc: "Active: Quickly fire two high-damage sniper shots." },
+    { key: "X", id: "buckshot-cone", name: "Buckshot Cone", req: 20, cd: 6, desc: "Active: Fire a wide cone of 5 bullets spreading outwards." }
   ],
   special: [
-    { name: "Pulse Bubble", req: 50, desc: "Unleashes an expanding bubble pushing away enemies." },
-    { name: "Storm Call", req: 200, desc: "Press Q to summon lightning on all nearby enemies." },
-    { name: "Grand Awakening", req: 500, desc: "Vaporizes minor enemies below 20% health and heals 50 HP." }
+    { key: "Z", id: "pulse-bubble", name: "Pulse Bubble", req: 5, cd: 6, desc: "Active: Unleash an expanding shockwave pushing enemies away." },
+    { key: "X", id: "gods-judgment", name: "God's Judgment", req: 20, cd: 40, desc: "Active: Summon a massive cosmic energy blast dealing colossal AOE damage." }
   ]
 };
 
@@ -271,6 +268,20 @@ const ui = {
   questDetail: document.querySelector("#quest-detail"),
   points: document.querySelector("#points-readout"),
   statsList: document.querySelector("#stats-list"),
+  
+  combatHud: document.querySelector("#combat-hud"),
+  combatWeaponIcon: document.querySelector("#combat-weapon-icon"),
+  combatWeaponName: document.querySelector("#combat-weapon-name"),
+  combatMasteryLabel: document.querySelector("#combat-mastery-label"),
+  combatMasteryBar: document.querySelector("#combat-mastery-bar"),
+  combatMasteryText: document.querySelector("#combat-mastery-text"),
+  combatSkillsList: document.querySelector("#combat-skills-list"),
+  
+  questCompass: document.querySelector("#quest-compass"),
+  compassPointer: document.querySelector("#compass-pointer"),
+  compassLabel: document.querySelector("#compass-label"),
+  lowHealthOverlay: document.querySelector("#low-health-overlay"),
+  respawnButton: document.querySelector("#respawn-button"),
 };
 
 const statLabels = {
@@ -376,11 +387,11 @@ const player = {
     special: 0,
   },
   mastery: {
-    melee: 0,
-    defense: 0,
-    sword: 0,
-    gun: 0,
-    special: 0,
+    melee: 20,
+    defense: 20,
+    sword: 20,
+    gun: 20,
+    special: 20,
   },
   armoredWillCooldown: 0,
   blockStartTime: 0,
@@ -389,6 +400,8 @@ const player = {
   hasSword: false,
   hasGun: false,
   specialUnlocked: false,
+  unlockedQuestsSeen: { starter: true },
+  newQuestUnlocked: false,
 };
 
 const inventoryState = {
@@ -652,12 +665,12 @@ const movementCodeMap = {
   arrowleft: "KeyA",
   arrowdown: "KeyS",
   arrowright: "KeyD",
-  z: "KeyW",
   q: "KeyA",
 };
 const allowedMovementCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
 
 window.addEventListener("keydown", (event) => {
+  if (!gameStarted || player.health <= 0) return;
   const code = event.code;
   const key = event.key.toLowerCase();
   const mappedCode = movementCodeMap[key] || code;
@@ -678,17 +691,27 @@ window.addEventListener("keydown", (event) => {
     player.blockStartTime = performance.now();
   }
   if (code === "KeyQ") {
-    const hasSwordQ = player.weapon === "sword" && player.mastery.sword >= 200;
-    const hasGunQ = player.weapon === "gun" && player.mastery.gun >= 200;
-    const hasSpecialQ = player.weapon === "special" && player.mastery.special >= 200;
-    
-    if (hasSwordQ || hasGunQ || hasSpecialQ) {
-      if (hasSwordQ) triggerSwordQ();
-      if (hasGunQ) triggerGunQ();
-      if (hasSpecialQ) triggerSpecialQ();
-    } else {
-      dash();
-    }
+    dash();
+  }
+  if (code === "KeyZ") {
+    event.preventDefault();
+    executeSkillByKey("Z");
+  }
+  if (code === "KeyX") {
+    event.preventDefault();
+    executeSkillByKey("X");
+  }
+  if (code === "KeyC") {
+    event.preventDefault();
+    executeSkillByKey("C");
+  }
+  if (code === "KeyV") {
+    event.preventDefault();
+    executeSkillByKey("V");
+  }
+  if (code === "KeyB") {
+    event.preventDefault();
+    executeSkillByKey("B");
   }
   if (code === "KeyG") {
     toggleHelm();
@@ -723,6 +746,7 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("resize", resize);
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (player.health <= 0) return;
   if (event.button === 0 && gameStarted) {
     attack();
     return;
@@ -764,7 +788,21 @@ sprintToggle?.addEventListener("click", () => setMovementMode("sprint"));
 hakiToggle?.addEventListener("click", toggleHaki);
 dialogueClose?.addEventListener("click", hideQuestDialogue);
 
+ui.respawnButton?.addEventListener("click", () => {
+  player.health = player.maxHealth;
+  playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+  jumpOffset = 0;
+  verticalVelocity = 0;
+  isGrounded = true;
+  if (ui.lowHealthOverlay) {
+    ui.lowHealthOverlay.classList.remove("low", "defeated");
+  }
+  updateHud();
+  log("You respawned at the starter dock.");
+});
+
 window.addEventListener("pointerdown", () => {
+  if (player.health <= 0) return;
   audio.init();
 }, { once: true });
 
@@ -778,6 +816,7 @@ function startGame(faction) {
   factionScreen.classList.add("hidden");
   hud.classList.remove("hidden");
   gameStarted = true;
+  checkNewQuestUnlocks();
   setWeapon(player.weapon);
   log(`You joined as ${faction}. Welcome to the First Sea.`);
   updateDerivedStats();
@@ -815,6 +854,7 @@ function setWeapon(weapon) {
     ui.level.classList.add("weapon-pop");
   }
   renderInventory();
+  updateCombatHud();
 }
 
 function renderInventory() {
@@ -841,7 +881,7 @@ function renderInventory() {
               <div class="bar" style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; margin-bottom: 10px;">
                 <div style="height: 100%; width: ${Math.min(100, (val % 100))}%; background: linear-gradient(90deg, #7ce0b4, #0d7892); transition: width 0.3s ease;"></div>
               </div>
-              <div class="mastery-skills" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+              <div class="mastery-skills" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px;">
                 ${skills.map(skill => {
                   const unlocked = val >= skill.req;
                   return `
@@ -2813,6 +2853,27 @@ function createHumanAvatarModel(avatar, options = {}) {
   belt.castShadow = true;
   group.add(belt);
 
+  // Golden halo floating above head
+  const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), haloMat);
+  halo.position.set(0, 10.6, 0);
+  halo.rotation.x = Math.PI / 2;
+  group.add(halo);
+
+  // Flowing royal cape on the back
+  const capeColor = avatar.shirt || "#111111";
+  const capeMat = new THREE.MeshStandardMaterial({
+    color: capeColor,
+    roughness: 0.85,
+    metalness: 0.1,
+    side: THREE.DoubleSide
+  });
+  const cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
+  cape.position.set(0, 4.4, -0.92);
+  cape.rotation.x = 0.12;
+  cape.castShadow = true;
+  group.add(cape);
+
   avatarParts.leftArm = leftArm;
   avatarParts.rightArm = rightArm;
   avatarParts.leftLeg = leftLeg;
@@ -2821,6 +2882,8 @@ function createHumanAvatarModel(avatar, options = {}) {
   avatarParts.rightHand = rightHand;
   avatarParts.torso = torso;
   avatarParts.head = head;
+  avatarParts.halo = halo;
+  avatarParts.cape = cape;
   group.userData.parts = avatarParts;
 
   if (showSword) {
@@ -2950,6 +3013,21 @@ function loop(time) {
     updateTeleport(stepDt);
     updateCamera();
     updateBossHud();
+
+    // Update active skill cooldown timers
+    let hasActiveCooldowns = false;
+    Object.keys(skillCooldowns).forEach((id) => {
+      if (skillCooldowns[id] > 0) {
+        skillCooldowns[id] = Math.max(0, skillCooldowns[id] - stepDt);
+        hasActiveCooldowns = true;
+      }
+    });
+
+    // Update HUD & Compass state
+    updateCompass();
+    if (hasActiveCooldowns) {
+      updateCombatHud();
+    }
   } else {
     const drift = Math.sin(time * 0.00035) * 7;
     camera.position.set(350 + drift, 210, 560);
@@ -2989,6 +3067,10 @@ function updateWorldAnimations(time) {
 }
 
 function updatePlayer(dt) {
+  if (player.health <= 0) {
+    player.lastMoveSpeed = 0;
+    return;
+  }
   if (isHelming) {
     updateBoat(dt);
     return;
@@ -3122,10 +3204,7 @@ function resolveWallCollision(previousPosition) {
     wallHitCooldown = 0.75;
     updateHud();
     if (player.health <= 0) {
-      player.health = player.maxHealth;
-      playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
-      updateHud();
-      log("You crashed into a wall and were returned to the island dock.");
+      killPlayer("crashing into a wall");
     }
   } else {
     triggerWallHitAnimation(hitDirection, collision.label, false);
@@ -3229,6 +3308,8 @@ function updatePlayerAnimation(dt) {
   }
 
   anim.attackTimer = Math.max(0, anim.attackTimer - dt);
+  anim.slamTimer = Math.max(0, (anim.slamTimer || 0) - dt);
+  anim.punchChargeTimer = Math.max(0, (anim.punchChargeTimer || 0) - dt);
   anim.wallHitTimer = Math.max(0, (anim.wallHitTimer || 0) - dt);
   const walkIntensity = moving ? 1 : 0.08;
   const armSwing = Math.sin(anim.walkPhase + Math.PI) * 0.55 * walkIntensity;
@@ -3241,6 +3322,50 @@ function updatePlayerAnimation(dt) {
   model.userData.parts.rightLeg.rotation.x = 0.1 - legSwing;
   model.userData.parts.head.position.y = 8.65 + bodyBob * 0.6;
   model.userData.parts.torso.position.y = 5.7 + bodyBob;
+
+  if (anim.slamTimer > 0) {
+    const slamProgress = 1 - anim.slamTimer / anim.slamDuration;
+    if (slamProgress < 0.35) {
+      const p = slamProgress / 0.35;
+      model.userData.parts.leftArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
+      model.userData.parts.rightArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
+      model.userData.parts.torso.rotation.x = -0.3 * p;
+      model.userData.parts.torso.position.y = 5.7 + 0.8 * p;
+    } else {
+      const p = (slamProgress - 0.35) / 0.65;
+      const easeDown = Math.pow(p, 2.5);
+      model.userData.parts.leftArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
+      model.userData.parts.rightArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
+      model.userData.parts.torso.rotation.x = -0.3 + (1.1 - (-0.3)) * easeDown;
+      model.userData.parts.torso.position.y = 6.5 + (3.2 - 6.5) * easeDown;
+    }
+  } else if (anim.punchChargeTimer > 0) {
+    const chargeProgress = 1 - anim.punchChargeTimer / anim.punchChargeDuration;
+    model.userData.parts.rightArm.rotation.x = -0.2 + (0.9 - (-0.2)) * chargeProgress;
+    model.userData.parts.rightArm.rotation.y = 0.5 * chargeProgress;
+    model.userData.parts.leftArm.rotation.x = -0.2 + (-1.4 - (-0.2)) * chargeProgress;
+    model.userData.parts.torso.rotation.y = -0.45 * chargeProgress;
+    model.userData.parts.torso.position.y = 5.7 - 0.5 * chargeProgress;
+  } else {
+    model.userData.parts.torso.rotation.x = 0;
+    model.userData.parts.rightArm.rotation.y = 0;
+    model.userData.parts.torso.rotation.y = 0;
+  }
+
+  // Animate the bobbing/rotation of the halo
+  if (model.userData.parts.halo) {
+    model.userData.parts.halo.rotation.z += dt * 1.5;
+    model.userData.parts.halo.position.y = 10.6 + Math.sin(performance.now() * 0.003) * 0.15;
+  }
+
+  // Animate the flapping of the cape
+  if (model.userData.parts.cape) {
+    const speed = player.lastMoveSpeed || 0;
+    const wave = Math.sin(performance.now() * 0.012) * (0.05 + (speed / 35) * 0.035);
+    model.userData.parts.cape.rotation.x = 0.12 + (speed / 35) * 0.35 + wave;
+    model.userData.parts.cape.rotation.y = Math.cos(performance.now() * 0.006) * 0.03 * (speed / 35);
+    model.userData.parts.cape.rotation.z = Math.sin(performance.now() * 0.006) * 0.02 * (speed / 35);
+  }
 
   if (anim.attackTimer > 0) {
     const attackProgress = 1 - anim.attackTimer / anim.attackDuration;
@@ -3460,14 +3585,26 @@ function damagePlayer(amount, source) {
   }
 
   if (player.health <= 0) {
-    player.health = player.maxHealth;
-    if (isHelming) unhelmBoat();
-    playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
-    jumpOffset = 0;
-    verticalVelocity = 0;
-    isGrounded = true;
-    log(`You were knocked out by ${source} and returned to the island dock.`);
+    killPlayer(source || "an enemy");
   }
+}
+
+function killPlayer(source) {
+  player.health = 0;
+  if (isHelming) unhelmBoat();
+  
+  // Clear key states to stop movement sliding
+  keys.clear();
+  
+  // Show Defeat Screen overlay
+  const overlay = document.getElementById("low-health-overlay");
+  if (overlay) {
+    overlay.classList.remove("low");
+    overlay.classList.add("defeated");
+  }
+  
+  updateHud();
+  log(`You were defeated by ${source}! Click Respawn to return to the starter dock.`);
 }
 
 function updateCamera() {
@@ -3563,6 +3700,18 @@ function interact() {
 
 function showQuestDialogue() {
   if (!dialoguePanel || !questOptions) return;
+
+  // Clear new quest alert when viewing quest hub
+  Object.values(questCatalog).forEach((q) => {
+    if (player.level >= q.minLevel) {
+      player.unlockedQuestsSeen[q.id] = true;
+    }
+  });
+  player.newQuestUnlocked = false;
+  if (ui.questCompass) {
+    ui.questCompass.classList.remove("new-quest-unlocked");
+  }
+
   dialoguePanel.classList.remove("hidden");
   dialogueTitle.textContent = "Outpost Quest Hub";
   dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
@@ -3619,7 +3768,7 @@ function purchaseHaki() {
 }
 
 function attack() {
-  if (!gameStarted || attackCooldown > 0) return;
+  if (!gameStarted || attackCooldown > 0 || player.weapon === "special") return;
 
   // Melee Ground Slam in Air!
   if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 200) {
@@ -3990,10 +4139,12 @@ function makeSlashTexture() {
 }
 
 function createAirSlash(position, direction, enemy) {
+  const isBuggy = enemy && enemy.type === "buggy";
+  const isPlayer = enemy && (enemy.type === "player" || enemy.type === "neutral" || enemy.type === "Pirates" || enemy.type === "Marines");
   const projectile = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: makeSlashTexture(),
-      color: enemy.type === "buggy" ? 0xff4668 : 0x9defff,
+      color: isBuggy ? 0xff4668 : (isPlayer ? 0x3ce88a : 0x9defff),
       transparent: true,
       opacity: 0.92,
       depthWrite: false,
@@ -4002,7 +4153,15 @@ function createAirSlash(position, direction, enemy) {
   projectile.position.copy(position);
   projectile.scale.set(16, 8, 1);
   scene.add(projectile);
-  projectiles.push({ mesh: projectile, direction: direction.clone(), speed: enemy.type === "buggy" ? 118 : 92, damage: enemy.type === "buggy" ? 24 : 14, age: 0, duration: 1.8 });
+  projectiles.push({
+    mesh: projectile,
+    direction: direction.clone(),
+    speed: isBuggy ? 118 : 92,
+    damage: isBuggy ? 24 : 14,
+    age: 0,
+    duration: 1.8,
+    owner: isPlayer ? "player" : "enemy"
+  });
 }
 
 function updateProjectiles(dt) {
@@ -4010,14 +4169,63 @@ function updateProjectiles(dt) {
     const projectile = projectiles[i];
     projectile.age += dt;
     projectile.mesh.position.addScaledVector(projectile.direction, projectile.speed * dt);
-    projectile.mesh.material.rotation += dt * 7;
-    if (projectile.mesh.position.distanceTo(playerMesh.position) < 8) {
-      damagePlayer(projectile.damage, "Air Slash");
-      scene.remove(projectile.mesh);
-      projectiles.splice(i, 1);
-      continue;
+    if (projectile.mesh.material && projectile.mesh.material.rotation !== undefined) {
+      projectile.mesh.material.rotation += dt * 7;
     }
+    
+    if (projectile.owner === "player") {
+      let hit = false;
+      for (let j = 0; j < enemies.length; j++) {
+        const enemy = enemies[j];
+        if (enemy.alive && projectile.mesh.position.distanceTo(enemy.mesh.position) < 26) {
+          hit = true;
+          if (projectile.isMortar) {
+            createGroundSlam(projectile.mesh.position.clone(), { type: "player" });
+            enemies.forEach(e => {
+              if (e.alive && e.mesh.position.distanceTo(projectile.mesh.position) < 55) {
+                const dmg = projectile.damage;
+                e.health -= dmg;
+                triggerHitFlash(e.mesh);
+                createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Explosion -${dmg}`, "#ff7a3d");
+                if (e.health <= 0) defeatEnemy(e);
+              }
+            });
+          } else {
+            enemy.health -= projectile.damage;
+            triggerHitFlash(enemy.mesh);
+            createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Slash -${projectile.damage}`, "#3ce88a");
+            if (enemy.health <= 0) defeatEnemy(enemy);
+          }
+          break;
+        }
+      }
+      if (hit) {
+        scene.remove(projectile.mesh);
+        projectiles.splice(i, 1);
+        continue;
+      }
+    } else {
+      if (projectile.mesh.position.distanceTo(playerMesh.position) < 14) {
+        damagePlayer(projectile.damage, "Air Slash");
+        scene.remove(projectile.mesh);
+        projectiles.splice(i, 1);
+        continue;
+      }
+    }
+    
     if (projectile.age >= projectile.duration) {
+      if (projectile.isMortar) {
+        createGroundSlam(projectile.mesh.position.clone(), { type: "player" });
+        enemies.forEach(e => {
+          if (e.alive && e.mesh.position.distanceTo(projectile.mesh.position) < 55) {
+            const dmg = projectile.damage;
+            e.health -= dmg;
+            triggerHitFlash(e.mesh);
+            createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Explosion -${dmg}`, "#ff7a3d");
+            if (e.health <= 0) defeatEnemy(e);
+          }
+        });
+      }
       scene.remove(projectile.mesh);
       projectiles.splice(i, 1);
     }
@@ -4025,19 +4233,64 @@ function updateProjectiles(dt) {
 }
 
 function createGroundSlam(position, enemy) {
-  cameraShake = Math.max(cameraShake, 1.2);
+  cameraShake = Math.max(cameraShake, 1.4);
   createDustCloud(position);
-  for (let i = 0; i < 9; i += 1) {
-    const angle = (i / 9) * Math.PI * 2;
-    const spike = new THREE.Mesh(
-      new THREE.ConeGeometry(3.5, 22, 5),
-      new THREE.MeshStandardMaterial({ color: 0x6b5f54, roughness: 0.95, flatShading: true }),
-    );
-    spike.position.copy(position).add(new THREE.Vector3(Math.cos(angle) * 22, 9, Math.sin(angle) * 22));
-    spike.rotation.z = Math.sin(i) * 0.25;
-    spike.castShadow = true;
-    scene.add(spike);
-    hazards.push({ mesh: spike, damage: enemy.type === "brute" ? 20 : 28, radius: 8, age: 0, duration: 3.4 });
+
+  // Set violent player ground slam animation
+  if (enemy && (enemy.type === "player" || enemy.type === "starter") && playerMesh?.userData?.animation) {
+    playerMesh.userData.animation.slamTimer = 0.5;
+    playerMesh.userData.animation.slamDuration = 0.5;
+  }
+
+  const owner = (enemy && (enemy.type === "player" || enemy.type === "starter")) ? "player" : "enemy";
+  const numRocks = 12;
+
+  for (let i = 0; i < numRocks; i += 1) {
+    const angle = (i / numRocks) * Math.PI * 2;
+    // Vary distance from 10 (near) to 32 (far)
+    const distance = 10 + Math.random() * 22;
+
+    // Scale rock base size based on distance: nearer = smaller, farther = larger
+    const minDistance = 10;
+    const maxDistance = 32;
+    const sizeMultiplier = 0.4 + 1.2 * ((distance - minDistance) / (maxDistance - minDistance));
+    const rockRadius = (2.2 + Math.random() * 1.2) * sizeMultiplier;
+
+    // Jagged low-poly rock geometry
+    const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
+    // Squish rocks to make them look irregular and natural
+    rockGeo.scale(1.2, 0.7 + Math.random() * 0.6, 0.8 + Math.random() * 0.4);
+
+    const rockMat = new THREE.MeshStandardMaterial({
+      color: 0x5a4f43,
+      roughness: 0.95,
+      metalness: 0.1,
+      flatShading: true
+    });
+
+    const rock = new THREE.Mesh(rockGeo, rockMat);
+    const targetX = position.x + Math.cos(angle) * distance;
+    const targetZ = position.z + Math.sin(angle) * distance;
+
+    const startY = position.y - 6 * sizeMultiplier; // sink larger rocks deeper
+    const baseY = position.y + 0.5; // sit slightly above ground level
+
+    rock.position.set(targetX, startY, targetZ);
+    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    scene.add(rock);
+
+    hazards.push({
+      mesh: rock,
+      damage: (enemy && enemy.type === "brute") ? 20 : 28,
+      radius: Math.max(3, rockRadius * 1.4), // collision radius scales with rock size
+      age: 0,
+      duration: 3.2,
+      owner: owner,
+      startY: startY,
+      baseY: baseY
+    });
   }
 }
 
@@ -4045,12 +4298,37 @@ function updateHazards(dt) {
   for (let i = hazards.length - 1; i >= 0; i -= 1) {
     const hazard = hazards[i];
     hazard.age += dt;
-    const scale = hazard.age < 0.25 ? hazard.age / 0.25 : 1;
-    hazard.mesh.scale.setScalar(scale);
-    if (hazard.mesh.position.distanceTo(playerMesh.position) < hazard.radius && wallHitCooldown <= 0) {
-      applyImpactDamage(hazard.damage, playerMesh.position.clone(), playerMesh.position.clone().sub(hazard.mesh.position).normalize(), "rock spikes");
+
+    const scaleUpTime = 0.35;
+    const fadeOutTime = 0.35;
+    let progress = 1;
+
+    // Rock rising and sinking animation
+    if (hazard.age < scaleUpTime) {
+      progress = hazard.age / scaleUpTime;
+      if (hazard.startY !== undefined && hazard.baseY !== undefined) {
+        hazard.mesh.position.y = hazard.startY + (hazard.baseY - hazard.startY) * progress;
+      }
+      hazard.mesh.scale.setScalar(progress);
+    } else if (hazard.age > hazard.duration - fadeOutTime) {
+      progress = (hazard.duration - hazard.age) / fadeOutTime;
+      if (hazard.startY !== undefined && hazard.baseY !== undefined) {
+        hazard.mesh.position.y = hazard.startY + (hazard.baseY - hazard.startY) * progress;
+      }
+      hazard.mesh.scale.setScalar(Math.max(0.001, progress));
+    } else {
+      if (hazard.baseY !== undefined) {
+        hazard.mesh.position.y = hazard.baseY;
+      }
+      hazard.mesh.scale.setScalar(1.0);
+    }
+
+    // Player takes damage from hazards ONLY if not owned by the player
+    if (hazard.owner !== "player" && hazard.mesh.position.distanceTo(playerMesh.position) < hazard.radius && wallHitCooldown <= 0) {
+      applyImpactDamage(hazard.damage, playerMesh.position.clone(), playerMesh.position.clone().sub(hazard.mesh.position).normalize(), "crushing rocks");
       wallHitCooldown = 0.8;
     }
+
     if (hazard.age >= hazard.duration) {
       scene.remove(hazard.mesh);
       hazards.splice(i, 1);
@@ -4146,10 +4424,16 @@ function updateBossHud() {
 function getDamage() {
   const traits = getAvatarTraits();
   const hakiBonus = player.haki.active ? 1 + player.haki.level * 0.12 : 1;
-  if (player.weapon === "sword") return Math.round((12 + player.stats.sword * 5) * traits.damageMultiplier * hakiBonus);
-  if (player.weapon === "gun") return Math.round((9 + player.stats.gun * 4) * traits.damageMultiplier * hakiBonus);
-  if (player.weapon === "special") return Math.round((20 + player.stats.special * 7) * traits.damageMultiplier * hakiBonus);
-  return Math.round((10 + player.stats.melee * 5) * traits.damageMultiplier * hakiBonus);
+  const mastery = player.mastery[player.weapon] || 0;
+  const masteryBonus = Math.pow(1.001, mastery);
+
+  let baseDmg = 10;
+  if (player.weapon === "sword") baseDmg = 12 + player.stats.sword * 5;
+  else if (player.weapon === "gun") baseDmg = 9 + player.stats.gun * 4;
+  else if (player.weapon === "special") baseDmg = 20 + player.stats.special * 7;
+  else baseDmg = 10 + player.stats.melee * 5;
+
+  return Math.round(baseDmg * traits.damageMultiplier * hakiBonus * masteryBonus);
 }
 
 function weaponName() {
@@ -4173,10 +4457,13 @@ function defeatEnemy(enemy) {
   player.materials.scrap += enemy.type === "brute" ? 3 : 1;
 
   // Mastery Reward!
-  const masteryGained = enemy.type === "buggy" ? 800 : enemy.type === "brute" ? 90 : enemy.type === "pirate" ? 45 : 5;
+  player.enemiesDefeatedCount = (player.enemiesDefeatedCount || 0) + 1;
+  const baseMastery = enemy.type === "buggy" ? 800 : enemy.type === "brute" ? 90 : enemy.type === "pirate" ? 45 : 5;
+  const decayFactor = 0.10; // 10% harder per defeat
+  const masteryGained = Math.max(1, Math.round(baseMastery / (1 + (player.enemiesDefeatedCount - 1) * decayFactor)));
   const currentWeapon = player.weapon;
   player.mastery[currentWeapon] += masteryGained;
-  log(`Mastered ${statLabels[currentWeapon]}: +${masteryGained} Mastery Points!`);
+  log(`Mastered ${statLabels[currentWeapon]}: +${masteryGained} Mastery Points! (Multiplier: x${(1 / (1 + (player.enemiesDefeatedCount - 1) * decayFactor)).toFixed(2)})`);
 
   // Mastery skill unlock check
   masterySkills[currentWeapon].forEach((skill) => {
@@ -4259,6 +4546,7 @@ function addXp(amount) {
   while (player.xp >= player.xpToNext) {
     player.xp -= player.xpToNext;
     player.level += 1;
+    checkNewQuestUnlocks();
     player.statPoints += 3;
     player.xpToNext = Math.round(player.xpToNext * 1.35);
     player.health = player.maxHealth;
@@ -4269,6 +4557,19 @@ function addXp(amount) {
 
 function updateHud() {
   const traits = getAvatarTraits();
+  
+  if (ui.lowHealthOverlay) {
+    if (player.health <= 0) {
+      ui.lowHealthOverlay.classList.remove("low");
+      ui.lowHealthOverlay.classList.add("defeated");
+    } else if (player.health / player.maxHealth <= 0.3) {
+      ui.lowHealthOverlay.classList.remove("defeated");
+      ui.lowHealthOverlay.classList.add("low");
+    } else {
+      ui.lowHealthOverlay.classList.remove("low", "defeated");
+    }
+  }
+
   ui.playerTitle.textContent = `${getSelectedAvatar().name} | ${player.faction} ${player.level >= 4 ? "Captain" : "Rookie"}`;
   ui.level.textContent = `Level ${player.level} | ${weaponName()} | ${traits.label}`;
   ui.healthText.textContent = `${player.health}/${player.maxHealth}`;
@@ -4303,6 +4604,8 @@ function updateHud() {
   document.querySelectorAll(".stat-line button").forEach((button) => {
     button.disabled = player.statPoints <= 0;
   });
+
+  updateCombatHud();
 }
 
 function log(message) {
@@ -4744,3 +5047,505 @@ function triggerSpecialQ() {
     }
   });
 }
+
+// ========================
+// NEW SYSTEMS
+// ========================
+
+function checkNewQuestUnlocks() {
+  if (!player.unlockedQuestsSeen) player.unlockedQuestsSeen = { starter: true };
+  let hasNew = false;
+  Object.values(questCatalog).forEach((q) => {
+    if (player.level >= q.minLevel && !player.unlockedQuestsSeen[q.id]) {
+      hasNew = true;
+    }
+  });
+  if (hasNew) {
+    player.newQuestUnlocked = true;
+  }
+}
+
+function executeSkillByKey(keyChar) {
+  if (!gameStarted) return;
+  const weapon = player.weapon;
+  const skills = masterySkills[weapon] || [];
+  const skill = skills.find(s => s.key === keyChar);
+  if (!skill) return;
+
+  const val = player.mastery[weapon] || 0;
+  if (val < skill.req) {
+    log(`Skill locked! Need ${skill.req} Mastery for ${skill.name}.`);
+    return;
+  }
+
+  const cooldownRemaining = skillCooldowns[skill.id] || 0;
+  if (cooldownRemaining > 0) {
+    log(`${skill.name} on cooldown (${cooldownRemaining.toFixed(1)}s).`);
+    return;
+  }
+
+  skillCooldowns[skill.id] = skill.cd;
+  triggerActiveSkill(skill.id);
+  updateCombatHud();
+}
+
+function getQuestTargetPosition() {
+  if (!quest.active && !quest.complete) {
+    return new THREE.Vector3(52, STARTER_SURFACE_Y, 16);
+  }
+  if (quest.active && !quest.complete) {
+    const aliveBandit = enemies.find(e => !e.type && e.alive);
+    if (aliveBandit) return aliveBandit.mesh.position;
+    return new THREE.Vector3(-100, STARTER_SURFACE_Y, 20);
+  }
+  if (quest.complete && !activeQuest) {
+    if (islands[2]) {
+      return islands[2].position.clone().add(new THREE.Vector3(-80, 0, 40));
+    }
+    return questGiverPosition;
+  }
+  if (activeQuest && activeQuest.active) {
+    const tt = activeQuest.targetType;
+    const alive = enemies.find(e => e.type === tt && e.alive);
+    if (alive) return alive.mesh.position;
+    if (islands[2]) return islands[2].position;
+  }
+  return null;
+}
+
+function updateCompass() {
+  if (!gameStarted || !ui.questCompass || !ui.compassPointer || !playerMesh) return;
+
+  if (player.newQuestUnlocked) {
+    ui.questCompass.classList.add("new-quest-unlocked");
+  } else {
+    ui.questCompass.classList.remove("new-quest-unlocked");
+  }
+
+  const targetPos = getQuestTargetPosition();
+  if (!targetPos) { ui.questCompass.style.opacity = "0"; return; }
+  ui.questCompass.style.opacity = "1";
+
+  const dx = targetPos.x - playerMesh.position.x;
+  const dz = targetPos.z - playerMesh.position.z;
+  const distance = Math.sqrt(dx * dx + dz * dz);
+  const targetYaw = isHelming ? boatYaw : cameraYaw;
+
+  const fx = -Math.sin(targetYaw);
+  const fz = -Math.cos(targetYaw);
+  const rx = Math.cos(targetYaw);
+  const rz = -Math.sin(targetYaw);
+  const forwardProj = dx * fx + dz * fz;
+  const rightProj = dx * rx + dz * rz;
+  const angle = Math.atan2(rightProj, forwardProj);
+
+  ui.compassPointer.style.transform = `rotate(${angle}rad)`;
+  if (ui.compassLabel) ui.compassLabel.textContent = `${Math.round(distance)}m`;
+}
+
+function updateCombatHud() {
+  if (!ui.combatHud) return;
+
+  const weapon = player.weapon;
+  const val = player.mastery[weapon] || 0;
+  const weaponEmojis = { melee: "👊", sword: "⚔️", gun: "🔫", special: "✨" };
+  const weaponNames = { melee: "MELEE", sword: "SWORD", gun: "GUN", special: "SPECIAL" };
+
+  if (ui.combatWeaponIcon) ui.combatWeaponIcon.textContent = weaponEmojis[weapon] || "👊";
+  if (ui.combatWeaponName) ui.combatWeaponName.textContent = weaponNames[weapon] || "COMBAT";
+
+  const skills = masterySkills[weapon] || [];
+  const maxBarValue = 20;
+  const currentLevel = Math.floor(val / 100) + 1;
+  const needed = Math.max(0, 20 - val);
+  const neededText = needed > 0 ? `(Need ${needed} MP)` : "(Maxed)";
+
+  if (ui.combatMasteryLabel) ui.combatMasteryLabel.textContent = `Mastery ${val} (Lv. ${currentLevel})`;
+  if (ui.combatMasteryBar) ui.combatMasteryBar.style.width = `${Math.min(100, (val / maxBarValue) * 100)}%`;
+  if (ui.combatMasteryText) ui.combatMasteryText.textContent = `${val}/${maxBarValue} ${neededText}`;
+
+  if (ui.combatSkillsList) {
+    ui.combatSkillsList.innerHTML = skills.map(skill => {
+      const unlocked = val >= skill.req;
+      const cd = skillCooldowns[skill.id] || 0;
+      const cdPercent = cd > 0 ? (cd / skill.cd) * 100 : 0;
+      const rowClass = `combat-skill-row${unlocked ? "" : " locked"}${unlocked ? " skill-row-glow" : ""}`;
+      return `
+        <div class="${rowClass}">
+          <div class="skill-cooldown-overlay" style="height:${cdPercent}%"></div>
+          <span class="skill-key">${skill.key}</span>
+          <div class="skill-info">
+            <span class="skill-name">${skill.name}</span>
+            <span class="skill-req">${unlocked ? "UNLOCKED" : `Req ${skill.req} MP`}</span>
+          </div>
+          ${cd > 0 ? `<span class="skill-cd-number">${cd.toFixed(1)}s</span>` : ""}
+        </div>`;
+    }).join("");
+  }
+}
+
+function triggerActiveSkill(skillId) {
+  const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
+
+  if (skillId === "falcon-punch") {
+    // Immediately snap player mesh to face where the camera is looking
+    playerMesh.rotation.y = cameraYaw + Math.PI;
+
+    // Set procedural charging animation on the model
+    if (playerMesh?.userData?.animation) {
+      playerMesh.userData.animation.punchChargeTimer = 0.3;
+      playerMesh.userData.animation.punchChargeDuration = 0.3;
+    }
+
+    // Delay the punch release, damage, and audio by 300ms (charge time)
+    setTimeout(() => {
+      if (!gameStarted || !playerMesh) return;
+
+      // Re-snap to camera yaw in case they turned camera during the 0.3s charge
+      playerMesh.rotation.y = cameraYaw + Math.PI;
+
+      // Re-calculate the direction vector when the punch is released
+      const currentForward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
+
+      audio.playSlash();
+      createMeleeBurst(playerMesh);
+
+      // Play release punch strike animation
+      if (playerMesh.userData.animation) {
+        playerMesh.userData.animation.attackTimer = 0.22;
+        playerMesh.userData.animation.attackDuration = 0.22;
+        playerMesh.userData.animation.attackImpact = 1.0;
+      }
+
+      // High-range single target detection towards the direction player is facing (up to 24 units visual range + 4 units radius buffer)
+      const punchRange = 24;
+      const candidates = enemies
+        .filter(e => e.alive)
+        .map(e => {
+          const toEnemy = e.mesh.position.clone().sub(playerMesh.position);
+          const dist3D = toEnemy.length();
+          const toEnemy2D = toEnemy.clone().setY(0);
+          const dist2D = toEnemy2D.length();
+          return { enemy: e, toEnemy2D, dist2D, dist3D };
+        })
+        .filter(item => item.dist2D <= punchRange + 4.0) // 28 units center-to-center accounts for 24 units visual reach plus body radii
+        .filter(item => {
+          if (item.dist2D < 6.0) return true; // Close range automatic hit
+          const angle = currentForward.angleTo(item.toEnemy2D.clone().normalize());
+          return angle < 0.85; // Facing cone (approx ~48 degrees) for gameplay forgiveness
+        })
+        .sort((a, b) => a.dist2D - b.dist2D);
+
+      const t = candidates.length > 0 ? candidates[0].enemy : null;
+
+      // Visual feedback: a series of shockwaves/bursts along the path, and ground rupture V-shaped rocks
+      const maxDistance = t ? Math.max(4, t.mesh.position.distanceTo(playerMesh.position)) : 24;
+      const perpendicular = new THREE.Vector3(-currentForward.z, 0, currentForward.x).normalize();
+
+      // We'll spawn pairs of rocks in a forward-rippling sequence up to maxDistance
+      for (let d = 3.5; d <= maxDistance; d += 2.5) {
+        const delay = (d / 24) * 200; // sequential forward ripple delay (0 to 200ms)
+
+        setTimeout(() => {
+          if (!gameStarted || !playerMesh) return;
+
+          const progress = (d - 3.5) / 20.5; // 0 to 1 scaling along the path
+          const sizeMultiplier = 0.35 + 1.25 * progress; // near you are smaller, further from you are bigger
+          const halfWidth = 1.2 + progress * 6.5; // V-shape divergence (starts close, spreads outwards)
+
+          // Spawn a left and a right rock
+          const offsets = [halfWidth, -halfWidth];
+          offsets.forEach(offsetSign => {
+            const rockPos = playerMesh.position.clone()
+              .addScaledVector(currentForward, d)
+              .addScaledVector(perpendicular, offsetSign);
+
+            const rockRadius = (1.5 + Math.random() * 0.8) * sizeMultiplier;
+            const rockGeo = new THREE.DodecahedronGeometry(rockRadius, 0);
+            rockGeo.scale(1.2, 0.7 + Math.random() * 0.5, 0.8 + Math.random() * 0.4);
+
+            const rockMat = new THREE.MeshStandardMaterial({
+              color: 0x5a4f43, // match Ground Slam rock color
+              roughness: 0.95,
+              metalness: 0.1,
+              flatShading: true
+            });
+
+            const rock = new THREE.Mesh(rockGeo, rockMat);
+            const startY = rockPos.y - 6 * sizeMultiplier;
+            const baseY = rockPos.y + 0.2;
+
+            rock.position.set(rockPos.x, startY, rockPos.z);
+            rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            rock.castShadow = true;
+            rock.receiveShadow = true;
+            scene.add(rock);
+
+            // Spawn smoke/dust above rising rock
+            if (Math.random() < 0.7) {
+              const smokePos = rockPos.clone();
+              smokePos.y += rockRadius * 0.8;
+              createDustCloud(smokePos);
+            }
+
+            // Push to hazards to animate and auto-expire
+            hazards.push({
+              mesh: rock,
+              damage: 0, // visual hazard, doesn't deal extra damage
+              radius: 0.1,
+              age: 0,
+              duration: 2.2,
+              owner: "player",
+              startY: startY,
+              baseY: baseY
+            });
+          });
+
+          // Also spawn the golden shockwave ring at this point along the center line
+          const effectPos = playerMesh.position.clone().addScaledVector(currentForward, d);
+          effectPos.y += 3.5; // hand height
+          
+          const punchRing = new THREE.Mesh(
+            new THREE.TorusGeometry(1.2 + progress * 2.2, 0.15, 8, 24),
+            new THREE.MeshBasicMaterial({ color: 0xffdf80, transparent: true, opacity: 0.85 })
+          );
+          punchRing.position.copy(effectPos);
+          punchRing.lookAt(effectPos.clone().add(currentForward));
+          
+          addTimedEffect(punchRing, 0.22, (mesh, progress) => {
+            mesh.scale.setScalar(1 + progress * 1.5);
+            mesh.material.opacity = 0.85 * (1 - progress);
+          });
+        }, delay);
+      }
+
+      if (t) {
+        const dmg = Math.max(t.maxHealth * 2.5, 9999);
+        t.health -= dmg;
+        triggerHitFlash(t.mesh);
+        // Violent knockback
+        t.mesh.position.addScaledVector(currentForward, 24);
+        createFloatingText(t.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `FalconPunch -${dmg}`, "#ffcf5a");
+        cameraShake = Math.max(cameraShake, 2.2);
+        createWallHitEffect(t.mesh.position.clone(), true);
+        if (t.health <= 0) defeatEnemy(t);
+      } else {
+        cameraShake = Math.max(cameraShake, 0.8);
+        const endPos = playerMesh.position.clone().addScaledVector(currentForward, 24);
+        createWallHitEffect(endPos, false);
+      }
+    }, 300);
+  } else if (skillId === "ground-slam") {
+    createGroundSlam(playerMesh.position.clone(), { type: "player" });
+    audio.playImpact();
+    enemies.forEach(e => {
+      if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 48) {
+        const dmg = Math.round(getDamage() * 2.2);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Slam -${dmg}`, "#ffcf5a");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "gatling-flurry") {
+    let count = 0;
+    const iv = setInterval(() => {
+      if (count >= 10 || !gameStarted) { clearInterval(iv); return; }
+      audio.playSlash();
+      const pos = playerMesh.position.clone().addScaledVector(forward, 6 + Math.random() * 8).add(new THREE.Vector3((Math.random() - 0.5) * 4, 3 + (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4));
+      createDustCloud(pos);
+      enemies.forEach(e => {
+        if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 30) {
+          const dmg = Math.round(getDamage() * 0.38);
+          e.health -= dmg;
+          triggerHitFlash(e.mesh);
+          createFloatingText(e.mesh.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, 8, 0)), `Gatling -${dmg}`, "#ffcf5a");
+          if (e.health <= 0) defeatEnemy(e);
+        }
+      });
+      count++;
+    }, 100);
+
+  } else if (skillId === "piercing-thrust") {
+    audio.playSlash();
+    playerMesh.position.addScaledVector(forward, 20);
+    createSwordSlash(playerMesh);
+    enemies.forEach(e => {
+      if (!e.alive) return;
+      const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
+      if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
+        const dmg = Math.round(getDamage() * 2.1);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Thrust -${dmg}`, "#f6b73c");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "cyclone-spin") {
+    audio.playSlash();
+    createSpecialBurst(playerMesh);
+    enemies.forEach(e => {
+      if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 42) {
+        const dmg = Math.round(getDamage() * 1.9);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Cyclone -${dmg}`, "#ffcf5a");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "dimensional-slash") {
+    audio.playSlash();
+    createAirSlash(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward, { type: "player" });
+
+  } else if (skillId === "double-tap") {
+    audio.playShot();
+    createGunShot();
+    const shoot = () => {
+      const t = enemies.filter(e => e.alive && e.mesh.position.distanceTo(playerMesh.position) <= 130)
+        .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
+      if (t) {
+        const dmg = Math.round(getDamage() * 1.4);
+        t.health -= dmg;
+        triggerHitFlash(t.mesh);
+        createFloatingText(t.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `DoubleTap -${dmg}`, "#9defff");
+        if (t.health <= 0) defeatEnemy(t);
+      }
+    };
+    shoot();
+    setTimeout(() => { audio.playShot(); createGunShot(); shoot(); }, 160);
+
+  } else if (skillId === "buckshot-cone") {
+    audio.playShot();
+    createGunShot(); createGunShot();
+    let hits = 0;
+    enemies.forEach(e => {
+      if (!e.alive || hits >= 5) return;
+      const toE = e.mesh.position.clone().sub(playerMesh.position);
+      if (toE.length() < 95 && forward.angleTo(toE.normalize()) < 0.5) {
+        hits++;
+        const dmg = Math.round(getDamage() * 1.3);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Buckshot -${dmg}`, "#ff7a3d");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "mortar-blast") {
+    audio.playShot();
+    const shell = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(2, 0),
+      new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.9, emissive: 0xff4400, emissiveIntensity: 0.6 })
+    );
+    shell.position.copy(playerMesh.position).add(new THREE.Vector3(0, 6, 0)).addScaledVector(forward, 8);
+    scene.add(shell);
+    projectiles.push({ mesh: shell, direction: forward.clone(), speed: 68, damage: Math.round(getDamage() * 2.8), age: 0, duration: 2.0, owner: "player", isMortar: true });
+
+  } else if (skillId === "pulse-bubble") {
+    audio.playQuestComplete();
+    createSpecialBurst(playerMesh);
+    enemies.forEach(e => {
+      if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 55) {
+        const push = e.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
+        e.mesh.position.addScaledVector(push, 34);
+        const dmg = Math.round(getDamage() * 1.5);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Bubble -${dmg}`, "#7ce0b4");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "storm-call") {
+    audio.playQuestComplete();
+    sun.intensity = 6.0;
+    scene.background.setHex(0xffffff);
+    scene.fog.color.setHex(0xffffff);
+    setTimeout(() => updateDayNightLighting(0), 80);
+    enemies.forEach(e => {
+      if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 140) {
+        const dmg = Math.round(getDamage() * 2.2);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡ Storm -${dmg}`, "#7ce0b4");
+        createWallHitEffect(e.mesh.position.clone(), true);
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+
+  } else if (skillId === "celestial-beam") {
+    audio.playSpecial();
+    const beamGeo = new THREE.CylinderGeometry(2.5, 2.5, 90, 8, 1, true);
+    beamGeo.rotateX(Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({ color: 0x7ce0b4, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    const beamCenter = playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)).addScaledVector(forward, 45);
+    beam.position.copy(beamCenter);
+    beam.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)));
+    scene.add(beam);
+    let tick = 0;
+    const biv = setInterval(() => {
+      if (tick >= 6 || !gameStarted) { clearInterval(biv); scene.remove(beam); return; }
+      enemies.forEach(e => {
+        if (!e.alive) return;
+        const toE = e.mesh.position.clone().sub(playerMesh.position);
+        if (toE.length() < 95 && forward.angleTo(toE.normalize()) < 0.3) {
+          const dmg = Math.round(getDamage() * 0.5);
+          e.health -= dmg;
+          triggerHitFlash(e.mesh);
+          createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Beam -${dmg}`, "#7ce0b4");
+          if (e.health <= 0) defeatEnemy(e);
+        }
+      });
+      beam.material.opacity = Math.max(0, 0.9 - (tick / 6) * 0.7);
+      tick++;
+    }, 200);
+
+  } else if (skillId === "grand-awakening") {
+    audio.playQuestComplete();
+    player.health = Math.min(player.maxHealth, player.health + 100);
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "+100 HP HEAL", "#7ce0b4");
+    sun.intensity = 9.0;
+    scene.background.setHex(0xa775ff);
+    scene.fog.color.setHex(0xa775ff);
+    setTimeout(() => updateDayNightLighting(0), 120);
+    enemies.forEach(e => {
+      if (e.alive && e.health < e.maxHealth * 0.22 && e.mesh.position.distanceTo(playerMesh.position) < 130) {
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "VAPORIZED!", "#a775ff");
+        e.health = 0;
+        defeatEnemy(e);
+      }
+    });
+    updateHud();
+
+  } else if (skillId === "gods-judgment") {
+    audio.playQuestComplete();
+    cameraShake = Math.max(cameraShake, 3.5);
+    const pillarGeo = new THREE.CylinderGeometry(14, 14, 200, 16, 1, true);
+    const pillarMat = new THREE.MeshBasicMaterial({ color: 0x3ce88a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending });
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.copy(playerMesh.position).setY(100);
+    scene.add(pillar);
+    enemies.forEach(e => {
+      if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 80) {
+        const dmg = Math.round(getDamage() * 4.2);
+        e.health -= dmg;
+        triggerHitFlash(e.mesh);
+        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡JUDGMENT -${dmg}`, "#3ce88a");
+        if (e.health <= 0) defeatEnemy(e);
+      }
+    });
+    let f = 0;
+    const fiv = setInterval(() => {
+      if (f >= 10 || !gameStarted) { clearInterval(fiv); scene.remove(pillar); return; }
+      pillar.scale.x = Math.max(0.05, pillar.scale.x - 0.08);
+      pillar.scale.z = Math.max(0.05, pillar.scale.z - 0.08);
+      pillar.material.opacity = Math.max(0, pillar.material.opacity - 0.09);
+      f++;
+    }, 80);
+  }
+}
+
