@@ -998,6 +998,38 @@ function renderInventory() {
     button.classList.toggle("active", button.dataset.inventoryTab === inventoryState.tab);
   });
 
+  if (inventoryState.tab === "items") {
+    inventoryList.innerHTML = `
+      <div class="inventory-items-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 8px; max-height: 380px; overflow-y: auto; pointer-events: auto;">
+        <div class="material-card" style="display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,247,230,0.15); border-radius: 12px; padding: 12px; background: rgba(5,18,26,0.85); box-shadow: 0 4px 10px rgba(0,0,0,0.4); text-shadow: none;">
+          <div style="font-size: 24px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(140, 90, 50, 0.15); border: 1px solid rgba(140, 90, 50, 0.3); color: #8c5a32;">🪵</div>
+          <div style="display: flex; flex-direction: column; flex: 1;">
+            <strong style="color: #fff; font-size: 13px;">Ironwood</strong>
+            <span style="color: rgba(255,247,230,0.5); font-size: 10.5px;">Premium hardwood used for crafting starter blades.</span>
+          </div>
+          <span style="color: #3ce88a; font-size: 15px; font-weight: 800; padding: 4px 10px; border-radius: 6px; background: rgba(60,232,138,0.1); border: 1px solid rgba(60,232,138,0.15);">${player.materials.ironwood}</span>
+        </div>
+        <div class="material-card" style="display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,247,230,0.15); border-radius: 12px; padding: 12px; background: rgba(5,18,26,0.85); box-shadow: 0 4px 10px rgba(0,0,0,0.4); text-shadow: none;">
+          <div style="font-size: 24px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(120, 120, 120, 0.15); border: 1px solid rgba(120, 120, 120, 0.3); color: #787878;">🔩</div>
+          <div style="display: flex; flex-direction: column; flex: 1;">
+            <strong style="color: #fff; font-size: 13px;">Wood Scrap / Metal Scrap</strong>
+            <span style="color: rgba(255,247,230,0.5); font-size: 10.5px;">Scavenged metal and wood pieces used to build flintlock pistols.</span>
+          </div>
+          <span style="color: #3ce88a; font-size: 15px; font-weight: 800; padding: 4px 10px; border-radius: 6px; background: rgba(60,232,138,0.1); border: 1px solid rgba(60,232,138,0.15);">${player.materials.scrap}</span>
+        </div>
+        <div class="material-card" style="display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,247,230,0.15); border-radius: 12px; padding: 12px; background: rgba(5,18,26,0.85); box-shadow: 0 4px 10px rgba(0,0,0,0.4); text-shadow: none;">
+          <div style="font-size: 24px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(13, 169, 214, 0.15); border: 1px solid rgba(13, 169, 214, 0.3); color: #0da9d6;">🔮</div>
+          <div style="display: flex; flex-direction: column; flex: 1;">
+            <strong style="color: #fff; font-size: 13px;">Jungle Core</strong>
+            <span style="color: rgba(255,247,230,0.5); font-size: 10.5px;">Ancient, glowing cores pulsing with energy, used for Special combat abilities.</span>
+          </div>
+          <span style="color: #3ce88a; font-size: 15px; font-weight: 800; padding: 4px 10px; border-radius: 6px; background: rgba(60,232,138,0.1); border: 1px solid rgba(60,232,138,0.15);">${player.materials.jungleCore}</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   if (inventoryState.tab === "mastery") {
     inventoryList.innerHTML = `
       <div class="mastery-container" style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 8px; max-height: 380px; overflow-y: auto; pointer-events: auto;">
@@ -1365,7 +1397,7 @@ function createIsland(position, radius, index) {
   group.add(base);
 
   const grass = new THREE.Mesh(
-    makeIrregularDiscGeometry(radius * 0.88, index <= 1 ? 128 : 40, index + 9),
+    makeIrregularDiscGeometry(radius * 0.88, index <= 1 ? 128 : 40, index + 9, height),
     new THREE.MeshStandardMaterial({ color: index === 0 ? 0x3fb05b : index === 1 ? 0x1f6f3a : 0x4aa65e, roughness: 0.78, metalness: 0.05 }),
   );
   grass.rotation.x = -Math.PI / 2;
@@ -1375,16 +1407,16 @@ function createIsland(position, radius, index) {
   group.add(grass);
 
   if (index === 0) {
-    addStarterIslandDetails(group, radius, height);
+    addStarterIslandDetails(group, radius, height, index);
   }
   if (index === 1) {
     addJungleIslandDetails(group, radius, height);
   }
   if (index === 2) {
-    addOutpostIslandDetails(group, radius, height);
+    addOutpostIslandDetails(group, radius, height, index);
   }
   if (index === 3) {
-    addDesertIslandDetails(group, radius, height);
+    addDesertIslandDetails(group, radius, height, index);
   }
   if (index !== 1) {
     addIslandRocks(group, radius, height);
@@ -1715,8 +1747,8 @@ function createTreehouse() {
   return group;
 }
 
-function addOutpostIslandDetails(group, radius, height) {
-  addBeachRing(group, radius, height);
+function addOutpostIslandDetails(group, radius, height, index) {
+  addBeachRing(group, radius, height, index);
   const dirt = new THREE.MeshStandardMaterial({ color: 0x8b7358, roughness: 0.96 });
   const stone = new THREE.MeshStandardMaterial({ color: 0x5c5a54, roughness: 0.96, flatShading: true });
   const wood = new THREE.MeshStandardMaterial({ color: 0x68432c, roughness: 0.9 });
@@ -1765,9 +1797,9 @@ function addOutpostIslandDetails(group, radius, height) {
   group.add(dock);
 }
 
-function addDesertIslandDetails(group, radius, height) {
+function addDesertIslandDetails(group, radius, height, index) {
   const sand = new THREE.Mesh(
-    makeIrregularDiscGeometry(radius * 0.82, 96, 177),
+    makeIrregularDiscGeometry(radius * 0.82, 96, 177, height),
     new THREE.MeshStandardMaterial({ color: 0xd6aa64, roughness: 0.96 }),
   );
   sand.rotation.x = -Math.PI / 2;
@@ -1844,8 +1876,8 @@ function createFlowerPatch(index) {
   return group;
 }
 
-function addStarterIslandDetails(group, radius, height) {
-  addBeachRing(group, radius, height);
+function addStarterIslandDetails(group, radius, height, index) {
+  addBeachRing(group, radius, height, index);
   addVillagePaths(group, height);
   addDock(group, radius, height);
   addPondAndWaterfall(group, radius, height);
@@ -1962,7 +1994,8 @@ function addMarketStalls(group, height) {
       stall.add(post);
     }
 
-    stall.position.set(x, height + 0.3, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    stall.position.set(x, hY + 0.3, z);
     stall.rotation.y = rotation;
     group.add(stall);
     addCollisionCircle(new THREE.Vector3(x, height, z), 20, "Market stall");
@@ -1987,12 +2020,13 @@ function addCratesAndBarrels(group, height) {
       index % 2 === 0
         ? new THREE.Mesh(new THREE.BoxGeometry(12, 12, 12), wood)
         : new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 13, 12), wood);
-    item.position.set(x, height + 6.5, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    item.position.set(x, hY + 6.5, z);
     item.rotation.y = index * 0.45;
     item.castShadow = true;
     item.receiveShadow = true;
     group.add(item);
-    addCollisionCircle(new THREE.Vector3(x, height, z), 8, "Supply stack");
+    addCollisionCircle(new THREE.Vector3(x, hY, z), 8, "Supply stack");
   });
 }
 
@@ -2019,7 +2053,8 @@ function addGardenBeds(group, height) {
       bed.add(plant);
     }
 
-    bed.position.set(x, height + 0.5, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    bed.position.set(x, hY + 0.5, z);
     bed.rotation.y = rotation;
     group.add(bed);
   });
@@ -2046,10 +2081,11 @@ function addFenceLines(group, height) {
     rail.castShadow = true;
     fence.add(rail);
 
-    fence.position.set(x, height + 0.5, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    fence.position.set(x, hY + 0.5, z);
     fence.rotation.y = rotation;
     group.add(fence);
-    addCollisionCircle(new THREE.Vector3(x + Math.cos(rotation) * count * 6, height, z - Math.sin(rotation) * count * 6), count * 8, "Fence");
+    addCollisionCircle(new THREE.Vector3(x + Math.cos(rotation) * count * 6, hY, z - Math.sin(rotation) * count * 6), count * 8, "Fence");
   });
 }
 
@@ -2074,10 +2110,11 @@ function addSignposts(group, height) {
     board.castShadow = true;
     sign.add(board);
 
-    sign.position.set(x, height + 0.4, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    sign.position.set(x, hY + 0.4, z);
     sign.rotation.y = rotation;
     group.add(sign);
-    addCollisionCircle(new THREE.Vector3(x, height, z), 8, "Signpost");
+    addCollisionCircle(new THREE.Vector3(x, hY, z), 8, "Signpost");
   });
 }
 
@@ -2102,10 +2139,11 @@ function addTrainingYard(group, height) {
     yard.add(dummy);
   }
 
-  yard.position.set(208, height + 0.3, 122);
+  const hY = getLocalSurfaceHeightAt(224, 138, STARTER_RADIUS, height, 0);
+  yard.position.set(208, hY + 0.3, 122);
   yard.rotation.y = -0.35;
   group.add(yard);
-  addCollisionCircle(new THREE.Vector3(224, height, 138), 36, "Training yard");
+  addCollisionCircle(new THREE.Vector3(224, hY, 138), 36, "Training yard");
 }
 
 function addLookoutArch(group, height) {
@@ -2115,16 +2153,17 @@ function addLookoutArch(group, height) {
     [34, 0, 0],
   ];
 
+  const archY = getLocalSurfaceHeightAt(-242, 112, STARTER_RADIUS, height, 0);
   positions.forEach(([x, y, z]) => {
     const pillar = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 38, 10), stone);
-    pillar.position.set(-242 + x, height + 19 + y, 112 + z);
+    pillar.position.set(-242 + x, archY + 19 + y, 112 + z);
     pillar.castShadow = true;
     group.add(pillar);
-    addCollisionCircle(new THREE.Vector3(-242 + x, height, 112 + z), 10, "Lookout arch");
+    addCollisionCircle(new THREE.Vector3(-242 + x, archY, 112 + z), 10, "Lookout arch");
   });
 
   const lintel = new THREE.Mesh(new THREE.BoxGeometry(86, 12, 18), stone);
-  lintel.position.set(-242, height + 41, 112);
+  lintel.position.set(-242, archY + 41, 112);
   lintel.rotation.z = 0.08;
   lintel.castShadow = true;
   group.add(lintel);
@@ -2133,7 +2172,7 @@ function addLookoutArch(group, height) {
     new THREE.PlaneGeometry(26, 16),
     new THREE.MeshStandardMaterial({ color: 0xf6b73c, side: THREE.DoubleSide, roughness: 0.6 }),
   );
-  flag.position.set(-198, height + 52, 112);
+  flag.position.set(-198, archY + 52, 112);
   flag.rotation.y = -0.45;
   group.add(flag);
 }
@@ -2154,20 +2193,21 @@ function addLanternsAndBanners(group, height) {
   ];
 
   spots.forEach(([x, z], index) => {
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 22, 8), postMaterial);
-    post.position.set(x, height + 11, z);
+    post.position.set(x, hY + 11, z);
     post.castShadow = true;
     group.add(post);
 
     const lantern = new THREE.Mesh(new THREE.SphereGeometry(3.2, 12, 8), glowMaterial);
-    lantern.position.set(x, height + 23, z);
+    lantern.position.set(x, hY + 23, z);
     group.add(lantern);
 
     const banner = new THREE.Mesh(
       new THREE.PlaneGeometry(9, 15),
       new THREE.MeshStandardMaterial({ color: bannerColors[index % bannerColors.length], side: THREE.DoubleSide, roughness: 0.72 }),
     );
-    banner.position.set(x + 4, height + 15, z);
+    banner.position.set(x + 4, hY + 15, z);
     banner.rotation.y = index * 0.7;
     group.add(banner);
   });
@@ -2189,20 +2229,23 @@ function addShoreCrystals(group, radius, height) {
         opacity: 0.88,
       }),
     );
-    crystal.position.set(Math.cos(angle) * distance, height + 9, Math.sin(angle) * distance);
+    const cx = Math.cos(angle) * distance;
+    const cz = Math.sin(angle) * distance;
+    const cY = getLocalSurfaceHeightAt(cx, cz, radius, height, 0);
+    crystal.position.set(cx, cY + 9, cz);
     crystal.rotation.z = -0.18 + (i % 4) * 0.1;
     crystal.castShadow = true;
     group.add(crystal);
   }
 }
 
-function addBeachRing(group, radius, height) {
+function addBeachRing(group, radius, height, index = 0) {
   const beach = new THREE.Mesh(
-    makeIrregularRingGeometry(radius * 0.76, radius * 0.98, 128, 21),
+    makeIrregularRingGeometry(radius * 0.76, radius * 0.98, 128, 21, height, index, radius),
     new THREE.MeshStandardMaterial({ color: 0xe7c980, roughness: 0.92, side: THREE.DoubleSide }),
   );
   beach.rotation.x = -Math.PI / 2;
-  beach.position.y = height + 0.07;
+  beach.position.y = height;
   beach.receiveShadow = true;
   group.add(beach);
 
@@ -2249,7 +2292,8 @@ function addVillagePaths(group, height) {
 
   paths.forEach(([x, z, length, width, rotation]) => {
     const path = new THREE.Mesh(new THREE.BoxGeometry(width, 0.35, length), material);
-    path.position.set(x, height + 0.44, z);
+    const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    path.position.set(x, hY + 0.44, z);
     path.rotation.y = rotation;
     path.receiveShadow = true;
     group.add(path);
@@ -2287,15 +2331,19 @@ function addVillagePlaza(group, height) {
 
 function addDock(group, radius, height) {
   const wood = new THREE.MeshStandardMaterial({ color: 0x7b5635, roughness: 0.9 });
+  const pierY = getLocalSurfaceHeightAt(0, radius * 0.93, radius, height, 0);
   const pier = new THREE.Mesh(new THREE.BoxGeometry(32, 2.5, 170), wood);
-  pier.position.set(0, height + 1.4, radius * 0.93);
+  pier.position.set(0, pierY + 1.4, radius * 0.93);
   pier.castShadow = true;
   pier.receiveShadow = true;
   group.add(pier);
 
   for (let i = -3; i <= 3; i += 1) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.6, 18, 10), wood);
-    post.position.set(i * 11, height - 3, radius * 0.78 + Math.abs(i % 2) * 35);
+    const postX = i * 11;
+    const postZ = radius * 0.78 + Math.abs(i % 2) * 35;
+    const postY = getLocalSurfaceHeightAt(postX, postZ, radius, height, 0);
+    post.position.set(postX, postY - 3, postZ);
     post.castShadow = true;
     group.add(post);
   }
@@ -2332,21 +2380,24 @@ function addPondAndWaterfall(group, radius, height) {
     side: THREE.DoubleSide,
   });
 
+  const pondY = getLocalSurfaceHeightAt(-138, -72, radius, height, 0);
   const pond = new THREE.Mesh(makeIrregularDiscGeometry(54, 42, 51), waterMaterial);
   pond.rotation.x = -Math.PI / 2;
-  pond.position.set(-138, height + 0.62, -72);
+  pond.position.set(-138, pondY + 0.62, -72);
   group.add(pond);
 
+  const streamY = getLocalSurfaceHeightAt(-184, -176, radius, height, 0);
   const stream = new THREE.Mesh(new THREE.BoxGeometry(20, 0.4, 185), waterMaterial);
-  stream.position.set(-184, height + 0.65, -176);
+  stream.position.set(-184, streamY + 0.65, -176);
   stream.rotation.y = -0.42;
   group.add(stream);
 
+  const waterfallY = getLocalSurfaceHeightAt(-247, -288, radius, height, 0);
   const waterfall = new THREE.Mesh(
     new THREE.PlaneGeometry(58, 58, 8, 8),
     new THREE.MeshStandardMaterial({ color: 0x9defff, transparent: true, opacity: 0.68, side: THREE.DoubleSide }),
   );
-  waterfall.position.set(-247, height - 13, -288);
+  waterfall.position.set(-247, waterfallY - 13, -288);
   waterfall.rotation.y = -0.42;
   group.add(waterfall);
 
@@ -2355,7 +2406,10 @@ function addPondAndWaterfall(group, radius, height) {
       new THREE.SphereGeometry(3 + (i % 3), 10, 8),
       new THREE.MeshStandardMaterial({ color: 0xd6fbff, transparent: true, opacity: 0.32 }),
     );
-    mist.position.set(-230 + Math.sin(i) * 24, height + 1 + (i % 4), -306 + Math.cos(i * 2) * 18);
+    const mx = -230 + Math.sin(i) * 24;
+    const mz = -306 + Math.cos(i * 2) * 18;
+    const mY = getLocalSurfaceHeightAt(mx, mz, radius, height, 0);
+    mist.position.set(mx, mY + 1 + (i % 4), mz);
     group.add(mist);
   }
 }
@@ -5446,7 +5500,7 @@ function getLocalSurfaceHeightAt(lx, lz, radius, height, index) {
   
   const centerHeight = height + 0.5;
   const seed = index + 9;
-  const slope = -5.5;
+  const slope = -height;
   const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
   const edgeHeight = height + 0.16 + slope + uneven;
   
@@ -5464,7 +5518,7 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
   const indices = [];
   const topCenterIndex = 0;
   const bottomCenterIndex = 1;
-  positions.push(0, height / 2, 0, 0, -height / 2, 0);
+  positions.push(0, height / 2, 0, 0, -height / 2 - 40, 0);
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
@@ -5472,12 +5526,12 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
     const bottomRadius = islandProfileRadius(angle + 0.08, radius, seed + 2);
     
     // Sloped edge height matching the disc
-    const slope = -5.5;
+    const slope = -height;
     const uneven = Math.sin(angle * 6 + (seed + 6)) * 1.5 + Math.cos(angle * 11) * 0.8;
     const ledge = slope + uneven;
     
     positions.push(Math.cos(angle) * topRadius, height / 2 + ledge, Math.sin(angle) * topRadius);
-    positions.push(Math.cos(angle) * bottomRadius, -height / 2, Math.sin(angle) * bottomRadius);
+    positions.push(Math.cos(angle) * bottomRadius, -height / 2 - 40, Math.sin(angle) * bottomRadius);
   }
 
   for (let i = 0; i < segments; i += 1) {
@@ -5499,7 +5553,7 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
   return geometry;
 }
 
-function makeIrregularDiscGeometry(radius, segments, seed) {
+function makeIrregularDiscGeometry(radius, segments, seed, height = 0) {
   const positions = [0, 0, 0.5]; // Center is slightly raised
   const indices = [];
 
@@ -5507,7 +5561,7 @@ function makeIrregularDiscGeometry(radius, segments, seed) {
     const angle = (i / segments) * Math.PI * 2;
     const edgeRadius = islandProfileRadius(angle, radius, seed);
     
-    const slope = -5.5;
+    const slope = -height;
     const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
     const rise = slope + uneven;
     
@@ -5526,7 +5580,7 @@ function makeIrregularDiscGeometry(radius, segments, seed) {
   return geometry;
 }
 
-function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed) {
+function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed, height = 0, index = 0, maxRadius = 1) {
   const positions = [];
   const indices = [];
 
@@ -5534,9 +5588,27 @@ function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed) {
     const angle = (i / segments) * Math.PI * 2;
     const inner = islandProfileRadius(angle + 0.12, innerRadius, seed + 1);
     const outer = islandProfileRadius(angle, outerRadius, seed);
-    const ripple = Math.sin(angle * 15 + seed) * 0.3;
-    positions.push(Math.cos(angle) * inner, Math.sin(angle) * inner, ripple);
-    positions.push(Math.cos(angle) * outer, Math.sin(angle) * outer, -ripple);
+    
+    let innerRise = Math.sin(angle * 15 + seed) * 0.3;
+    let outerRise = -innerRise;
+    
+    if (height > 0) {
+      const slope = -height;
+      const seedVal = index + 9;
+      const uneven = Math.sin(angle * 6 + seedVal) * 1.5 + Math.cos(angle * 11) * 0.8;
+      
+      const centerHeight = 0.5;
+      const edgeHeight = 0.16 + slope + uneven;
+      
+      const normInner = Math.min(1, inner / (maxRadius * 0.96));
+      const normOuter = Math.min(1, outer / (maxRadius * 0.96));
+      
+      innerRise = centerHeight + (edgeHeight - centerHeight) * normInner;
+      outerRise = centerHeight + (edgeHeight - centerHeight) * normOuter;
+    }
+    
+    positions.push(Math.cos(angle) * inner, Math.sin(angle) * inner, innerRise);
+    positions.push(Math.cos(angle) * outer, Math.sin(angle) * outer, outerRise);
   }
 
   for (let i = 0; i < segments; i += 1) {
