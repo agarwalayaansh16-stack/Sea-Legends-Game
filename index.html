@@ -4,10 +4,43 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sea Legends: Pirates vs Marines</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <div id="game-root">
+      <div id="perf-stats-bar" class="perf-stats-bar hidden">
+        <div class="perf-stat-item">
+          <span class="perf-label">Mem</span>
+          <span id="perf-val-mem" class="perf-value">0 MB</span>
+          <canvas id="perf-graph-mem" class="perf-graph" width="40" height="14"></canvas>
+        </div>
+        <div class="perf-stat-item">
+          <span class="perf-label">CPU</span>
+          <span id="perf-val-cpu" class="perf-value">0 ms</span>
+          <canvas id="perf-graph-cpu" class="perf-graph" width="40" height="14"></canvas>
+        </div>
+        <div class="perf-stat-item">
+          <span class="perf-label">GPU</span>
+          <span id="perf-val-gpu" class="perf-value">0 ms</span>
+          <canvas id="perf-graph-gpu" class="perf-graph" width="40" height="14"></canvas>
+        </div>
+        <div class="perf-stat-item">
+          <span class="perf-label">Sent</span>
+          <span id="perf-val-sent" class="perf-value">0 KB/s</span>
+        </div>
+        <div class="perf-stat-item">
+          <span class="perf-label">Recv</span>
+          <span id="perf-val-recv" class="perf-value">0 KB/s</span>
+        </div>
+        <div id="perf-item-ping" class="perf-stat-item">
+          <span class="perf-label">Ping</span>
+          <span id="perf-val-ping" class="perf-value">0 ms</span>
+          <canvas id="perf-graph-ping" class="perf-graph" width="40" height="14"></canvas>
+        </div>
+      </div>
       <canvas id="game"></canvas>
 
       <section id="faction-screen" class="overlay">
@@ -65,6 +98,7 @@
                       <option value="short">Short</option>
                       <option value="spiky">Spiky</option>
                       <option value="cap">Captain Cap</option>
+                      <option value="messy">Messy</option>
                     </select>
                   </label>
                   <label>
@@ -73,6 +107,7 @@
                       <option value="sailor">Sailor</option>
                       <option value="coat">Long Coat</option>
                       <option value="armor">Light Armor</option>
+                      <option value="adventurer">Adventurer Vest</option>
                     </select>
                   </label>
                   <label>Height <input id="height-scale" type="range" min="85" max="125" value="100"></label>
@@ -105,21 +140,42 @@
       </section>
 
       <section id="hud" class="hud hidden">
-        <div class="top-row">
-          <div class="stat-block">
-            <strong id="player-title">Neutral Rookie</strong>
-            <span id="level-readout">Level 1</span>
+        <!-- Top Left Escape Menu trigger button -->
+        <button id="top-left-menu-btn" class="top-left-menu-btn" type="button">☰</button>
+
+        <div id="bottom-left-hud" class="bottom-left-hud">
+          <div class="nav-grid">
+            <button id="nav-btn-stats" class="nav-btn" type="button">Stats</button>
+            <button id="nav-btn-items" class="nav-btn" type="button">Items</button>
+            <button id="nav-btn-shop" class="nav-btn" type="button">Shop</button>
+            <button id="nav-btn-close" class="nav-btn" type="button">Close</button>
           </div>
-          <div class="bars">
-            <label>Health <span id="health-readout"></span></label>
-            <div class="bar"><span id="health-bar"></span></div>
-            <label>XP <span id="xp-readout"></span></label>
-            <div class="bar xp"><span id="xp-bar"></span></div>
+          
+          <div class="hud-status-row">
+            <span id="money-readout" class="hud-money">$0</span>
+            <span id="level-readout" class="hud-level">Lv. 1</span>
           </div>
-          <div class="wallet">
-            <span id="money-readout">$0</span>
-            <span id="sea-readout">First Sea</span>
+
+          <div class="hud-xp-wrap">
+            <div class="hud-xp-bar"><span id="xp-bar"></span></div>
+            <span id="xp-readout" class="hud-xp-text">0/100</span>
           </div>
+          
+          <div class="hud-bars">
+            <div class="hud-bar-container health">
+              <span id="health-bar" class="hud-bar-fill"></span>
+              <span class="hud-bar-label">Health <span id="health-readout">100/100</span></span>
+            </div>
+            
+            <div class="hud-bar-container energy">
+              <span id="stamina-bar" class="hud-bar-fill"></span>
+              <span class="hud-bar-label">Energy <span id="stamina-readout">100/100</span></span>
+            </div>
+          </div>
+          
+          <!-- Hidden spans to prevent JS lookup errors -->
+          <span id="player-title" style="display: none;"></span>
+          <span id="sea-readout" style="display: none;"></span>
         </div>
 
         <div id="settings-bar" class="settings-bar">
@@ -137,6 +193,14 @@
           <div class="settings-section settings-bar-right">
             <span id="teleport-status">Teleport ready</span>
             <label class="toggle">
+              <input id="controls-toggle" type="checkbox" checked>
+              <span>Controls</span>
+            </label>
+            <label class="toggle">
+              <input id="quest-toggle" type="checkbox" checked>
+              <span>Quest</span>
+            </label>
+            <label class="toggle">
               <input id="shiftlock-toggle" type="checkbox" checked>
               <span>Shiftlock enabled</span>
             </label>
@@ -148,7 +212,7 @@
           <p id="quest-detail">Walk to the gold marker on Starter Island and press E.</p>
         </div>
 
-        <div class="stats-card">
+        <div class="stats-card hidden">
           <div class="stats-header">
             <strong>Stats</strong>
             <span id="points-readout">0 points</span>
@@ -156,7 +220,7 @@
           <div id="stats-list"></div>
         </div>
 
-        <button id="inventory-button" class="inventory-button" type="button">Inventory</button>
+
 
         <div id="inventory-panel" class="inventory-panel hidden">
           <div class="inventory-header">
@@ -178,6 +242,7 @@
           <span><i id="boss-health-bar"></i></span>
         </div>
 
+        <div id="combat-flash" class="combat-flash"></div>
         <div id="prompt" class="prompt hidden"></div>
         <div id="message-log" class="message-log"></div>
 
@@ -239,6 +304,60 @@
           </div>
         </div>
       </section>
+
+      <!-- Escape Menu (Roblox Style settings) -->
+      <div id="esc-menu" class="esc-menu hidden">
+        <div class="esc-dialog">
+          <div class="esc-header">
+            <h2>Settings & Performance</h2>
+            <button id="esc-close" class="esc-close-btn" type="button">×</button>
+          </div>
+          <div class="esc-body">
+            <div class="esc-section">
+              <h3>Performance Stats Bar</h3>
+              <div class="esc-row">
+                <label class="toggle">
+                  <input id="esc-perf-toggle" type="checkbox">
+                  <span>Show Performance Stats (Mem, CPU, GPU, Sent, Recv)</span>
+                </label>
+              </div>
+              <div class="esc-row">
+                <label class="toggle">
+                  <input id="esc-ping-toggle" type="checkbox" checked>
+                  <span>Show Ping metric</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="esc-section">
+              <h3>Graphics Quality</h3>
+              <div class="esc-row graphics-slider-row">
+                <div>
+                  <span>Graphics Level</span>
+                  <strong id="graphics-level-val">5</strong>
+                </div>
+                <input id="graphics-quality-slider" type="range" min="1" max="5" value="5" step="1">
+              </div>
+              <small class="esc-help">Low levels disable shadows and lower resolution to boost performance.</small>
+            </div>
+
+            <div class="esc-section">
+              <h3>Volume</h3>
+              <div class="esc-row volume-slider-row">
+                <div>
+                  <span>Volume</span>
+                  <strong id="volume-val">50%</strong>
+                </div>
+                <input id="volume-slider" type="range" min="0" max="100" value="50" step="5">
+              </div>
+            </div>
+          </div>
+          <div class="esc-footer">
+            <button id="esc-resume-btn" class="esc-btn primary" type="button">Resume</button>
+            <button id="esc-reset-btn" class="esc-btn danger" type="button">Reset Character</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

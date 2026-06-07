@@ -2,14 +2,36 @@
 const audio = {
   ctx: null,
   enabled: false,
+  volume: 0.5,
+  masterGain: null,
   init() {
     if (this.ctx) return;
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      this.masterGain.connect(this.ctx.destination);
+      
+      const originalConnect = AudioNode.prototype.connect;
+      const self = this;
+      AudioNode.prototype.connect = function(destination, output, input) {
+        if (destination === self.ctx.destination) {
+          return originalConnect.call(this, self.masterGain, output, input);
+        }
+        return originalConnect.call(this, destination, output, input);
+      };
+
       this.enabled = true;
       this.playFanfare();
     } catch (e) {
       console.warn("Web Audio API not supported", e);
+    }
+  },
+  setVolume(val) {
+    this.volume = clamp(val, 0, 1);
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
     }
   },
   playSlash() {
@@ -165,6 +187,21 @@ const audio = {
       osc.start(now + idx * 0.05);
       osc.stop(now + idx * 0.05 + 0.22);
     });
+  },
+  playCoinChime() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.08); // E6
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.22);
   }
 };
 
@@ -215,12 +252,19 @@ const boatMenuClose = document.querySelector("#boat-menu-close");
 const homeTeleportButton = document.querySelector("#home-teleport-button");
 const teleportStatus = document.querySelector("#teleport-status");
 const shiftlockToggle = document.querySelector("#shiftlock-toggle");
+const controlsToggle = document.querySelector("#controls-toggle");
+const questToggle = document.querySelector("#quest-toggle");
 const walkToggle = document.querySelector("#walk-toggle");
 const sprintToggle = document.querySelector("#sprint-toggle");
 const hakiToggle = document.querySelector("#haki-toggle");
 const settingsBar = document.querySelector("#settings-bar");
 const settingsCollapseButton = document.querySelector("#settings-collapse-button");
-const inventoryButton = document.querySelector("#inventory-button");
+const inventoryButton = document.querySelector("#nav-btn-items");
+const statsCard = document.querySelector(".stats-card");
+const topLeftMenuBtn = document.querySelector("#top-left-menu-btn");
+const navBtnStats = document.querySelector("#nav-btn-stats");
+const navBtnShop = document.querySelector("#nav-btn-shop");
+const navBtnClose = document.querySelector("#nav-btn-close");
 const inventoryPanel = document.querySelector("#inventory-panel");
 const inventoryTabs = document.querySelector("#inventory-tabs");
 const inventoryList = document.querySelector("#inventory-list");
@@ -301,8 +345,22 @@ const OUTPOST_ISLAND_INDEX = 2;
 const DESERT_ISLAND_INDEX = 3;
 
 const avatarState = {
-  selectedId: "wave-runner",
+  selectedId: "tavern-hero",
   avatars: [
+    {
+      id: "tavern-hero",
+      name: "Tavern Hero",
+      skin: "#eed2b8",
+      shirt: "#223745",
+      pants: "#4d4637",
+      hair: "#8e4e24",
+      eyes: "#1f3c5b",
+      boots: "#3d2616",
+      hairStyle: "messy",
+      outfit: "adventurer",
+      height: 100,
+      build: 100,
+    },
     {
       id: "wave-runner",
       name: "Wave Runner",
@@ -514,6 +572,7 @@ let activeQuest = null;
 const keys = new Set();
 const enemies = [];
 const hazards = [];
+const lootDrops = [];
 const projectiles = [];
 const interactables = [];
 const islands = [];
@@ -529,6 +588,17 @@ let homeTeleportCountdown = 0;
 let questGiverPosition = new THREE.Vector3();
 let activeBoat = null;
 let isPointerDown = false;
+let escMenuOpen = false;
+const perfState = {
+  visible: false,
+  showPing: true,
+  memHistory: [],
+  cpuHistory: [],
+  gpuHistory: [],
+  pingHistory: [],
+  lastUpdateTime: 0,
+  frameCount: 0,
+};
 let lastPointerX = 0;
 let lastPointerY = 0;
 let attackCooldown = 0;
@@ -608,10 +678,43 @@ settingsCollapseButton?.addEventListener("click", () => {
 
 inventoryButton?.addEventListener("click", () => {
   inventoryState.open = !inventoryState.open;
+  if (inventoryState.open) {
+    statsCard?.classList.add("hidden");
+    navBtnStats?.classList.remove("active");
+  }
   renderInventory();
 });
 
 inventoryCloseButton?.addEventListener("click", () => {
+  inventoryState.open = false;
+  renderInventory();
+});
+
+topLeftMenuBtn?.addEventListener("click", () => {
+  toggleEscMenu();
+});
+
+navBtnStats?.addEventListener("click", () => {
+  if (!statsCard) return;
+  const isHidden = statsCard.classList.contains("hidden");
+  if (isHidden) {
+    statsCard.classList.remove("hidden");
+    navBtnStats.classList.add("active");
+    inventoryState.open = false;
+    renderInventory();
+  } else {
+    statsCard.classList.add("hidden");
+    navBtnStats.classList.remove("active");
+  }
+});
+
+navBtnShop?.addEventListener("click", () => {
+  log("Shop Guidelines: Walk up to a Shop Sign (like Boat Shop or Sword Shop) and press E to interact and purchase items.");
+});
+
+navBtnClose?.addEventListener("click", () => {
+  statsCard?.classList.add("hidden");
+  navBtnStats?.classList.remove("active");
   inventoryState.open = false;
   renderInventory();
 });
@@ -670,6 +773,12 @@ const movementCodeMap = {
 const allowedMovementCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
 
 window.addEventListener("keydown", (event) => {
+  if (event.code === "Escape") {
+    event.preventDefault();
+    toggleEscMenu();
+    return;
+  }
+  if (escMenuOpen) return;
   if (!gameStarted || player.health <= 0) return;
   const code = event.code;
   const key = event.key.toLowerCase();
@@ -730,6 +839,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (escMenuOpen) return;
   const code = event.code;
   const key = event.key.toLowerCase();
   const mappedCode = movementCodeMap[key] || code;
@@ -746,6 +856,7 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("resize", resize);
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (escMenuOpen) return;
   if (player.health <= 0) return;
   if (event.button === 0 && gameStarted) {
     attack();
@@ -764,6 +875,7 @@ window.addEventListener("pointerup", () => {
 });
 
 window.addEventListener("pointermove", (event) => {
+  if (escMenuOpen) return;
   if (!isPointerDown) return;
   cameraYaw -= (event.clientX - lastPointerX) * 0.006;
   cameraPitch = clamp(cameraPitch - (event.clientY - lastPointerY) * 0.004, -0.52, 0.95);
@@ -781,6 +893,26 @@ homeTeleportButton?.addEventListener("click", () => {
 shiftlockToggle?.addEventListener("change", () => {
   shiftLockEnabled = shiftlockToggle.checked;
   shiftlockToggle.nextElementSibling.textContent = shiftLockEnabled ? "Shiftlock enabled" : "Shiftlock disabled";
+});
+
+controlsToggle?.addEventListener("change", () => {
+  const showControls = controlsToggle.checked;
+  const controlsPanel = document.querySelector(".controls");
+  if (controlsPanel) {
+    controlsPanel.classList.toggle("hidden", !showControls);
+  }
+});
+
+questToggle?.addEventListener("change", () => {
+  const showQuest = questToggle.checked;
+  const questCard = document.querySelector(".quest-card");
+  const questCompass = document.querySelector("#quest-compass");
+  if (questCard) {
+    questCard.classList.toggle("hidden", !showQuest);
+  }
+  if (questCompass) {
+    questCompass.classList.toggle("hidden", !showQuest);
+  }
 });
 
 walkToggle?.addEventListener("click", () => setMovementMode("walk"));
@@ -1056,7 +1188,7 @@ function updateAvatarPreview(avatar) {
   avatarPreview.querySelector(".preview-head").style.background = avatar.skin;
   avatarPreview.querySelector(".preview-neck").style.background = avatar.skin;
   avatarPreview.querySelectorAll(".preview-arm").forEach((part) => {
-    part.style.background = avatar.skin;
+    part.style.background = `linear-gradient(to bottom, ${avatar.shirt} 65%, ${avatar.skin} 65%)`;
   });
   avatarPreview.querySelector(".preview-body").style.background = avatar.shirt;
   avatarPreview.querySelectorAll(".preview-leg").forEach((part) => {
@@ -1099,6 +1231,11 @@ function getAvatarTraits(avatar = getSelectedAvatar()) {
   }
   if (outfit === "sailor") {
     traits.speedMultiplier += 0.06;
+  }
+  if (outfit === "adventurer") {
+    traits.speedMultiplier += 0.04;
+    traits.damageMultiplier += 0.04;
+    traits.incomingDamageMultiplier -= 0.05;
   }
 
   traits.healthMultiplier = clamp(traits.healthMultiplier, 0.75, 1.35);
@@ -1169,18 +1306,40 @@ function createWorld() {
     islands.push({ index: i, position, radius, mesh: island, surfaceY: getIslandSurfaceY(i) });
   }
 
-  createQuestGiver(new THREE.Vector3(52, STARTER_SURFACE_Y, 16));
-  createBoatDealer(new THREE.Vector3(-460, STARTER_SURFACE_Y, 60));
-  createSwordDealer(new THREE.Vector3(48, STARTER_SURFACE_Y, 104));
+  const starterIsland = islands[0];
+  const qgY = getIslandSurfaceHeightAt(52, 16, starterIsland);
+  createQuestGiver(new THREE.Vector3(52, qgY, 16));
+  
+  const bdY = getIslandSurfaceHeightAt(-460, 60, starterIsland);
+  createBoatDealer(new THREE.Vector3(-460, bdY, 60));
+  
+  const sdY = getIslandSurfaceHeightAt(48, 104, starterIsland);
+  createSwordDealer(new THREE.Vector3(48, sdY, 104));
+  
   createCrossingDock();
-  createTeleporter(new THREE.Vector3(438, STARTER_SURFACE_Y, -310), new THREE.Vector3(islands[1].position.x - 620, islands[1].surfaceY + 0.15, islands[1].position.z + 430));
-  createTeleporter(new THREE.Vector3(-380, STARTER_SURFACE_Y, -360), new THREE.Vector3(islands[2].position.x + 160, islands[2].surfaceY + 0.15, islands[2].position.z + 120));
+  
+  const tel1Y = getIslandSurfaceHeightAt(438, -310, starterIsland);
+  createTeleporter(new THREE.Vector3(438, tel1Y, -310), new THREE.Vector3(islands[1].position.x - 620, islands[1].surfaceY + 0.15, islands[1].position.z + 430));
+  
+  const tel2Y = getIslandSurfaceHeightAt(-380, -360, starterIsland);
+  createTeleporter(new THREE.Vector3(-380, tel2Y, -360), new THREE.Vector3(islands[2].position.x + 160, islands[2].surfaceY + 0.15, islands[2].position.z + 120));
+  
   createBanditCamp();
-  createOutpostQuestGiver(islands[2].position.clone().add(new THREE.Vector3(-80, islands[2].surfaceY, 40)));
-  createHakiTrainer(islands[3].position.clone().add(new THREE.Vector3(70, islands[3].surfaceY, -60)));
+  
+  const oqgPos = islands[2].position.clone().add(new THREE.Vector3(-80, 0, 40));
+  oqgPos.y = getIslandSurfaceHeightAt(oqgPos.x, oqgPos.z, islands[2]);
+  createOutpostQuestGiver(oqgPos);
+  
+  const htPos = islands[3].position.clone().add(new THREE.Vector3(70, 0, -60));
+  htPos.y = getIslandSurfaceHeightAt(htPos.x, htPos.z, islands[3]);
+  createHakiTrainer(htPos);
+  
   spawnPirateCamp(islands[2]);
   spawnBruteCamp(islands[2]);
-  spawnBuggyBoss(islands[2].position.clone().add(new THREE.Vector3(260, islands[2].surfaceY, -220)));
+  
+  const buggyPos = islands[2].position.clone().add(new THREE.Vector3(260, 0, -220));
+  buggyPos.y = getIslandSurfaceHeightAt(buggyPos.x, buggyPos.z, islands[2]);
+  spawnBuggyBoss(buggyPos);
 }
 
 function createIsland(position, radius, index) {
@@ -1316,20 +1475,27 @@ function addJungleIslandDetails(group, radius, height) {
   addJungleLakeAndPaths(group, radius, height);
   addJungleSatelliteIsland(group, radius, height);
 
+  const tx = -radius * 0.12;
+  const tz = radius * 0.08;
+  const tY = getLocalSurfaceHeightAt(tx, tz, radius, height, 1);
+  
   const treehouseTree = createJungleTree(230, 20);
-  treehouseTree.position.set(-radius * 0.12, height + 0.1, radius * 0.08);
+  treehouseTree.position.set(tx, tY + 0.1, tz);
   group.add(treehouseTree);
 
   const treehouse = createTreehouse();
-  treehouse.position.set(-radius * 0.12, height + 145, radius * 0.08);
+  treehouse.position.set(tx, tY + 145, tz);
   treehouse.rotation.y = 0.45;
   group.add(treehouse);
 
   for (let i = 0; i < 180; i += 1) {
     const angle = i * 2.399;
     const distance = radius * (0.08 + ((i * 37) % 76) / 100);
+    const trx = Math.cos(angle) * distance;
+    const trz = Math.sin(angle) * distance;
+    const trY = getLocalSurfaceHeightAt(trx, trz, radius, height, 1);
     const tree = createJungleTree(120 + (i % 7) * 18, 10 + (i % 5) * 2.2);
-    tree.position.set(Math.cos(angle) * distance, height + 0.1, Math.sin(angle) * distance);
+    tree.position.set(trx, trY + 0.1, trz);
     tree.rotation.y = angle;
     group.add(tree);
   }
@@ -1337,8 +1503,11 @@ function addJungleIslandDetails(group, radius, height) {
   for (let i = 0; i < 260; i += 1) {
     const angle = i * 1.618;
     const distance = radius * (0.06 + ((i * 53) % 80) / 100);
+    const bx = Math.cos(angle) * distance;
+    const bz = Math.sin(angle) * distance;
+    const bY = getLocalSurfaceHeightAt(bx, bz, radius, height, 1);
     const bush = createBigJungleBush(26 + (i % 6) * 7);
-    bush.position.set(Math.cos(angle) * distance, height + 1.2, Math.sin(angle) * distance);
+    bush.position.set(bx, bY + 1.2, bz);
     bush.rotation.y = angle;
     group.add(bush);
   }
@@ -1554,7 +1723,8 @@ function addOutpostIslandDetails(group, radius, height) {
 
   [[0, 0, 520, 34, 0.6], [-160, 120, 380, 28, -0.35], [180, -160, 340, 28, 1.2]].forEach(([x, z, l, w, r]) => {
     const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, l), dirt);
-    path.position.set(x, height + 0.6, z);
+    const pY = getLocalSurfaceHeightAt(x, z, radius, height, 2);
+    path.position.set(x, pY + 0.6, z);
     path.rotation.y = r;
     group.add(path);
   });
@@ -1563,7 +1733,10 @@ function addOutpostIslandDetails(group, radius, height) {
     const ruin = new THREE.Mesh(new THREE.BoxGeometry(26 + (i % 4) * 8, 24 + (i % 3) * 12, 18), stone);
     const angle = i * 1.17;
     const dist = radius * (0.18 + ((i * 41) % 54) / 100);
-    ruin.position.set(Math.cos(angle) * dist, height + ruin.geometry.parameters.height / 2, Math.sin(angle) * dist);
+    const rx = Math.cos(angle) * dist;
+    const rz = Math.sin(angle) * dist;
+    const rY = getLocalSurfaceHeightAt(rx, rz, radius, height, 2);
+    ruin.position.set(rx, rY + ruin.geometry.parameters.height / 2, rz);
     ruin.rotation.y = angle;
     ruin.castShadow = true;
     ruin.receiveShadow = true;
@@ -1574,13 +1747,19 @@ function addOutpostIslandDetails(group, radius, height) {
     const tower = new THREE.Mesh(new THREE.CylinderGeometry(10, 14, 58, 6), stone);
     const angle = i * 0.7;
     const dist = radius * 0.58;
-    tower.position.set(Math.cos(angle) * dist, height + 29, Math.sin(angle) * dist);
+    const tx = Math.cos(angle) * dist;
+    const tz = Math.sin(angle) * dist;
+    const tY = getLocalSurfaceHeightAt(tx, tz, radius, height, 2);
+    tower.position.set(tx, tY + 29, tz);
     tower.castShadow = true;
     group.add(tower);
   }
 
+  const dockX = -radius * 0.54;
+  const dockZ = radius * 0.62;
+  const dockY = getLocalSurfaceHeightAt(dockX, dockZ, radius, height, 2);
   const dock = new THREE.Mesh(new THREE.BoxGeometry(42, 2.5, 210), wood);
-  dock.position.set(-radius * 0.54, height + 1.2, radius * 0.62);
+  dock.position.set(dockX, dockY + 1.2, dockZ);
   dock.rotation.y = -0.58;
   dock.castShadow = true;
   group.add(dock);
@@ -1602,7 +1781,10 @@ function addDesertIslandDetails(group, radius, height) {
     );
     const angle = i * 1.41;
     const dist = radius * (0.16 + ((i * 29) % 62) / 100);
-    obelisk.position.set(Math.cos(angle) * dist, height + 24, Math.sin(angle) * dist);
+    const ox = Math.cos(angle) * dist;
+    const oz = Math.sin(angle) * dist;
+    const oY = getLocalSurfaceHeightAt(ox, oz, radius, height, 3);
+    obelisk.position.set(ox, oY + 24, oz);
     obelisk.rotation.y = angle;
     obelisk.castShadow = true;
     group.add(obelisk);
@@ -1683,17 +1865,21 @@ function addStarterIslandDetails(group, radius, height) {
 
   houseSpots.forEach(([x, z, rotation], index) => {
     const house = createHouse(index);
-    house.position.set(x, height + 0.2, z);
+    const hY = getLocalSurfaceHeightAt(x, z, radius, height, 0);
+    house.position.set(x, hY + 0.2, z);
     house.rotation.y = rotation;
     group.add(house);
-    addCollisionCircle(new THREE.Vector3(x, height, z), 28, "House wall");
+    addCollisionCircle(new THREE.Vector3(x, hY, z), 28, "House wall");
   });
 
   for (let i = 0; i < 28; i += 1) {
     const angle = i * 0.72 + Math.sin(i * 1.9) * 0.16;
     const distance = radius * (0.58 + (i % 7) * 0.045);
     const palm = createPalmTree(18 + (i % 4) * 2.8);
-    palm.position.set(Math.cos(angle) * distance, height + 0.1, Math.sin(angle) * distance);
+    const px = Math.cos(angle) * distance;
+    const pz = Math.sin(angle) * distance;
+    const pY = getLocalSurfaceHeightAt(px, pz, radius, height, 0);
+    palm.position.set(px, pY + 0.1, pz);
     palm.rotation.y = angle + Math.PI / 2;
     group.add(palm);
   }
@@ -1701,17 +1887,25 @@ function addStarterIslandDetails(group, radius, height) {
   for (let i = 0; i < 34; i += 1) {
     const angle = i * 0.64 + Math.sin(i) * 0.2;
     const distance = radius * (0.52 + (i % 5) * 0.075);
-    const rock = createRock(7 + (i % 4) * 3);
-    rock.position.set(Math.cos(angle) * distance, height + 0.2, Math.sin(angle) * distance);
+    const rockSize = 7 + (i % 4) * 3;
+    const rock = createRock(rockSize);
+    const rx = Math.cos(angle) * distance;
+    const rz = Math.sin(angle) * distance;
+    const rY = getLocalSurfaceHeightAt(rx, rz, radius, height, 0);
+    rock.position.set(rx, rY + 0.2, rz);
     rock.rotation.y = angle;
     group.add(rock);
+    addCollisionCircle(new THREE.Vector3(rx, rY, rz), rockSize * 0.85, "Rock obstacle");
   }
 
   for (let i = 0; i < 46; i += 1) {
     const angle = i * 1.97;
     const distance = radius * (0.14 + ((i * 37) % 68) / 100);
     const tuft = createGrassTuft(3 + (i % 4));
-    tuft.position.set(Math.cos(angle) * distance, height + 0.3, Math.sin(angle) * distance);
+    const tx = Math.cos(angle) * distance;
+    const tz = Math.sin(angle) * distance;
+    const tY = getLocalSurfaceHeightAt(tx, tz, radius, height, 0);
+    tuft.position.set(tx, tY + 0.3, tz);
     tuft.rotation.y = angle;
     group.add(tuft);
   }
@@ -1720,7 +1914,10 @@ function addStarterIslandDetails(group, radius, height) {
     const angle = i * 2.31;
     const distance = radius * (0.18 + ((i * 29) % 62) / 100);
     const flowers = createFlowerPatch(i);
-    flowers.position.set(Math.cos(angle) * distance, height + 0.45, Math.sin(angle) * distance);
+    const fx = Math.cos(angle) * distance;
+    const fz = Math.sin(angle) * distance;
+    const fY = getLocalSurfaceHeightAt(fx, fz, radius, height, 0);
+    flowers.position.set(fx, fY + 0.45, fz);
     flowers.rotation.y = angle;
     group.add(flowers);
   }
@@ -2584,14 +2781,22 @@ function addIslandRocks(group, radius, height) {
   const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x60534a, roughness: 0.97, flatShading: true });
   const rockCount = 18;
   for (let i = 0; i < rockCount; i += 1) {
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(3 + Math.random() * 4, 0), rockMaterial);
+    const rockRadius = 3 + Math.random() * 4;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rockRadius, 0), rockMaterial);
     const angle = (i / rockCount) * Math.PI * 2 + Math.random() * 0.4;
     const distance = radius * (0.96 + Math.random() * 0.07);
-    rock.position.set(Math.cos(angle) * distance, height * 0.02 + Math.random() * 1.1, Math.sin(angle) * distance);
+    const rx = Math.cos(angle) * distance;
+    const rz = Math.sin(angle) * distance;
+    const ry = height * 0.02 + Math.random() * 1.1;
+    rock.position.set(rx, ry, rz);
     rock.rotation.set(Math.random() * 0.4, Math.random() * Math.PI, Math.random() * 0.6);
     rock.castShadow = true;
     rock.receiveShadow = true;
     group.add(rock);
+
+    // Add collision circle for boundary rock in global space
+    const globalPos = group.position.clone().add(new THREE.Vector3(rx, ry, rz));
+    addCollisionCircle(globalPos, rockRadius * 0.85, "Shore Rock");
   }
 }
 
@@ -2634,7 +2839,11 @@ function spawnPirateCamp(island) {
   const center = island.position;
   for (let i = 0; i < 6; i += 1) {
     const angle = i * 1.05;
-    spawnAdvancedEnemy(center.clone().add(new THREE.Vector3(Math.cos(angle) * 230, island.surfaceY, Math.sin(angle) * 230)), i, "pirate");
+    const px = Math.cos(angle) * 230;
+    const pz = Math.sin(angle) * 230;
+    const spawnPos = center.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "pirate");
   }
 }
 
@@ -2642,7 +2851,11 @@ function spawnBruteCamp(island) {
   const center = island.position.clone().add(new THREE.Vector3(-260, 0, 210));
   for (let i = 0; i < 4; i += 1) {
     const angle = i * 1.5;
-    spawnAdvancedEnemy(center.clone().add(new THREE.Vector3(Math.cos(angle) * 150, island.surfaceY, Math.sin(angle) * 150)), i, "brute");
+    const px = Math.cos(angle) * 150;
+    const pz = Math.sin(angle) * 150;
+    const spawnPos = center.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "brute");
   }
 }
 
@@ -2774,6 +2987,8 @@ function createHumanAvatarModel(avatar, options = {}) {
   const boots = new THREE.MeshStandardMaterial({ color: avatar.boots || "#23170f", roughness: 0.9 });
   const metal = new THREE.MeshStandardMaterial({ color: 0xc8d7df, metalness: 0.7, roughness: 0.25 });
   const trim = new THREE.MeshStandardMaterial({ color: avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", roughness: 0.65 });
+  const leather = new THREE.MeshStandardMaterial({ color: "#5c3d21", roughness: 0.82 });
+  const darkLeather = new THREE.MeshStandardMaterial({ color: "#362a22", roughness: 0.88 });
 
   const torsoWidth = 3.2 * buildScale;
   const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, 4.1, 1.6), shirt);
@@ -2813,22 +3028,78 @@ function createHumanAvatarModel(avatar, options = {}) {
   }
 
   const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), eyes);
-  leftEye.position.set(-0.42, 8.72, 1.08);
-  group.add(leftEye);
+  leftEye.position.set(-0.42, 0.07, 1.08);
+  head.add(leftEye);
 
   const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), eyes);
-  rightEye.position.set(0.42, 8.72, 1.08);
-  group.add(rightEye);
+  rightEye.position.set(0.42, 0.07, 1.08);
+  head.add(rightEye);
+
+  // Reddish mouth material for premium aesthetics
+  const mouthMaterial = new THREE.MeshStandardMaterial({ color: "#5c1e28", roughness: 0.6 });
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 8, 16, Math.PI * 0.8), mouthMaterial);
+  mouth.position.set(0, -0.35, 1.16);
+  mouth.rotation.set(0.15, 0, Math.PI * 1.1); // Rotate to smile + align
+  head.add(mouth);
+
+  // Eyebrows matching hair color
+  const leftEyebrow = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.12), hair);
+  leftEyebrow.position.set(-0.42, 0.25, 1.14);
+  leftEyebrow.rotation.set(0, 0, -0.12);
+  head.add(leftEyebrow);
+
+  const rightEyebrow = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.12), hair);
+  rightEyebrow.position.set(0.42, 0.25, 1.14);
+  rightEyebrow.rotation.set(0, 0, 0.12);
+  head.add(rightEyebrow);
 
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.55, 14), skin);
   neck.position.y = 7.45;
   neck.castShadow = true;
   group.add(neck);
 
-  const leftArm = addLimb(group, -2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, -0.15);
-  const rightArm = addLimb(group, 2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, 0.15);
+  // Shirt collar/neck trim for professional detail
+  const collarMaterial = avatar.outfit === "adventurer" ? leather : shirt;
+  const collarGeo = avatar.outfit === "adventurer"
+    ? new THREE.CylinderGeometry(0.56, 0.6, 0.48, 14, 1, true)
+    : new THREE.TorusGeometry(0.55, 0.12, 8, 16);
+  const collar = new THREE.Mesh(collarGeo, collarMaterial);
+  if (avatar.outfit === "adventurer") {
+    collar.position.y = 7.75;
+  } else {
+    collar.position.y = 7.65;
+    collar.rotation.x = Math.PI / 2;
+  }
+  collar.castShadow = true;
+  group.add(collar);
+
+  const leftArm = addLimb(group, -2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, -0.15, shirt);
+  const rightArm = addLimb(group, 2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, 0.15, shirt);
   const leftLeg = addLimb(group, -0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, pants, 0.04);
   const rightLeg = addLimb(group, 0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, pants, -0.04);
+
+  // Armor accessories (shoulder pads, gauntlets) if wearing armor outfit
+  if (avatar.outfit === "armor") {
+    const leftPad = new THREE.Mesh(new THREE.BoxGeometry(1.25 * buildScale, 0.8, 1.25 * buildScale), trim);
+    leftPad.position.set(0, -0.2, 0);
+    leftPad.castShadow = true;
+    leftArm.add(leftPad);
+
+    const rightPad = new THREE.Mesh(new THREE.BoxGeometry(1.25 * buildScale, 0.8, 1.25 * buildScale), trim);
+    rightPad.position.set(0, -0.2, 0);
+    rightPad.castShadow = true;
+    rightArm.add(rightPad);
+
+    const leftGauntlet = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * buildScale, 0.5 * buildScale, 0.95, 12), trim);
+    leftGauntlet.position.set(0, -1.8, 0);
+    leftGauntlet.castShadow = true;
+    leftArm.add(leftGauntlet);
+
+    const rightGauntlet = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * buildScale, 0.5 * buildScale, 0.95, 12), trim);
+    rightGauntlet.position.set(0, -1.8, 0);
+    rightGauntlet.castShadow = true;
+    rightArm.add(rightGauntlet);
+  }
 
   const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.28 * buildScale, 10, 10), skin);
   leftHand.position.set(0, -2.75, 0);
@@ -2848,31 +3119,178 @@ function createHumanAvatarModel(avatar, options = {}) {
   rightBoot.castShadow = true;
   rightLeg.add(rightBoot);
 
+  // Boot cuffs trim for layered clothing feel
+  const leftBootCuff = new THREE.Mesh(new THREE.BoxGeometry(1.15 * buildScale, 0.25, 1.35), trim);
+  leftBootCuff.position.set(0, -3.65, 0.14);
+  leftBootCuff.castShadow = true;
+  leftLeg.add(leftBootCuff);
+
+  const rightBootCuff = new THREE.Mesh(new THREE.BoxGeometry(1.15 * buildScale, 0.25, 1.35), trim);
+  rightBootCuff.position.set(0, -3.65, 0.14);
+  rightBootCuff.castShadow = true;
+  rightLeg.add(rightBootCuff);
+
   const belt = new THREE.Mesh(new THREE.BoxGeometry(3.4 * buildScale, 0.38, 1.75), boots);
   belt.position.y = 3.7;
   belt.castShadow = true;
   group.add(belt);
 
-  // Golden halo floating above head
-  const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), haloMat);
-  halo.position.set(0, 10.6, 0);
-  halo.rotation.x = Math.PI / 2;
-  group.add(halo);
+  if (avatar.outfit === "adventurer") {
+    // Harness / Shoulder Straps
+    const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 4.15, 1.76), leather);
+    strapL.position.set(-0.82 * buildScale, 5.7, 0.02);
+    strapL.castShadow = true;
+    group.add(strapL);
 
-  // Flowing royal cape on the back
-  const capeColor = avatar.shirt || "#111111";
-  const capeMat = new THREE.MeshStandardMaterial({
-    color: capeColor,
-    roughness: 0.85,
-    metalness: 0.1,
-    side: THREE.DoubleSide
-  });
-  const cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
-  cape.position.set(0, 4.4, -0.92);
-  cape.rotation.x = 0.12;
-  cape.castShadow = true;
-  group.add(cape);
+    const strapR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 4.15, 1.76), leather);
+    strapR.position.set(0.82 * buildScale, 5.7, 0.02);
+    strapR.castShadow = true;
+    group.add(strapR);
+
+    // Silver buckles on shoulder straps (front only)
+    const buckleL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.26, 0.12), metal);
+    buckleL.position.set(-0.82 * buildScale, 6.8, 0.89);
+    buckleL.castShadow = true;
+    group.add(buckleL);
+
+    const buckleR = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.26, 0.12), metal);
+    buckleR.position.set(0.82 * buildScale, 6.8, 0.89);
+    buckleR.castShadow = true;
+    group.add(buckleR);
+
+    // Diagonal crossing chest strap
+    const crossStrap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 4.8, 1.8), leather);
+    crossStrap.position.set(0, 5.7, 0.05);
+    crossStrap.rotation.z = -0.55;
+    crossStrap.castShadow = true;
+    group.add(crossStrap);
+
+    // Backpack / Rolled bedroll on the back
+    const backpack = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 3.4 * buildScale, 12), leather);
+    backpack.position.set(0, 5.9, -1.25);
+    backpack.rotation.z = Math.PI / 2;
+    backpack.castShadow = true;
+    group.add(backpack);
+
+    // Backpack straps (vertical rings looping around bedroll)
+    const bpStrapL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 1.45), darkLeather);
+    bpStrapL.position.set(-0.95 * buildScale, 5.9, -1.25);
+    bpStrapL.castShadow = true;
+    group.add(bpStrapL);
+
+    const bpStrapR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 1.45), darkLeather);
+    bpStrapR.position.set(0.95 * buildScale, 5.9, -1.25);
+    bpStrapR.castShadow = true;
+    group.add(bpStrapR);
+
+    // Hip Pouches (attached to belt)
+    const pouchR = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.95, 0.52), leather);
+    pouchR.position.set(1.68 * buildScale, 3.55, 0.38);
+    pouchR.rotation.y = 0.25;
+    pouchR.rotation.z = -0.15;
+    pouchR.castShadow = true;
+    group.add(pouchR);
+
+    const satchelL = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.62), leather);
+    satchelL.position.set(-1.68 * buildScale, 3.42, 0.22);
+    satchelL.rotation.y = -0.25;
+    satchelL.rotation.z = 0.15;
+    satchelL.castShadow = true;
+    group.add(satchelL);
+
+    // Fingerless gloves (adds cuff/bodies on hands)
+    const gloveBodyL = new THREE.Mesh(new THREE.CylinderGeometry(0.52 * buildScale, 0.48 * buildScale, 0.72, 12), darkLeather);
+    gloveBodyL.position.set(0, -0.05, 0);
+    gloveBodyL.castShadow = true;
+    leftHand.add(gloveBodyL);
+
+    const gloveBodyR = new THREE.Mesh(new THREE.CylinderGeometry(0.52 * buildScale, 0.48 * buildScale, 0.72, 12), darkLeather);
+    gloveBodyR.position.set(0, -0.05, 0);
+    gloveBodyR.castShadow = true;
+    rightHand.add(gloveBodyR);
+
+    // Knee pads on legs
+    const kneePadL = new THREE.Mesh(new THREE.BoxGeometry(0.85 * buildScale, 0.85, 0.35), darkLeather);
+    kneePadL.position.set(0, -1.9, 0.58);
+    kneePadL.castShadow = true;
+    leftLeg.add(kneePadL);
+
+    const kneePadR = new THREE.Mesh(new THREE.BoxGeometry(0.85 * buildScale, 0.85, 0.35), darkLeather);
+    kneePadR.position.set(0, -1.9, 0.58);
+    kneePadR.castShadow = true;
+    rightLeg.add(kneePadR);
+
+    // Boot Straps
+    const bootStrapL = new THREE.Mesh(new THREE.BoxGeometry(1.18 * buildScale, 0.15, 0.45), leather);
+    bootStrapL.position.set(0, -3.72, 0.42);
+    bootStrapL.castShadow = true;
+    leftLeg.add(bootStrapL);
+
+    const bootStrapR = new THREE.Mesh(new THREE.BoxGeometry(1.18 * buildScale, 0.15, 0.45), leather);
+    bootStrapR.position.set(0, -3.72, 0.42);
+    bootStrapR.castShadow = true;
+    rightLeg.add(bootStrapR);
+
+    // Wooden Runic Staff attached to Left Arm
+    const staffShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 7.8, 8), leather);
+    staffShaft.position.set(0, -1.8, 0.45);
+    staffShaft.castShadow = true;
+    leftArm.add(staffShaft);
+
+    // Curved top of staff
+    const staffTop = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), leather);
+    staffTop.position.set(0, 3.9, 0);
+    staffShaft.add(staffTop);
+
+    const staffHorn = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.11, 8, 16, Math.PI * 0.72), leather);
+    staffHorn.position.set(0, 4.0, 0.15);
+    staffHorn.rotation.x = Math.PI / 2;
+    staffShaft.add(staffHorn);
+
+    // Glowing Neon-Blue Runes
+    const runeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const rune1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
+    rune1.position.set(0, 3.0, 0.16);
+    staffShaft.add(rune1);
+
+    const rune2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
+    rune2.position.set(0, 2.6, 0.16);
+    staffShaft.add(rune2);
+
+    const rune3 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
+    rune3.position.set(0, 2.2, 0.16);
+    staffShaft.add(rune3);
+  }
+
+  // Save eye references to userData for blinking animations
+  group.userData.eyesList = [leftEye, rightEye];
+
+  let halo;
+  if (avatar.outfit !== "adventurer") {
+    // Golden halo floating above head
+    const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+    halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), haloMat);
+    halo.position.set(0, 10.6, 0);
+    halo.rotation.x = Math.PI / 2;
+    group.add(halo);
+  }
+
+  let cape;
+  if (avatar.outfit !== "adventurer") {
+    // Flowing royal cape on the back
+    const capeColor = avatar.shirt || "#111111";
+    const capeMat = new THREE.MeshStandardMaterial({
+      color: capeColor,
+      roughness: 0.85,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+    cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
+    cape.position.set(0, 4.4, -0.92);
+    cape.rotation.x = 0.12;
+    cape.castShadow = true;
+    group.add(cape);
+  }
 
   avatarParts.leftArm = leftArm;
   avatarParts.rightArm = rightArm;
@@ -2882,8 +3300,8 @@ function createHumanAvatarModel(avatar, options = {}) {
   avatarParts.rightHand = rightHand;
   avatarParts.torso = torso;
   avatarParts.head = head;
-  avatarParts.halo = halo;
-  avatarParts.cape = cape;
+  if (halo) avatarParts.halo = halo;
+  if (cape) avatarParts.cape = cape;
   group.userData.parts = avatarParts;
 
   if (showSword) {
@@ -2941,21 +3359,97 @@ function addHair(group, style, material) {
     return;
   }
 
+  if (style === "messy") {
+    // Base hair cap covering top/back of head
+    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(1.35, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), material);
+    hairCap.position.set(0, 9.0, -0.05);
+    hairCap.castShadow = true;
+    group.add(hairCap);
+
+    // Front messy bangs hanging over face (fringe)
+    const fringeCount = 5;
+    for (let i = 0; i < fringeCount; i++) {
+      const angle = -0.5 + (i / (fringeCount - 1)) * 1.0;
+      const bang = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.95, 6), material);
+      const px = Math.sin(angle) * 0.95;
+      const py = 9.15 - Math.abs(angle) * 0.15 + (i % 2 === 0 ? 0.05 : -0.05);
+      const pz = 1.02 - Math.abs(angle) * 0.2;
+      bang.position.set(px, py, pz);
+      bang.rotation.x = Math.PI * 0.58;
+      bang.rotation.y = -angle * 0.5;
+      bang.rotation.z = -angle * 0.8 + 0.1 * Math.sin(i);
+      bang.castShadow = true;
+      group.add(bang);
+    }
+
+    // Top messy/wavy tufts pointing up/back/sides
+    const tuftCount = 8;
+    for (let i = 0; i < tuftCount; i++) {
+      const theta = (i / tuftCount) * Math.PI * 2;
+      const r = 0.5 + Math.random() * 0.3;
+      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.15, 6), material);
+      const px = Math.cos(theta) * r;
+      const py = 9.7 + Math.random() * 0.25;
+      const pz = Math.sin(theta) * r - 0.1;
+      tuft.position.set(px, py, pz);
+      tuft.rotation.x = (pz / 1.35) * 0.8 + 0.2;
+      tuft.rotation.z = -(px / 1.35) * 0.8;
+      tuft.rotation.y = Math.random() * Math.PI;
+      tuft.castShadow = true;
+      group.add(tuft);
+    }
+
+    // Sideburns
+    const leftSide = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), material);
+    leftSide.position.set(-1.18, 8.4, 0.45);
+    leftSide.rotation.x = 0.1;
+    leftSide.rotation.z = 0.18;
+    leftSide.castShadow = true;
+    group.add(leftSide);
+
+    const rightSide = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), material);
+    rightSide.position.set(1.18, 8.4, 0.45);
+    rightSide.rotation.x = 0.1;
+    rightSide.rotation.z = -0.18;
+    rightSide.castShadow = true;
+    group.add(rightSide);
+    return;
+  }
+
   const hairCap = new THREE.Mesh(new THREE.SphereGeometry(1.32, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), material);
   hairCap.position.y = 9.0;
   hairCap.castShadow = true;
   group.add(hairCap);
 }
 
-function addLimb(group, x, y, z, radius, height, material, lean) {
+function addLimb(group, x, y, z, radius, height, material, lean, sleeveMaterial = null) {
   const limbGroup = new THREE.Group();
   limbGroup.position.set(x, y, z);
   limbGroup.rotation.z = lean;
 
-  const limb = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.9, height, 14), material);
-  limb.position.y = -height / 2;
-  limb.castShadow = true;
-  limbGroup.add(limb);
+  if (sleeveMaterial) {
+    const sleeveHeight = height * 0.65;
+    const forearmHeight = height * 0.35;
+
+    // Sleeve part
+    const sleeveGeo = new THREE.CylinderGeometry(radius, radius * 0.93, sleeveHeight, 14);
+    const sleeve = new THREE.Mesh(sleeveGeo, sleeveMaterial);
+    sleeve.position.y = -sleeveHeight / 2;
+    sleeve.castShadow = true;
+    limbGroup.add(sleeve);
+
+    // Forearm part (skin)
+    const forearmGeo = new THREE.CylinderGeometry(radius * 0.93, radius * 0.9, forearmHeight, 14);
+    const forearm = new THREE.Mesh(forearmGeo, material);
+    forearm.position.y = -sleeveHeight - forearmHeight / 2;
+    forearm.castShadow = true;
+    limbGroup.add(forearm);
+  } else {
+    const limb = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.9, height, 14), material);
+    limb.position.y = -height / 2;
+    limb.castShadow = true;
+    limbGroup.add(limb);
+  }
 
   group.add(limbGroup);
   return limbGroup;
@@ -2993,6 +3487,7 @@ function updateDerivedStats(avatar = getSelectedAvatar()) {
 }
 
 function loop(time) {
+  const loopStart = performance.now();
   const dt = Math.min(0.033, (time - (loop.lastTime || time)) / 1000);
   loop.lastTime = time;
   const stepDt = hitStopTimer > 0 ? dt * 0.12 : dt;
@@ -3034,10 +3529,170 @@ function loop(time) {
     camera.lookAt(0, STARTER_SURFACE_Y + 24, 0);
   }
 
+  updateBlinking(stepDt);
+  updateLootDrops(stepDt);
   updateWorldAnimations(time);
   ocean.material.color.offsetHSL(0, 0, Math.sin(time * 0.001) * 0.0008);
+  
+  const renderStart = performance.now();
   renderer.render(scene, camera);
+  const frameGpuTime = performance.now() - renderStart;
+  
+  const loopEnd = performance.now();
+  const frameCpuTime = loopEnd - loopStart;
+
+  if (perfState.visible) {
+    perfState.frameCount++;
+    perfState.cpuHistory.push(frameCpuTime);
+    perfState.gpuHistory.push(frameGpuTime);
+    if (perfState.cpuHistory.length > 30) perfState.cpuHistory.shift();
+    if (perfState.gpuHistory.length > 30) perfState.gpuHistory.shift();
+
+    const now = performance.now();
+    let memVal = 550;
+    if (window.performance && window.performance.memory) {
+      memVal = window.performance.memory.usedJSHeapSize / (1024 * 1024);
+    } else {
+      memVal = 580 + Math.sin(now * 0.0001) * 35 + Math.random() * 3;
+    }
+    perfState.memHistory.push(memVal);
+    if (perfState.memHistory.length > 30) perfState.memHistory.shift();
+
+    if (now - perfState.lastUpdateTime > 250) {
+      updatePerfStatsUI(now);
+      perfState.lastUpdateTime = now;
+    }
+  }
+
   requestAnimationFrame(loop);
+}
+
+function updateBlinking(dt) {
+  scene.traverse((node) => {
+    if (node.userData && node.userData.eyesList) {
+      if (node.userData.blinkTimer === undefined) {
+        node.userData.blinkTimer = 3.0 + Math.random() * 2.0;
+        node.userData.isBlinking = false;
+      }
+      node.userData.blinkTimer -= dt;
+      if (node.userData.blinkTimer <= 0) {
+        if (!node.userData.isBlinking) {
+          node.userData.isBlinking = true;
+          node.userData.blinkTimer = 0.12; // blink duration
+          node.userData.eyesList.forEach((eye) => {
+            eye.scale.y = 0.001;
+          });
+        } else {
+          node.userData.isBlinking = false;
+          node.userData.blinkTimer = 2.5 + Math.random() * 3.5; // next blink delay
+          node.userData.eyesList.forEach((eye) => {
+            eye.scale.y = 1.0;
+          });
+        }
+      }
+    }
+  });
+}
+
+function spawnLootCoins(position, totalValue) {
+  let numCoins = 3;
+  if (totalValue > 50) numCoins = 5;
+  if (totalValue > 100) numCoins = 7;
+  if (totalValue > 1000) numCoins = 15;
+
+  const coinValue = Math.floor(totalValue / numCoins);
+  const remainder = totalValue % numCoins;
+
+  const coinGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.15, 8);
+  const coinMat = new THREE.MeshStandardMaterial({
+    color: 0xffd700,
+    metalness: 0.85,
+    roughness: 0.18,
+    flatShading: true,
+  });
+
+  for (let i = 0; i < numCoins; i += 1) {
+    const coinMesh = new THREE.Mesh(coinGeo, coinMat);
+    coinMesh.position.copy(position).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 3,
+      2 + Math.random() * 3,
+      (Math.random() - 0.5) * 3,
+    ));
+    coinMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    coinMesh.castShadow = true;
+    coinMesh.receiveShadow = true;
+    scene.add(coinMesh);
+
+    const vx = (Math.random() - 0.5) * 22;
+    const vy = 15 + Math.random() * 18;
+    const vz = (Math.random() - 0.5) * 22;
+
+    const value = coinValue + (i === 0 ? remainder : 0);
+    lootDrops.push({
+      mesh: coinMesh,
+      velocity: new THREE.Vector3(vx, vy, vz),
+      value: value,
+      bounceCount: 0,
+    });
+  }
+}
+
+function updateLootDrops(dt) {
+  const magnetRange = 28;
+  const collectRange = 4.5;
+  const gravity = 58;
+  const playerPos = playerMesh.position;
+
+  for (let i = lootDrops.length - 1; i >= 0; i -= 1) {
+    const coin = lootDrops[i];
+    const mesh = coin.mesh;
+
+    coin.velocity.y -= gravity * dt;
+    mesh.position.addScaledVector(coin.velocity, dt);
+
+    mesh.rotation.x += dt * 5;
+    mesh.rotation.y += dt * 3;
+
+    let surfaceY = OCEAN_SURFACE_Y;
+    islands.forEach((isl) => {
+      const dx = mesh.position.x - isl.position.x;
+      const dz = mesh.position.z - isl.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= isl.radius) {
+        surfaceY = getIslandSurfaceHeightAt(mesh.position.x, mesh.position.z, isl);
+      }
+    });
+
+    if (mesh.position.y <= surfaceY + 0.15) {
+      mesh.position.y = surfaceY + 0.15;
+      if (coin.bounceCount < 3) {
+        coin.velocity.y = -coin.velocity.y * 0.45;
+        coin.velocity.x *= 0.65;
+        coin.velocity.z *= 0.65;
+        coin.bounceCount += 1;
+      } else {
+        coin.velocity.set(0, 0, 0);
+      }
+    }
+
+    const distToPlayer = mesh.position.distanceTo(playerPos);
+
+    if (distToPlayer < magnetRange) {
+      const pullDir = playerPos.clone().sub(mesh.position).normalize();
+      const pullSpeed = (1 - distToPlayer / magnetRange) * 140 + 20;
+      coin.velocity.lerp(pullDir.multiplyScalar(pullSpeed), 0.22);
+      mesh.position.addScaledVector(coin.velocity, dt);
+    }
+
+    if (distToPlayer < collectRange) {
+      audio.playCoinChime();
+      player.money += coin.value;
+      createFloatingText(mesh.position.clone().add(new THREE.Vector3(0, 4, 0)), `+$${coin.value}`, "#ffd700");
+      scene.remove(mesh);
+      lootDrops.splice(i, 1);
+      updateHud();
+    }
+  }
 }
 
 function updateWorldAnimations(time) {
@@ -3119,6 +3774,16 @@ function updatePlayer(dt) {
     player.lastMoveSpeed = speed * input.length();
     playerMesh.rotation.y = Math.atan2(move.x, move.z);
     resolveWallCollision(previousPosition);
+
+    // Sprint footstep dust VFX
+    if (!player.isSwimming && player.movementMode === "sprint") {
+      if (updatePlayer.lastDustTime === undefined) updatePlayer.lastDustTime = 0;
+      const now = performance.now();
+      if (now - updatePlayer.lastDustTime > 220) {
+        createFootstepDustEffect(playerMesh.position.clone());
+        updatePlayer.lastDustTime = now;
+      }
+    }
   } else {
     player.lastMoveSpeed = 0;
   }
@@ -3132,7 +3797,7 @@ function updatePlayer(dt) {
     if (player.isSwimming) createSplashEffect(playerMesh.position.clone());
     player.isSwimming = false;
     player.oxygen = Math.min(100, player.oxygen + dt * 18);
-    playerMesh.position.y = island.surfaceY + 0.15;
+    playerMesh.position.y = getIslandSurfaceHeightAt(playerMesh.position.x, playerMesh.position.z, island) + 0.15;
     updateIslandArrival(island);
     updateJump(dt);
   }
@@ -3162,6 +3827,52 @@ function updateSwimming(dt) {
     wallHitCooldown = 1;
   }
   if (Math.random() < dt * 4) createBubbleEffect(playerMesh.position.clone());
+
+  // Spawn visual white ripple rings around player while swimming
+  const moving = keys.has("KeyW") || keys.has("KeyA") || keys.has("KeyS") || keys.has("KeyD");
+  if (moving) {
+    if (updateSwimming.lastRippleTime === undefined) updateSwimming.lastRippleTime = 0;
+    const now = performance.now();
+    if (now - updateSwimming.lastRippleTime > 380) {
+      createSwimRippleEffect(playerMesh.position.clone(), 1.0);
+      updateSwimming.lastRippleTime = now;
+    }
+  } else {
+    if (updateSwimming.lastRippleTime === undefined) updateSwimming.lastRippleTime = 0;
+    const now = performance.now();
+    if (now - updateSwimming.lastRippleTime > 1100) {
+      createSwimRippleEffect(playerMesh.position.clone(), 0.4);
+      updateSwimming.lastRippleTime = now;
+    }
+  }
+}
+
+function createSwimRippleEffect(position, velocityMultiplier = 1.0) {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(3.5, 0.1, 8, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 * velocityMultiplier })
+  );
+  ring.position.copy(position);
+  ring.position.y = OCEAN_SURFACE_Y + 0.1;
+  ring.rotation.x = Math.PI / 2;
+  addTimedEffect(ring, 0.65, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 2.5);
+    mesh.material.opacity = 0.4 * velocityMultiplier * (1 - progress);
+  });
+}
+
+function createFootstepDustEffect(position) {
+  const dust = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xd6c2a5, transparent: true, opacity: 0.35 })
+  );
+  dust.position.copy(position);
+  dust.position.y += 0.3;
+  addTimedEffect(dust, 0.4, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 1.5);
+    mesh.position.y += 0.08;
+    mesh.material.opacity = 0.35 * (1 - progress);
+  });
 }
 
 function updateIslandArrival(island) {
@@ -3180,34 +3891,53 @@ function updateIslandArrival(island) {
 }
 
 function resolveWallCollision(previousPosition) {
-  const collision = getWallCollision(playerMesh.position);
+  let collision = getWallCollision(playerMesh.position);
   if (!collision) return;
 
-  const hitDirection = playerMesh.position.clone().sub(collision.center).setY(0);
+  const initialCollision = collision;
+  let hitDirection = playerMesh.position.clone().sub(collision.center).setY(0);
   if (hitDirection.lengthSq() < 0.001) {
     hitDirection.copy(playerMesh.position.clone().sub(previousPosition).setY(0).multiplyScalar(-1));
   }
   hitDirection.normalize();
-  playerMesh.position.copy(previousPosition);
-  playerMesh.position.addScaledVector(hitDirection, 2.5);
+
+  let iterations = 0;
+  while (collision && iterations < 3) {
+    const pushVec = playerMesh.position.clone().sub(collision.center).setY(0);
+    const dist = pushVec.length();
+    if (dist < collision.radius) {
+      const penetration = collision.radius - dist;
+      if (dist > 0.001) {
+        pushVec.divideScalar(dist);
+      } else {
+        pushVec.copy(hitDirection);
+      }
+      playerMesh.position.addScaledVector(pushVec, penetration + 0.05);
+    }
+    iterations++;
+    collision = getWallCollision(playerMesh.position);
+  }
 
   const impactDamage = calculateImpactDamage({
     speed: player.lastMoveSpeed,
     verticalVelocity: 0,
-    material: collision.material,
-    toughness: collision.toughness,
-    baseDamage: collision.damage ?? 10,
+    material: initialCollision.material,
+    toughness: initialCollision.toughness,
+    baseDamage: initialCollision.damage ?? 10,
   });
 
   if (impactDamage > 0 && wallHitCooldown <= 0) {
-    applyImpactDamage(impactDamage, playerMesh.position.clone(), hitDirection, collision.label);
+    applyImpactDamage(impactDamage, playerMesh.position.clone(), hitDirection, initialCollision.label);
     wallHitCooldown = 0.75;
     updateHud();
     if (player.health <= 0) {
       killPlayer("crashing into a wall");
     }
   } else {
-    triggerWallHitAnimation(hitDirection, collision.label, false);
+    if (wallHitCooldown <= 0) {
+      triggerWallHitAnimation(hitDirection, initialCollision.label, false);
+      wallHitCooldown = 0.25;
+    }
   }
 }
 
@@ -3311,45 +4041,130 @@ function updatePlayerAnimation(dt) {
   anim.slamTimer = Math.max(0, (anim.slamTimer || 0) - dt);
   anim.punchChargeTimer = Math.max(0, (anim.punchChargeTimer || 0) - dt);
   anim.wallHitTimer = Math.max(0, (anim.wallHitTimer || 0) - dt);
-  const walkIntensity = moving ? 1 : 0.08;
-  const armSwing = Math.sin(anim.walkPhase + Math.PI) * 0.55 * walkIntensity;
-  const legSwing = Math.sin(anim.walkPhase) * 1.1 * walkIntensity;
-  const bodyBob = Math.sin(anim.walkPhase * 2) * 0.08 * walkIntensity;
 
-  model.userData.parts.leftArm.rotation.x = -0.2 + armSwing;
-  model.userData.parts.rightArm.rotation.x = -0.2 - armSwing;
-  model.userData.parts.leftLeg.rotation.x = 0.1 + legSwing;
-  model.userData.parts.rightLeg.rotation.x = 0.1 - legSwing;
-  model.userData.parts.head.position.y = 8.65 + bodyBob * 0.6;
-  model.userData.parts.torso.position.y = 5.7 + bodyBob;
+  if (player.isSwimming) {
+    const swimPhase = performance.now() * 0.008;
 
-  if (anim.slamTimer > 0) {
-    const slamProgress = 1 - anim.slamTimer / anim.slamDuration;
-    if (slamProgress < 0.35) {
-      const p = slamProgress / 0.35;
-      model.userData.parts.leftArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
-      model.userData.parts.rightArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
-      model.userData.parts.torso.rotation.x = -0.3 * p;
-      model.userData.parts.torso.position.y = 5.7 + 0.8 * p;
+    if (moving) {
+      // Horizontal pose in water
+      model.rotation.x = 1.35;
+      model.position.y = -3.8;
+      model.position.z = -2.8;
+
+      // Tilt head up to see forward and keep face above the surface
+      model.userData.parts.head.rotation.x = -0.55;
+
+      // Freestyle arm strokes: alternating circles
+      model.userData.parts.leftArm.rotation.x = Math.sin(swimPhase) * 1.4 - 1.2;
+      model.userData.parts.leftArm.rotation.y = Math.cos(swimPhase) * 0.4;
+      model.userData.parts.leftArm.rotation.z = -0.2;
+
+      model.userData.parts.rightArm.rotation.x = Math.sin(swimPhase + Math.PI) * 1.4 - 1.2;
+      model.userData.parts.rightArm.rotation.y = Math.cos(swimPhase + Math.PI) * 0.4;
+      model.userData.parts.rightArm.rotation.z = 0.2;
+
+      // Leg flutter kicks
+      model.userData.parts.leftLeg.rotation.x = Math.sin(swimPhase * 2) * 0.45;
+      model.userData.parts.rightLeg.rotation.x = -Math.sin(swimPhase * 2) * 0.45;
+      model.userData.parts.leftLeg.rotation.y = 0;
+      model.userData.parts.rightLeg.rotation.y = 0;
+      model.userData.parts.leftLeg.rotation.z = 0.04;
+      model.userData.parts.rightLeg.rotation.z = -0.04;
     } else {
-      const p = (slamProgress - 0.35) / 0.65;
-      const easeDown = Math.pow(p, 2.5);
-      model.userData.parts.leftArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
-      model.userData.parts.rightArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
-      model.userData.parts.torso.rotation.x = -0.3 + (1.1 - (-0.3)) * easeDown;
-      model.userData.parts.torso.position.y = 6.5 + (3.2 - 6.5) * easeDown;
+      // Vertical treading pose
+      model.rotation.x = 0.18;
+      model.position.y = -4.2 + Math.sin(performance.now() * 0.0035) * 0.35;
+      model.position.z = -0.8;
+
+      // Gentle head tilt
+      model.userData.parts.head.rotation.x = -0.12;
+
+      // Treading water scull
+      model.userData.parts.leftArm.rotation.x = 0.4 + Math.sin(swimPhase * 0.6) * 0.2;
+      model.userData.parts.leftArm.rotation.y = Math.cos(swimPhase * 0.6) * 0.25;
+      model.userData.parts.leftArm.rotation.z = -0.4;
+
+      model.userData.parts.rightArm.rotation.x = 0.4 + Math.sin(swimPhase * 0.6) * 0.2;
+      model.userData.parts.rightArm.rotation.y = -Math.cos(swimPhase * 0.6) * 0.25;
+      model.userData.parts.rightArm.rotation.z = 0.4;
+
+      // Gentle leg scissors
+      model.userData.parts.leftLeg.rotation.x = Math.sin(swimPhase * 0.6) * 0.2;
+      model.userData.parts.rightLeg.rotation.x = -Math.sin(swimPhase * 0.6) * 0.2;
+      model.userData.parts.leftLeg.rotation.y = 0;
+      model.userData.parts.rightLeg.rotation.y = 0;
+      model.userData.parts.leftLeg.rotation.z = 0.06;
+      model.userData.parts.rightLeg.rotation.z = -0.06;
     }
-  } else if (anim.punchChargeTimer > 0) {
-    const chargeProgress = 1 - anim.punchChargeTimer / anim.punchChargeDuration;
-    model.userData.parts.rightArm.rotation.x = -0.2 + (0.9 - (-0.2)) * chargeProgress;
-    model.userData.parts.rightArm.rotation.y = 0.5 * chargeProgress;
-    model.userData.parts.leftArm.rotation.x = -0.2 + (-1.4 - (-0.2)) * chargeProgress;
-    model.userData.parts.torso.rotation.y = -0.45 * chargeProgress;
-    model.userData.parts.torso.position.y = 5.7 - 0.5 * chargeProgress;
-  } else {
+
+    // Torso and other parts neutral while swimming
     model.userData.parts.torso.rotation.x = 0;
-    model.userData.parts.rightArm.rotation.y = 0;
     model.userData.parts.torso.rotation.y = 0;
+    if (anim.attackTimer <= 0) {
+      model.userData.parts.torso.rotation.z = 0;
+    }
+    model.userData.parts.torso.position.y = 5.7;
+    model.userData.parts.head.position.y = 8.65;
+
+    if (anim.punchChargeTimer <= 0) {
+      model.userData.parts.rightArm.rotation.y = 0;
+    }
+  } else {
+    // Reset swim rotation and offset when back on land
+    if (model.rotation.x !== 0) model.rotation.x = 0;
+    if (model.position.y !== 0) model.position.y = 0;
+    if (model.position.z !== 0) model.position.z = 0;
+    if (model.userData.parts.head.rotation.x !== 0) model.userData.parts.head.rotation.x = 0;
+
+    // Reset arm and leg Y/Z rotations that swim modified
+    model.userData.parts.leftArm.rotation.y = 0;
+    model.userData.parts.leftArm.rotation.z = -0.15;
+    model.userData.parts.rightArm.rotation.y = 0;
+    model.userData.parts.rightArm.rotation.z = 0.15;
+    model.userData.parts.leftLeg.rotation.z = 0.04;
+    model.userData.parts.rightLeg.rotation.z = -0.04;
+
+    // Normal land animations
+    const walkIntensity = moving ? 1 : 0.08;
+    const armSwing = Math.sin(anim.walkPhase + Math.PI) * 0.55 * walkIntensity;
+    const legSwing = Math.sin(anim.walkPhase) * 1.1 * walkIntensity;
+    const bodyBob = Math.sin(anim.walkPhase * 2) * 0.08 * walkIntensity;
+
+    model.userData.parts.leftArm.rotation.x = -0.2 + armSwing;
+    model.userData.parts.rightArm.rotation.x = -0.2 - armSwing;
+    model.userData.parts.leftLeg.rotation.x = 0.1 + legSwing;
+    model.userData.parts.rightLeg.rotation.x = 0.1 - legSwing;
+    model.userData.parts.head.position.y = 8.65 + bodyBob * 0.6;
+    model.userData.parts.torso.position.y = 5.7 + bodyBob;
+
+    if (anim.slamTimer > 0) {
+      const slamProgress = 1 - anim.slamTimer / anim.slamDuration;
+      if (slamProgress < 0.35) {
+        const p = slamProgress / 0.35;
+        model.userData.parts.leftArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
+        model.userData.parts.rightArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
+        model.userData.parts.torso.rotation.x = -0.3 * p;
+        model.userData.parts.torso.position.y = 5.7 + 0.8 * p;
+      } else {
+        const p = (slamProgress - 0.35) / 0.65;
+        const easeDown = Math.pow(p, 2.5);
+        model.userData.parts.leftArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
+        model.userData.parts.rightArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
+        model.userData.parts.torso.rotation.x = -0.3 + (1.1 - (-0.3)) * easeDown;
+        model.userData.parts.torso.position.y = 6.5 + (3.2 - 6.5) * easeDown;
+      }
+    } else if (anim.punchChargeTimer > 0) {
+      const chargeProgress = 1 - anim.punchChargeTimer / anim.punchChargeDuration;
+      model.userData.parts.rightArm.rotation.x = -0.2 + (0.9 - (-0.2)) * chargeProgress;
+      model.userData.parts.rightArm.rotation.y = 0.5 * chargeProgress;
+      model.userData.parts.leftArm.rotation.x = -0.2 + (-1.4 - (-0.2)) * chargeProgress;
+      model.userData.parts.torso.rotation.y = -0.45 * chargeProgress;
+      model.userData.parts.torso.position.y = 5.7 - 0.5 * chargeProgress;
+    } else {
+      model.userData.parts.torso.rotation.x = 0;
+      model.userData.parts.rightArm.rotation.y = 0;
+      model.userData.parts.torso.rotation.y = 0;
+    }
   }
 
   // Animate the bobbing/rotation of the halo
@@ -3520,6 +4335,18 @@ function updateEnemies(dt) {
       damagePlayer(Math.round((enemy.type === "brute" ? 18 : enemy.type === "buggy" ? 22 : 8) * getAvatarTraits().incomingDamageMultiplier), enemy.type === "brute" ? "mace hit" : "enemy strike");
       enemy.hitTimer = 1.0;
       updateHud();
+    }
+
+    // Update enemy Y coordinate to match sloped terrain
+    const enemyIsland = islands.find(isl => {
+      const dx = enemy.mesh.position.x - isl.position.x;
+      const dz = enemy.mesh.position.z - isl.position.z;
+      return Math.sqrt(dx * dx + dz * dz) <= isl.radius;
+    });
+    if (enemyIsland) {
+      enemy.mesh.position.y = getIslandSurfaceHeightAt(enemy.mesh.position.x, enemy.mesh.position.z, enemyIsland);
+    } else {
+      enemy.mesh.position.y = OCEAN_SURFACE_Y;
     }
   });
 }
@@ -3975,7 +4802,7 @@ function createWallHitEffect(position, showDamage) {
 }
 
 function getAttackDirection(target) {
-  if (target) {
+  if (target && target.mesh) {
     return target.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
   }
   return new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
@@ -4452,7 +5279,7 @@ function defeatEnemy(enemy) {
   const xpReward = enemy.type === "buggy" ? 9000 : enemy.type === "brute" ? 950 : enemy.type === "pirate" ? 520 : 18;
   const moneyReward = enemy.type === "buggy" ? 4200 : enemy.type === "brute" ? 95 : enemy.type === "pirate" ? 62 : 12;
   addXp(xpReward);
-  player.money += moneyReward;
+  spawnLootCoins(enemy.mesh.position.clone(), moneyReward);
   player.materials.ironwood += enemy.type ? 2 : 1;
   player.materials.scrap += enemy.type === "brute" ? 3 : 1;
 
@@ -4612,6 +5439,26 @@ function log(message) {
   messageLog.textContent = message;
 }
 
+function getLocalSurfaceHeightAt(lx, lz, radius, height, index) {
+  const r = Math.sqrt(lx * lx + lz * lz);
+  const normDist = Math.min(1, r / (radius * 0.96));
+  const angle = Math.atan2(lz, lx);
+  
+  const centerHeight = height + 0.5;
+  const seed = index + 9;
+  const slope = -5.5;
+  const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
+  const edgeHeight = height + 0.16 + slope + uneven;
+  
+  return centerHeight + (edgeHeight - centerHeight) * normDist;
+}
+
+function getIslandSurfaceHeightAt(x, z, island) {
+  if (!island) return OCEAN_SURFACE_Y;
+  const height = island.surfaceY - 0.16;
+  return getLocalSurfaceHeightAt(x - island.position.x, z - island.position.z, island.radius, height, island.index);
+}
+
 function makeIrregularCylinderGeometry(radius, height, segments, seed) {
   const positions = [];
   const indices = [];
@@ -4623,7 +5470,12 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
     const angle = (i / segments) * Math.PI * 2;
     const topRadius = islandProfileRadius(angle, radius * 0.9, seed);
     const bottomRadius = islandProfileRadius(angle + 0.08, radius, seed + 2);
-    const ledge = Math.sin(angle * 11 + seed) * 1.4;
+    
+    // Sloped edge height matching the disc
+    const slope = -5.5;
+    const uneven = Math.sin(angle * 6 + (seed + 6)) * 1.5 + Math.cos(angle * 11) * 0.8;
+    const ledge = slope + uneven;
+    
     positions.push(Math.cos(angle) * topRadius, height / 2 + ledge, Math.sin(angle) * topRadius);
     positions.push(Math.cos(angle) * bottomRadius, -height / 2, Math.sin(angle) * bottomRadius);
   }
@@ -4648,13 +5500,17 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
 }
 
 function makeIrregularDiscGeometry(radius, segments, seed) {
-  const positions = [0, 0, 0];
+  const positions = [0, 0, 0.5]; // Center is slightly raised
   const indices = [];
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
     const edgeRadius = islandProfileRadius(angle, radius, seed);
-    const rise = Math.sin(angle * 9 + seed) * 0.7 + Math.cos(angle * 17) * 0.35;
+    
+    const slope = -5.5;
+    const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
+    const rise = slope + uneven;
+    
     positions.push(Math.cos(angle) * edgeRadius, Math.sin(angle) * edgeRadius, rise);
   }
 
@@ -4760,7 +5616,45 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 
+function createBloodSplatter(position) {
+  if (!position) return;
+  const count = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < count; i++) {
+    const size = 0.35 + Math.random() * 0.45;
+    const geometry = new THREE.SphereGeometry(size, 6, 6);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xcc0000,
+      transparent: true,
+      opacity: 0.95
+    });
+    const drop = new THREE.Mesh(geometry, material);
+    
+    drop.position.copy(position);
+    drop.position.y += 2.5 + Math.random() * 3.5;
+    drop.position.x += (Math.random() - 0.5) * 1.5;
+    drop.position.z += (Math.random() - 0.5) * 1.5;
+    
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 12 + Math.random() * 18;
+    const velocity = new THREE.Vector3(
+      Math.cos(angle) * speed,
+      5 + Math.random() * 15,
+      Math.sin(angle) * speed
+    );
+    
+    addTimedEffect(drop, 0.45 + Math.random() * 0.25, (mesh, progress, dt) => {
+      velocity.y -= dt * 75;
+      mesh.position.addScaledVector(velocity, dt);
+      mesh.material.opacity = 0.95 * (1 - progress);
+      mesh.scale.setScalar(1 - progress * 0.5);
+    });
+  }
+}
+
 function triggerHitFlash(group) {
+  if (group && group.position) {
+    createBloodSplatter(group.position);
+  }
   group.traverse((child) => {
     if (child.isMesh && child.material) {
       if (!child.userData.baseEmissive) {
@@ -4768,7 +5662,7 @@ function triggerHitFlash(group) {
         child.userData.baseEmissiveInt = child.material.emissiveIntensity || 0;
       }
       if (child.material.emissive) {
-        child.material.emissive.setHex(0xffffff);
+        child.material.emissive.setHex(0xff3333);
         child.material.emissiveIntensity = 1.0;
         setTimeout(() => {
           if (child.material) {
@@ -5184,6 +6078,18 @@ function updateCombatHud() {
   }
 }
 
+function triggerCombatFlash() {
+  const flash = document.querySelector("#combat-flash");
+  if (flash) {
+    flash.classList.remove("active");
+    void flash.offsetWidth; // Force reflow
+    flash.classList.add("active");
+    setTimeout(() => {
+      flash.classList.remove("active");
+    }, 80);
+  }
+}
+
 function triggerActiveSkill(skillId) {
   const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
 
@@ -5205,17 +6111,7 @@ function triggerActiveSkill(skillId) {
       playerMesh.rotation.y = cameraYaw + Math.PI;
 
       // Re-calculate the direction vector when the punch is released
-      const currentForward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
-
-      audio.playSlash();
-      createMeleeBurst(playerMesh);
-
-      // Play release punch strike animation
-      if (playerMesh.userData.animation) {
-        playerMesh.userData.animation.attackTimer = 0.22;
-        playerMesh.userData.animation.attackDuration = 0.22;
-        playerMesh.userData.animation.attackImpact = 1.0;
-      }
+      let currentForward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
 
       // High-range single target detection towards the direction player is facing (up to 24 units visual range + 4 units radius buffer)
       const punchRange = 24;
@@ -5230,13 +6126,31 @@ function triggerActiveSkill(skillId) {
         })
         .filter(item => item.dist2D <= punchRange + 4.0) // 28 units center-to-center accounts for 24 units visual reach plus body radii
         .filter(item => {
-          if (item.dist2D < 6.0) return true; // Close range automatic hit
+          if (item.dist2D < 8.0) return true; // Close range automatic hit
           const angle = currentForward.angleTo(item.toEnemy2D.clone().normalize());
-          return angle < 0.85; // Facing cone (approx ~48 degrees) for gameplay forgiveness
+          return angle < 1.15; // Generous facing cone (~66 degrees) for gameplay forgiveness
         })
         .sort((a, b) => a.dist2D - b.dist2D);
 
       const t = candidates.length > 0 ? candidates[0].enemy : null;
+
+      // Aim-snap: if target found, snap player Y-rotation and align currentForward to face them directly!
+      if (t) {
+        const toTarget = t.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
+        playerMesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
+        currentForward.copy(toTarget);
+      }
+
+      audio.playSlash();
+      triggerCombatFlash();
+      createMeleeBurst(playerMesh);
+
+      // Play release punch strike animation
+      if (playerMesh.userData.animation) {
+        playerMesh.userData.animation.attackTimer = 0.22;
+        playerMesh.userData.animation.attackDuration = 0.22;
+        playerMesh.userData.animation.attackImpact = 1.0;
+      }
 
       // Visual feedback: a series of shockwaves/bursts along the path, and ground rupture V-shaped rocks
       const maxDistance = t ? Math.max(4, t.mesh.position.distanceTo(playerMesh.position)) : 24;
@@ -5337,6 +6251,7 @@ function triggerActiveSkill(skillId) {
     }, 300);
   } else if (skillId === "ground-slam") {
     createGroundSlam(playerMesh.position.clone(), { type: "player" });
+    triggerCombatFlash();
     audio.playImpact();
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 48) {
@@ -5548,4 +6463,180 @@ function triggerActiveSkill(skillId) {
     }, 80);
   }
 }
+
+// ===== Escape Menu & Performance Stats Bar (Roblox Style) =====
+
+const escMenu = document.querySelector("#esc-menu");
+const escClose = document.querySelector("#esc-close");
+const escResumeBtn = document.querySelector("#esc-resume-btn");
+const escResetBtn = document.querySelector("#esc-reset-btn");
+const escPerfToggle = document.querySelector("#esc-perf-toggle");
+const escPingToggle = document.querySelector("#esc-ping-toggle");
+const graphicsQualitySlider = document.querySelector("#graphics-quality-slider");
+const graphicsLevelVal = document.querySelector("#graphics-level-val");
+const volumeSlider = document.querySelector("#volume-slider");
+const volumeVal = document.querySelector("#volume-val");
+const perfStatsBar = document.querySelector("#perf-stats-bar");
+const perfItemPing = document.querySelector("#perf-item-ping");
+
+function toggleEscMenu(forceState = null) {
+  const nextState = forceState !== null ? forceState : !escMenuOpen;
+  if (nextState === escMenuOpen) return;
+  
+  escMenuOpen = nextState;
+  if (escMenu) {
+    escMenu.classList.toggle("hidden", !escMenuOpen);
+  }
+  
+  if (escMenuOpen) {
+    keys.clear();
+    if (volumeSlider) {
+      volumeSlider.value = Math.round(audio.volume * 100);
+      if (volumeVal) volumeVal.textContent = `${volumeSlider.value}%`;
+    }
+  }
+}
+
+function setGraphicsQuality(level) {
+  if (!renderer || !sun) return;
+  
+  if (level <= 2) {
+    sun.castShadow = false;
+    renderer.shadowMap.enabled = false;
+    renderer.setPixelRatio(level === 1 ? 0.75 : 0.88);
+  } else {
+    sun.castShadow = true;
+    renderer.shadowMap.enabled = true;
+    const ratios = { 3: 1.0, 4: 1.35, 5: 1.65 };
+    const targetRatio = ratios[level] || 2.0;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, targetRatio));
+  }
+  
+  scene.traverse((child) => {
+    if (child.isMesh && child.material) {
+      child.material.needsUpdate = true;
+    }
+  });
+}
+
+function drawPerfGraph(canvasId, history, color, minVal, maxVal) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  
+  if (history.length < 2) return;
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  
+  const step = w / (history.length - 1);
+  for (let i = 0; i < history.length; i++) {
+    const val = history[i];
+    const norm = (val - minVal) / (maxVal - minVal || 1);
+    const clamped = Math.max(0, Math.min(1, norm));
+    const x = i * step;
+    const y = h - clamped * (h - 2) - 1;
+    
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+  
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fillStyle = color + "1a";
+  ctx.fill();
+}
+
+function updatePerfStatsUI(now) {
+  const memVal = perfState.memHistory[perfState.memHistory.length - 1] || 0;
+  const memEl = document.querySelector("#perf-val-mem");
+  if (memEl) memEl.textContent = `${memVal.toFixed(2)} MB`;
+  drawPerfGraph("perf-graph-mem", perfState.memHistory, "#3ce88a", 400, 800);
+
+  const avgCpu = perfState.cpuHistory.reduce((a, b) => a + b, 0) / (perfState.cpuHistory.length || 1);
+  const cpuEl = document.querySelector("#perf-val-cpu");
+  if (cpuEl) cpuEl.textContent = `${avgCpu.toFixed(1)} ms`;
+  drawPerfGraph("perf-graph-cpu", perfState.cpuHistory, "#3ce88a", 0, 33);
+
+  const avgGpu = perfState.gpuHistory.reduce((a, b) => a + b, 0) / (perfState.gpuHistory.length || 1);
+  const gpuEl = document.querySelector("#perf-val-gpu");
+  if (gpuEl) gpuEl.textContent = `${avgGpu.toFixed(1)} ms`;
+  drawPerfGraph("perf-graph-gpu", perfState.gpuHistory, "#0da9d6", 0, 33);
+
+  const isMoving = keys.size > 0;
+  const sentVal = isMoving ? (1.5 + Math.random() * 0.8) : (0.05 + Math.random() * 0.05);
+  const recvVal = isMoving ? (15.4 + Math.random() * 25.0) : (1.2 + Math.random() * 0.6);
+  const sentEl = document.querySelector("#perf-val-sent");
+  if (sentEl) sentEl.textContent = `${sentVal.toFixed(2)} KB/s`;
+  const recvEl = document.querySelector("#perf-val-recv");
+  if (recvEl) recvEl.textContent = `${recvVal.toFixed(2)} KB/s`;
+
+  if (perfState.showPing) {
+    const basePing = 45 + Math.sin(now * 0.0005) * 15;
+    const pingVal = basePing + Math.random() * 6 + (isMoving ? Math.random() * 10 : 0);
+    perfState.pingHistory.push(pingVal);
+    if (perfState.pingHistory.length > 30) perfState.pingHistory.shift();
+    
+    const pingEl = document.querySelector("#perf-val-ping");
+    if (pingEl) pingEl.textContent = `${Math.round(pingVal)} ms`;
+    drawPerfGraph("perf-graph-ping", perfState.pingHistory, "#f6b73c", 0, 150);
+  }
+}
+
+escClose?.addEventListener("click", () => toggleEscMenu(false));
+escResumeBtn?.addEventListener("click", () => toggleEscMenu(false));
+
+escResetBtn?.addEventListener("click", () => {
+  if (playerMesh) {
+    playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+    verticalVelocity = 0;
+    jumpOffset = 0;
+  }
+  player.health = player.maxHealth;
+  updateHud();
+  toggleEscMenu(false);
+  log("Character reset to starting dock.");
+});
+
+escPerfToggle?.addEventListener("change", () => {
+  perfState.visible = escPerfToggle.checked;
+  if (perfStatsBar) {
+    perfStatsBar.classList.toggle("hidden", !perfState.visible);
+  }
+  document.body.classList.toggle("perf-hidden", !perfState.visible);
+});
+
+escPingToggle?.addEventListener("change", () => {
+  perfState.showPing = escPingToggle.checked;
+  if (perfItemPing) {
+    perfItemPing.classList.toggle("hidden", !perfState.showPing);
+  }
+});
+
+graphicsQualitySlider?.addEventListener("input", () => {
+  const val = parseInt(graphicsQualitySlider.value, 10);
+  if (graphicsLevelVal) graphicsLevelVal.textContent = val;
+  setGraphicsQuality(val);
+});
+
+volumeSlider?.addEventListener("input", () => {
+  const val = parseInt(volumeSlider.value, 10);
+  if (volumeVal) volumeVal.textContent = `${val}%`;
+  audio.setVolume(val / 100);
+});
+
+audio.setVolume(0.5);
+setGraphicsQuality(5);
+document.body.classList.add("perf-hidden");
 
