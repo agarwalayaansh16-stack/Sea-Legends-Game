@@ -146,7 +146,7 @@
         <div id="bottom-left-hud" class="bottom-left-hud">
           <div class="nav-grid">
             <button id="nav-btn-stats" class="nav-btn" type="button">Stats</button>
-            <button id="nav-btn-items" class="nav-btn" type="button">Items</button>
+            <button id="nav-btn-items" class="nav-btn" type="button">Inventory</button>
             <button id="nav-btn-shop" class="nav-btn" type="button">Shop</button>
             <button id="nav-btn-close" class="nav-btn" type="button">Close</button>
           </div>
@@ -350,6 +350,90 @@
                   <strong id="volume-val">50%</strong>
                 </div>
                 <input id="volume-slider" type="range" min="0" max="100" value="50" step="5">
+              </div>
+            </div>
+
+            <div class="esc-section">
+              <h3>Keyboard Bindings</h3>
+              <div class="esc-row" style="flex-direction: column; align-items: flex-start; gap: 8px; font-size: 11.5px; line-height: 1.45; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 12px; pointer-events: auto; width: 100%; box-sizing: border-box;">
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px; font-weight: 800; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">
+                  <span style="color: #f6b73c;">Keys</span>
+                  <span style="color: #f6b73c;">Action / Function</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">W/A/S/D</kbd></span>
+                  <span>Move character / Steer boat</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Space</kbd></span>
+                  <span>Jump</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Shift</kbd></span>
+                  <span>Sprint toggle</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Left Click</kbd></span>
+                  <span>Strike / Shoot (aim gun at head for 1.5x headshot)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">F</kbd></span>
+                  <span>Block (Hold to guard, tap right before hit to Perfect Parry)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Q</kbd></span>
+                  <span>Dash in facing direction</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">1 / 2 / 3 / 4</kbd></span>
+                  <span>Equip: Melee (1), Sword (2), Gun (3), Special (4)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Z / X</kbd></span>
+                  <span>Active skills (requires Mastery Level 5 / 20)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">E / G</kbd></span>
+                  <span>Steer Boat (E) / Disembark Boat (G)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">H</kbd></span>
+                  <span>Toggle Haki (Armor / Damage boost, level 60 Desert)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Esc</kbd></span>
+                  <span>Toggle settings and menu</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="esc-section" style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 12px; margin-top: -4px;">
+              <h3>Save Protection Status</h3>
+              <div class="esc-row" style="font-size: 11px; padding: 10px 14px; background: rgba(13, 120, 146, 0.08); border: 1px solid rgba(13, 120, 146, 0.2); border-radius: 12px; color: rgba(255,255,255,0.9); line-height: 1.4;">
+                <span>💾 <strong>Auto-Save is Active:</strong> Progress is auto-saved locally every 5 seconds. Save data cannot be deleted from within the game.</span>
+              </div>
+            </div>
+
+            <div id="esc-admin-section" class="esc-section hidden" style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 12px; margin-top: -4px;">
+              <h3 style="color: #ffcf5a;">👑 Admin Control Panel</h3>
+              <div class="esc-row" style="flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(255, 207, 90, 0.04); border: 1.5px solid rgba(255, 207, 90, 0.15); box-sizing: border-box; width: 100%;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%;">
+                  <button id="admin-godmode-btn" class="esc-btn" style="flex: 1; min-width: 120px; font-size: 11px; padding: 8px; background: rgba(60, 232, 138, 0.15); border: 1px solid rgba(60, 232, 138, 0.3); color: #3ce88a; border-radius: 8px; font-weight: 800; cursor: pointer; text-shadow: none;">GOD MODE: OFF</button>
+                  <button id="admin-instakill-btn" class="esc-btn" style="flex: 1; min-width: 120px; font-size: 11px; padding: 8px; background: rgba(255, 96, 72, 0.15); border: 1px solid rgba(255, 96, 72, 0.3); color: #ff6048; border-radius: 8px; font-weight: 800; cursor: pointer; text-shadow: none;">INSTAKILL: OFF</button>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; width: 100%;">
+                  <button id="admin-cash-btn" class="esc-btn" style="flex: 1; min-width: 100px; font-size: 11px; padding: 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 6px; font-weight: bold; cursor: pointer; outline: none; border-radius: 6px;">+$10,000 Cash</button>
+                  <button id="admin-mats-btn" class="esc-btn" style="flex: 1; min-width: 100px; font-size: 11px; padding: 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 6px; font-weight: bold; cursor: pointer; outline: none; border-radius: 6px;">+10 Materials</button>
+                  <button id="admin-levels-btn" class="esc-btn" style="flex: 1; min-width: 100px; font-size: 11px; padding: 6px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; border-radius: 6px; font-weight: bold; cursor: pointer; outline: none; border-radius: 6px;">Max Levels</button>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between; font-size: 11px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 8px; margin-top: 4px; width: 100%;">
+                  <span style="color: rgba(255,255,255,0.5);">Teleport to Island:</span>
+                  <div style="display: flex; gap: 4px;">
+                    <button id="admin-tp-starter" style="font-size: 10px; padding: 4px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 4px; cursor: pointer; outline: none;">Starter</button>
+                    <button id="admin-tp-desert" style="font-size: 10px; padding: 4px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 4px; cursor: pointer; outline: none;">Desert</button>
+                    <button id="admin-tp-jungle" style="font-size: 10px; padding: 4px 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 4px; cursor: pointer; outline: none;">Jungle</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

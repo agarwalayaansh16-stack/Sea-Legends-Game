@@ -445,11 +445,18 @@ const player = {
     special: 0,
   },
   mastery: {
-    melee: 20,
-    defense: 20,
-    sword: 20,
-    gun: 20,
-    special: 20,
+    melee: 1,
+    defense: 1,
+    sword: 1,
+    gun: 1,
+    special: 1,
+  },
+  masteryXp: {
+    melee: 0,
+    defense: 0,
+    sword: 0,
+    gun: 0,
+    special: 0,
   },
   armoredWillCooldown: 0,
   blockStartTime: 0,
@@ -460,6 +467,9 @@ const player = {
   specialUnlocked: false,
   unlockedQuestsSeen: { starter: true },
   newQuestUnlocked: false,
+  isAdmin: true,
+  isGodMode: false,
+  isInstakill: false,
 };
 
 const inventoryState = {
@@ -491,6 +501,7 @@ const inventoryItems = {
         player.money -= 120;
         player.materials.ironwood -= 3;
         player.hasSword = true;
+        saveGame();
       },
     },
   ],
@@ -507,6 +518,7 @@ const inventoryItems = {
         player.money -= 220;
         player.materials.scrap -= 5;
         player.hasGun = true;
+        saveGame();
       },
     },
   ],
@@ -660,6 +672,12 @@ updateDerivedStats();
 updateHud();
 resize();
 requestAnimationFrame(loop);
+
+// Auto-Load Save Game if it exists
+checkAndLoadSave();
+
+// Periodic Auto-Save every 5 seconds
+setInterval(saveGame, 5000);
 
 document.querySelectorAll("[data-faction]").forEach((button) => {
   button.addEventListener("click", () => startGame(button.dataset.faction));
@@ -859,7 +877,7 @@ canvas.addEventListener("pointerdown", (event) => {
   if (escMenuOpen) return;
   if (player.health <= 0) return;
   if (event.button === 0 && gameStarted) {
-    attack();
+    attack(event);
     return;
   }
   if (event.button !== 2) return;
@@ -953,6 +971,7 @@ function startGame(faction) {
   log(`You joined as ${faction}. Welcome to the First Sea.`);
   updateDerivedStats();
   updateHud();
+  saveGame();
 }
 
 function setMovementMode(mode) {
@@ -1034,24 +1053,26 @@ function renderInventory() {
     inventoryList.innerHTML = `
       <div class="mastery-container" style="display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 8px; max-height: 380px; overflow-y: auto; pointer-events: auto;">
         ${Object.keys(player.mastery).map(stat => {
-          const val = player.mastery[stat];
+          const val = player.masteryXp ? (player.masteryXp[stat] || 0) : 0;
+          const masteryInfo = getMasteryInfo(val);
           const skills = masterySkills[stat];
+          const barPercent = (masteryInfo.currentLevelPoints / masteryInfo.neededForNext) * 100;
           return `
             <div class="mastery-card" style="border: 1px solid rgba(255,247,230,0.15); border-radius: 14px; padding: 12px; background: rgba(5,18,26,0.85); box-shadow: 0 4px 10px rgba(0,0,0,0.4); text-shadow: none;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
                 <strong style="color: var(--gold); text-transform: uppercase; font-size: 13px;">${statLabels[stat]} Mastery</strong>
-                <span style="color: #7ce0b4; font-weight: bold; font-size: 12px;">Lv. ${Math.floor(val / 100) + 1} (${val} MP)</span>
+                <span style="color: #7ce0b4; font-weight: bold; font-size: 12px;">Mastery ${masteryInfo.level} (${masteryInfo.currentLevelPoints}/${masteryInfo.neededForNext} MP)</span>
               </div>
               <div class="bar" style="height: 8px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; margin-bottom: 10px;">
-                <div style="height: 100%; width: ${Math.min(100, (val % 100))}%; background: linear-gradient(90deg, #7ce0b4, #0d7892); transition: width 0.3s ease;"></div>
+                <div style="height: 100%; width: ${Math.min(100, barPercent)}%; background: linear-gradient(90deg, #7ce0b4, #0d7892); transition: width 0.3s ease;"></div>
               </div>
               <div class="mastery-skills" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px;">
                 ${skills.map(skill => {
-                  const unlocked = val >= skill.req;
+                  const unlocked = masteryInfo.level >= skill.req;
                   return `
                     <div style="border: 1px solid ${unlocked ? "rgba(124,224,180,0.3)" : "rgba(255,255,255,0.05)"}; border-radius: 10px; padding: 6px; background: ${unlocked ? "rgba(124,224,180,0.06)" : "rgba(0,0,0,0.25)"}; text-align: center; font-size: 10px;">
                       <strong style="color: ${unlocked ? "#7ce0b4" : "rgba(255,255,255,0.45)"}; display: block; margin-bottom: 2px; font-size: 11px;">${skill.name}</strong>
-                      <small style="color: rgba(255,247,230,0.45); display: block; margin-bottom: 4px;">Req: ${skill.req} MP</small>
+                      <small style="color: rgba(255,247,230,0.45); display: block; margin-bottom: 4px;">Req: Mastery ${skill.req}</small>
                       <span style="color: rgba(255,255,255,0.65); display: block; font-size: 8.5px; line-height: 1.2; min-height: 38px;">${skill.desc}</span>
                       <b style="color: ${unlocked ? "#ffcf5a" : "#ef6048"}; display: block; margin-top: 4px; font-size: 9px; letter-spacing: 0.05em;">${unlocked ? "ACTIVE" : "LOCKED"}</b>
                     </div>
@@ -1299,6 +1320,134 @@ function formatMultiplier(value) {
   const percent = Math.round((value - 1) * 100);
   if (percent === 0) return "normal";
   return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
+function getMasteryInfo(totalPoints) {
+  let level = 1;
+  let pointsLeft = Math.max(0, totalPoints);
+  while (true) {
+    let neededForNext = Math.round(40 * Math.pow(1.2, level - 1));
+    if (pointsLeft >= neededForNext) {
+      pointsLeft -= neededForNext;
+      level++;
+    } else {
+      break;
+    }
+  }
+  let neededForNext = Math.round(40 * Math.pow(1.2, level - 1));
+  return {
+    level: level,
+    currentLevelPoints: pointsLeft,
+    neededForNext: neededForNext
+  };
+}
+
+function addMasteryXp(type, amount) {
+  if (!player.masteryXp) {
+    player.masteryXp = { melee: 0, defense: 0, sword: 0, gun: 0, special: 0 };
+  }
+  const oldLevel = player.mastery[type] || 1;
+  player.masteryXp[type] = (player.masteryXp[type] || 0) + amount;
+  
+  // Calculate new level from total accumulated points
+  const masteryInfo = getMasteryInfo(player.masteryXp[type]);
+  const newLevel = masteryInfo.level;
+  player.mastery[type] = newLevel;
+  
+  if (newLevel > oldLevel) {
+    log(`🎉 Your ${statLabels[type] || type} Mastery reached Level ${newLevel}!`);
+    audio.playQuestComplete();
+    
+    // Alert if any skills unlocked
+    const skills = masterySkills[type] || [];
+    skills.forEach(skill => {
+      if (newLevel >= skill.req && oldLevel < skill.req) {
+        log(`🌟 SKILL UNLOCKED: ${skill.name} (${statLabels[type] || type} skill)!`);
+      }
+    });
+  }
+  updateHud();
+  saveGame();
+}
+
+function saveGame() {
+  if (!gameStarted) return;
+  const saveData = {
+    level: player.level,
+    xp: player.xp,
+    xpToNext: player.xpToNext,
+    money: player.money,
+    materials: player.materials,
+    stats: player.stats,
+    mastery: player.mastery,
+    masteryXp: player.masteryXp,
+    hasSword: player.hasSword,
+    hasGun: player.hasGun,
+    specialUnlocked: player.specialUnlocked,
+    haki: player.haki,
+    faction: player.faction,
+    selectedAvatarId: avatarState.selectedId,
+    isGodMode: player.isGodMode,
+    isInstakill: player.isInstakill,
+  };
+  localStorage.setItem("sea_legends_save", JSON.stringify(saveData));
+}
+
+function checkAndLoadSave() {
+  const saveStr = localStorage.getItem("sea_legends_save");
+  if (!saveStr) return;
+  try {
+    const saveData = JSON.parse(saveStr);
+    if (!saveData) return;
+    
+    if (saveData.level !== undefined) player.level = saveData.level;
+    if (saveData.xp !== undefined) player.xp = saveData.xp;
+    if (saveData.xpToNext !== undefined) player.xpToNext = saveData.xpToNext;
+    if (saveData.money !== undefined) player.money = saveData.money;
+    if (saveData.materials) {
+      player.materials = { ...player.materials, ...saveData.materials };
+    }
+    if (saveData.stats) {
+      player.stats = { ...player.stats, ...saveData.stats };
+    }
+    if (saveData.mastery) {
+      player.mastery = { ...player.mastery, ...saveData.mastery };
+    }
+    if (saveData.masteryXp) {
+      player.masteryXp = { ...player.masteryXp, ...saveData.masteryXp };
+    }
+    if (saveData.hasSword !== undefined) player.hasSword = saveData.hasSword;
+    if (saveData.hasGun !== undefined) player.hasGun = saveData.hasGun;
+    if (saveData.specialUnlocked !== undefined) player.specialUnlocked = saveData.specialUnlocked;
+    if (saveData.haki) {
+      player.haki = { ...player.haki, ...saveData.haki };
+    }
+    if (saveData.faction !== undefined) player.faction = saveData.faction;
+    if (saveData.selectedAvatarId !== undefined) {
+      avatarState.selectedId = saveData.selectedAvatarId;
+    }
+    if (saveData.isGodMode !== undefined) player.isGodMode = saveData.isGodMode;
+    if (saveData.isInstakill !== undefined) player.isInstakill = saveData.isInstakill;
+    
+    // Apply visual systems
+    applyAvatarToPlayer();
+    updateDerivedStats();
+    updateHud();
+    
+    // Start game bypassing faction select screen
+    audio.init();
+    const fscreen = document.querySelector("#faction-screen");
+    if (fscreen) fscreen.classList.add("hidden");
+    if (hud) hud.classList.remove("hidden");
+    gameStarted = true;
+    checkNewQuestUnlocks();
+    setWeapon(player.weapon);
+    updateCombatHud();
+    
+    log("💾 Saved progress loaded! Welcome back to the First Sea.");
+  } catch (e) {
+    console.error("Failed to load save:", e);
+  }
 }
 
 function clamp(value, min, max) {
@@ -3067,6 +3216,7 @@ function createHumanAvatarModel(avatar, options = {}) {
   const head = new THREE.Mesh(new THREE.SphereGeometry(1.25, 24, 18), skin);
   head.position.y = 8.65;
   head.castShadow = true;
+  head.userData = { isHead: true };
   group.add(head);
 
   addHair(group, avatar.hairStyle || "short", hair);
@@ -3529,6 +3679,7 @@ function spendPoint(stat) {
   player.stats[stat] += 1;
   updateDerivedStats();
   updateHud();
+  saveGame();
 }
 
 function updateDerivedStats(avatar = getSelectedAvatar()) {
@@ -3780,18 +3931,22 @@ function updatePlayer(dt) {
     player.lastMoveSpeed = 0;
     return;
   }
+  if (player.isGodMode) {
+    player.health = player.maxHealth;
+    player.stamina = player.maxStamina;
+  }
   if (isHelming) {
     updateBoat(dt);
     return;
   }
 
   // Gatling Flurry rapid melee punches
-  if (isPointerDown && player.weapon === "melee" && player.mastery.melee >= 500 && attackCooldown <= 0) {
+  if (isPointerDown && player.weapon === "melee" && player.mastery.melee >= 50 && attackCooldown <= 0) {
     attack();
   }
 
   // Active parry Iron Bastion heal
-  if (player.isBlocking && player.mastery.defense >= 200) {
+  if (player.isBlocking && player.mastery.defense >= 20) {
     player.health = Math.min(player.maxHealth, player.health + dt * 3.5);
     if (Math.random() < 0.05) {
       createBubbleEffect(playerMesh.position.clone().add(new THREE.Vector3(0, 4, 0)));
@@ -4406,7 +4561,13 @@ function updateEnemies(dt) {
 }
 
 function damagePlayer(amount, source) {
+  if (player.isGodMode) return; // Admin Invulnerability!
   if (player.shieldTimer > 0) return; // Invulnerable shield active!
+
+  const isHeadshot = Math.random() < 0.20;
+  if (isHeadshot) {
+    amount = Math.round(amount * 1.5);
+  }
 
   // Play synthesized impact sound
   audio.playImpact();
@@ -4414,19 +4575,13 @@ function damagePlayer(amount, source) {
 
   // Defense Mastery gain on hit/block
   const masteryGained = player.isBlocking ? 8 : 2;
-  player.mastery.defense += masteryGained;
-  masterySkills.defense.forEach((skill) => {
-    if (player.mastery.defense === skill.req || (player.mastery.defense >= skill.req && player.mastery.defense - masteryGained < skill.req)) {
-      log(`🌟 SKILL UNLOCKED: ${skill.name} (Defense skill)!`);
-      audio.playQuestComplete();
-    }
-  });
+  addMasteryXp("defense", masteryGained);
 
   let block = player.isBlocking ? 0.45 : 1;
   let parried = false;
 
   // Perfect Parry: Block within 0.25s of keydown
-  if (player.isBlocking && player.mastery.defense >= 50 && (performance.now() - player.blockStartTime < 250)) {
+  if (player.isBlocking && player.mastery.defense >= 5 && (performance.now() - player.blockStartTime < 250)) {
     block = 0; // Immune!
     parried = true;
     createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "PERFECT PARRY!", "#7ce0b4");
@@ -4449,7 +4604,7 @@ function damagePlayer(amount, source) {
   const finalDamage = Math.max(0, Math.round(amount * block * haki));
 
   // Armored Will: Prevents fatal damage once on 90s CD
-  if (player.health - finalDamage <= 0 && player.mastery.defense >= 500 && player.armoredWillCooldown <= 0) {
+  if (player.health - finalDamage <= 0 && player.mastery.defense >= 50 && player.armoredWillCooldown <= 0) {
     player.health = 1;
     player.armoredWillCooldown = 90;
     player.shieldTimer = 3.0; // 3s invulnerable shield
@@ -4462,12 +4617,45 @@ function damagePlayer(amount, source) {
   player.health = Math.max(0, player.health - finalDamage);
   cameraShake = Math.max(cameraShake, finalDamage / 25);
   if (finalDamage > 0) {
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `-${finalDamage}`, "#ff6b4a");
+    if (isHeadshot) {
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `HEADSHOT! -${finalDamage}`, "#ff3333");
+      log(`⚠️ HEADSHOT! Taken 1.5x damage from ${source || "an enemy"}.`);
+    } else {
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `-${finalDamage}`, "#ff6b4a");
+    }
   }
 
   if (player.health <= 0) {
     killPlayer(source || "an enemy");
   }
+}
+
+function damageEnemy(enemy, baseAmount, label = "Strike", color = "#ff7a3d", isForcedHeadshot = null) {
+  if (!enemy || !enemy.alive) return 0;
+  if (player.isInstakill) {
+    baseAmount = Math.max(baseAmount, enemy.maxHealth * 10);
+  }
+
+  const isHeadshot = isForcedHeadshot !== null ? isForcedHeadshot : (Math.random() < 0.20);
+  const finalDamage = isHeadshot ? Math.round(baseAmount * 1.5) : baseAmount;
+
+  enemy.health = Math.max(0, enemy.health - finalDamage);
+  triggerHitFlash(enemy.mesh);
+
+  const pos = enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0));
+  if (isHeadshot) {
+    createFloatingText(pos, `HEADSHOT! -${finalDamage}`, "#3ce88a");
+    log(`🎯 HEADSHOT! Dealt 1.5x damage (${finalDamage}) to ${enemy.type || "enemy"}.`);
+  } else {
+    const displayText = (label.includes("-") || label.includes("+")) ? label : `${label} -${finalDamage}`;
+    createFloatingText(pos, displayText, color);
+    log(`${label} hit for ${finalDamage} damage.`);
+  }
+
+  if (enemy.health <= 0) {
+    defeatEnemy(enemy);
+  }
+  return finalDamage;
 }
 
 function killPlayer(source) {
@@ -4490,7 +4678,7 @@ function killPlayer(source) {
 
 function updateCamera() {
   const targetYaw = isHelming ? boatYaw : (shiftLockEnabled ? playerMesh.rotation.y : cameraYaw);
-  const isSniper = player.weapon === "gun" && player.mastery.gun >= 500 && player.lastMoveSpeed === 0;
+  const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
   const distance = isHelming ? 100 : (isSniper ? 98 : 58);
   const horizontalDistance = Math.cos(cameraPitch) * distance;
   const height = (isHelming ? 24 : 14) + Math.sin(cameraPitch) * distance;
@@ -4646,13 +4834,14 @@ function purchaseHaki() {
   applyHakiVisuals();
   updateHud();
   log("Armament Haki Level 1 unlocked.");
+  saveGame();
 }
 
-function attack() {
+function attack(event = null) {
   if (!gameStarted || attackCooldown > 0 || player.weapon === "special") return;
 
   // Melee Ground Slam in Air!
-  if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 200) {
+  if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 20) {
     jumpOffset = 0;
     verticalVelocity = -100; // Slam down!
     playerMesh.position.y = (getIslandUnderPlayer()?.surfaceY || STARTER_SURFACE_Y) + 0.15;
@@ -4664,10 +4853,7 @@ function attack() {
     enemies.forEach((enemy) => {
       if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 45) {
         const dmg = Math.round(getDamage() * 1.5);
-        enemy.health -= dmg;
-        triggerHitFlash(enemy.mesh);
-        createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `GroundSlam -${dmg}`, "#ffcf5a");
-        if (enemy.health <= 0) defeatEnemy(enemy);
+        damageEnemy(enemy, dmg, "GroundSlam", "#ffcf5a");
       }
     });
     attackCooldown = 0.5;
@@ -4675,7 +4861,7 @@ function attack() {
   }
 
   // Set attack cooldown
-  const isGatling = player.weapon === "melee" && player.mastery.melee >= 500;
+  const isGatling = player.weapon === "melee" && player.mastery.melee >= 50;
   attackCooldown = isGatling ? 0.11 : (player.weapon === "gun" ? 0.55 : 0.42);
 
   if (playerMesh?.userData?.animation) {
@@ -4691,9 +4877,9 @@ function attack() {
   const traits = getAvatarTraits();
   
   // Sword Piercing Thrust: +12 range
-  const swordBonus = (player.weapon === "sword" && player.mastery.sword >= 50) ? 12 : 0;
+  const swordBonus = (player.weapon === "sword" && player.mastery.sword >= 5) ? 12 : 0;
   // Sniper Focus: Double gun range when standing still
-  const isSniper = player.weapon === "gun" && player.mastery.gun >= 500 && player.lastMoveSpeed === 0;
+  const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
   const gunRange = isSniper ? 170 : 85;
 
   const baseRange = (player.weapon === "gun" ? gunRange : (11 + swordBonus));
@@ -4703,52 +4889,101 @@ function attack() {
   let isFalcon = false;
 
   // Falcon Punch: 15% chance for double damage + knockback
-  if (player.weapon === "melee" && player.mastery.melee >= 50 && Math.random() < 0.15) {
+  if (player.weapon === "melee" && player.mastery.melee >= 5 && Math.random() < 0.15) {
     isFalcon = true;
     damage = Math.round(damage * 2.5);
   }
 
-  const target = enemies
-    .filter((enemy) => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range)
-    .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
+  let target = null;
+  let isGunHeadshot = false;
+
+  if (player.weapon === "gun" && event) {
+    // Raycast to find if we clicked directly on any enemy
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+    
+    // Find all alive enemies in range
+    const candidateEnemies = enemies.filter(enemy => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range);
+    
+    let bestHit = null;
+    for (const enemy of candidateEnemies) {
+      const intersects = raycaster.intersectObject(enemy.mesh, true);
+      if (intersects.length > 0) {
+        const dist = intersects[0].distance;
+        if (bestHit === null || dist < bestHit.dist) {
+          let isHead = false;
+          for (let i = 0; i < intersects.length; i++) {
+            let obj = intersects[i].object;
+            while (obj) {
+              if (obj.userData && obj.userData.isHead) {
+                isHead = true;
+                break;
+              }
+              obj = obj.parent;
+            }
+            if (isHead) break;
+          }
+          bestHit = { enemy, dist, isHead };
+        }
+      }
+    }
+    
+    if (bestHit) {
+      target = bestHit.enemy;
+      isGunHeadshot = bestHit.isHead;
+    }
+  }
+
+  // Fallback to closest enemy if no direct mouse-hit target
+  if (!target) {
+    target = enemies
+      .filter((enemy) => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range)
+      .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
+    isGunHeadshot = false;
+  }
 
   if (playerMesh?.userData?.animation) {
     playerMesh.userData.animation.attackImpact = target ? 1 : 0.3;
   }
-  createCombatEffect(player.weapon, target);
+  
+  if (player.weapon === "gun") {
+    createGunShot(target, isGunHeadshot);
+  } else {
+    createCombatEffect(player.weapon, target);
+  }
 
   // Sword Dimensional Blade: Fires giant air slash forward!
-  if (player.weapon === "sword" && player.mastery.sword >= 500) {
+  if (player.weapon === "sword" && player.mastery.sword >= 50) {
     const dir = getAttackDirection(target);
     createAirSlash(playerMesh.position.clone().setY(playerMesh.position.y + 6), dir, { type: "player" });
   }
 
   // Gun Double Tap: Fires a second bullet quickly
-  if (player.weapon === "gun" && player.mastery.gun >= 50) {
+  if (player.weapon === "gun" && player.mastery.gun >= 5) {
     setTimeout(() => {
       if (player.weapon === "gun") {
         audio.playShot();
-        createGunShot(target);
+        createGunShot(target, isGunHeadshot);
         if (target && target.alive) {
           const dmgDouble = Math.round(getDamage() * 0.85);
-          target.health -= dmgDouble;
-          triggerHitFlash(target.mesh);
-          createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `DoubleTap -${dmgDouble}`, "#9defff");
-          if (target.health <= 0) defeatEnemy(target);
+          damageEnemy(target, dmgDouble, "DoubleTap", "#9defff", isGunHeadshot);
         }
       }
     }, 110);
   }
 
   // Pulse Bubble repel for Special Mastery 50
-  if (player.weapon === "special" && player.mastery.special >= 50) {
+  if (player.weapon === "special" && player.mastery.special >= 5) {
     enemies.forEach((enemy) => {
       if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 48) {
         const pushDir = enemy.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
         enemy.mesh.position.addScaledVector(pushDir, 28);
-        enemy.health -= Math.round(getDamage() * 0.4);
-        triggerHitFlash(enemy.mesh);
-        if (enemy.health <= 0) defeatEnemy(enemy);
+        const dmgBubble = Math.round(getDamage() * 0.4);
+        damageEnemy(enemy, dmgBubble, "Pulse", "#a775ff");
       }
     });
   }
@@ -4759,7 +4994,7 @@ function attack() {
   }
 
   // Grand Awakening: instantly vaporizes minor enemies below 20% health
-  const isGrandAwakening = player.weapon === "special" && player.mastery.special >= 500;
+  const isGrandAwakening = player.weapon === "special" && player.mastery.special >= 50;
   if (isGrandAwakening && target.health < target.maxHealth * 0.20) {
     createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "VAPORIZED!", "#a775ff");
     target.health = 0;
@@ -4770,21 +5005,15 @@ function attack() {
     return;
   }
 
-  target.health -= damage;
   target.mesh.scale.setScalar(1.08);
   setTimeout(() => target.mesh.scale.setScalar(1), 90);
-  triggerHitFlash(target.mesh);
 
   if (isFalcon) {
     const pushDir = target.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
     target.mesh.position.addScaledVector(pushDir, 35);
-    createFloatingText(target.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `FALCON PUNCH! -${damage}`, "#ff8a3d");
+    damageEnemy(target, damage, "Falcon Punch", "#ff8a3d");
   } else {
-    log(`${weaponName()} hit a bandit for ${damage} damage.`);
-  }
-
-  if (target.health <= 0) {
-    defeatEnemy(target);
+    damageEnemy(target, damage, weaponName(), "#ff7a3d", player.weapon === "gun" ? isGunHeadshot : null);
   }
 }
 
@@ -4916,12 +5145,12 @@ function createSwordSlash(target) {
   });
 }
 
-function createGunShot(target) {
+function createGunShot(target, isHeadshot = false) {
   const direction = getAttackDirection(target);
   const start = playerMesh.position.clone().add(direction.clone().multiplyScalar(5));
   start.y += 6;
   const end = target ? target.mesh.position.clone() : start.clone().add(direction.clone().multiplyScalar(80));
-  end.y += target ? 5 : 0;
+  end.y += target ? (isHeadshot ? 8.65 : 5.7) : 0;
   const midpoint = start.clone().lerp(end, 0.5);
   const length = start.distanceTo(end);
 
@@ -5064,18 +5293,11 @@ function updateProjectiles(dt) {
             createGroundSlam(projectile.mesh.position.clone(), { type: "player" });
             enemies.forEach(e => {
               if (e.alive && e.mesh.position.distanceTo(projectile.mesh.position) < 55) {
-                const dmg = projectile.damage;
-                e.health -= dmg;
-                triggerHitFlash(e.mesh);
-                createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Explosion -${dmg}`, "#ff7a3d");
-                if (e.health <= 0) defeatEnemy(e);
+                damageEnemy(e, projectile.damage, "Explosion", "#ff7a3d");
               }
             });
           } else {
-            enemy.health -= projectile.damage;
-            triggerHitFlash(enemy.mesh);
-            createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Slash -${projectile.damage}`, "#3ce88a");
-            if (enemy.health <= 0) defeatEnemy(enemy);
+            damageEnemy(enemy, projectile.damage, "Slash", "#3ce88a");
           }
           break;
         }
@@ -5099,11 +5321,7 @@ function updateProjectiles(dt) {
         createGroundSlam(projectile.mesh.position.clone(), { type: "player" });
         enemies.forEach(e => {
           if (e.alive && e.mesh.position.distanceTo(projectile.mesh.position) < 55) {
-            const dmg = projectile.damage;
-            e.health -= dmg;
-            triggerHitFlash(e.mesh);
-            createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Explosion -${dmg}`, "#ff7a3d");
-            if (e.health <= 0) defeatEnemy(e);
+            damageEnemy(e, projectile.damage, "Explosion", "#ff7a3d");
           }
         });
       }
@@ -5305,8 +5523,8 @@ function updateBossHud() {
 function getDamage() {
   const traits = getAvatarTraits();
   const hakiBonus = player.haki.active ? 1 + player.haki.level * 0.12 : 1;
-  const mastery = player.mastery[player.weapon] || 0;
-  const masteryBonus = Math.pow(1.001, mastery);
+  const masteryXp = player.masteryXp ? (player.masteryXp[player.weapon] || 0) : 0;
+  const masteryBonus = Math.pow(1.001, masteryXp);
 
   let baseDmg = 10;
   if (player.weapon === "sword") baseDmg = 12 + player.stats.sword * 5;
@@ -5339,23 +5557,15 @@ function defeatEnemy(enemy) {
 
   // Mastery Reward!
   player.enemiesDefeatedCount = (player.enemiesDefeatedCount || 0) + 1;
-  const baseMastery = enemy.type === "buggy" ? 800 : enemy.type === "brute" ? 90 : enemy.type === "pirate" ? 45 : 5;
+  const baseMastery = enemy.type === "buggy" ? 1000 : enemy.type === "brute" ? 250 : enemy.type === "pirate" ? 150 : 90;
   const decayFactor = 0.10; // 10% harder per defeat
   const masteryGained = Math.max(1, Math.round(baseMastery / (1 + (player.enemiesDefeatedCount - 1) * decayFactor)));
   const currentWeapon = player.weapon;
-  player.mastery[currentWeapon] += masteryGained;
+  addMasteryXp(currentWeapon, masteryGained);
   log(`Mastered ${statLabels[currentWeapon]}: +${masteryGained} Mastery Points! (Multiplier: x${(1 / (1 + (player.enemiesDefeatedCount - 1) * decayFactor)).toFixed(2)})`);
 
-  // Mastery skill unlock check
-  masterySkills[currentWeapon].forEach((skill) => {
-    if (player.mastery[currentWeapon] === skill.req || (player.mastery[currentWeapon] >= skill.req && player.mastery[currentWeapon] - masteryGained < skill.req)) {
-      log(`🌟 SKILL UNLOCKED: ${skill.name} (${statLabels[currentWeapon]} skill)!`);
-      audio.playQuestComplete();
-    }
-  });
-
   // Grand Awakening execution check for other nearby enemies
-  if (player.weapon === "special" && player.mastery.special >= 500) {
+  if (player.weapon === "special" && player.mastery.special >= 50) {
     enemies.forEach((e) => {
       if (e.alive && e !== enemy && e.health < e.maxHealth * 0.20 && e.mesh.position.distanceTo(playerMesh.position) < 120) {
         createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "VAPORIZED!", "#a775ff");
@@ -5434,6 +5644,7 @@ function addXp(amount) {
     audio.playLevelUp();
     log(`Level up! You reached level ${player.level} and gained 3 stat points.`);
   }
+  saveGame();
 }
 
 function updateHud() {
@@ -5451,7 +5662,8 @@ function updateHud() {
     }
   }
 
-  ui.playerTitle.textContent = `${getSelectedAvatar().name} | ${player.faction} ${player.level >= 4 ? "Captain" : "Rookie"}`;
+  const adminPrefix = player.isAdmin ? "👑 ADMIN | " : "";
+  ui.playerTitle.textContent = `${adminPrefix}${getSelectedAvatar().name} | ${player.faction} ${player.level >= 4 ? "Captain" : "Rookie"}`;
   ui.level.textContent = `Level ${player.level} | ${weaponName()} | ${traits.label}`;
   ui.healthText.textContent = `${player.health}/${player.maxHealth}`;
   ui.healthBar.style.width = `${(player.health / player.maxHealth) * 100}%`;
@@ -5459,7 +5671,7 @@ function updateHud() {
   ui.xpBar.style.width = `${(player.xp / player.xpToNext) * 100}%`;
   if (ui.staminaText) ui.staminaText.textContent = `${Math.round(player.stamina)}/${player.maxStamina}`;
   if (ui.staminaBar) ui.staminaBar.style.width = `${(player.stamina / player.maxStamina) * 100}%`;
-  ui.money.textContent = `$${player.money} | Wood ${player.materials.ironwood} | Scrap ${player.materials.scrap} | Core ${player.materials.jungleCore}`;
+  ui.money.textContent = `$${player.money}`;
   if (ui.sea) ui.sea.textContent = hasReachedJungle ? "Jungle Island" : "First Sea";
   ui.points.textContent = `${player.statPoints} points`;
 
@@ -5955,10 +6167,7 @@ function triggerSwordQ() {
   enemies.forEach((enemy) => {
     if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 38) {
       const dmg = Math.round(getDamage() * 1.8);
-      enemy.health -= dmg;
-      triggerHitFlash(enemy.mesh);
-      createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Spin -${dmg}`, "#ffcf5a");
-      if (enemy.health <= 0) defeatEnemy(enemy);
+      damageEnemy(enemy, dmg, "Spin", "#ffcf5a");
     }
   });
 }
@@ -5983,10 +6192,7 @@ function triggerGunQ() {
         if (angle < 0.42) {
           hits++;
           const dmg = Math.round(getDamage() * 1.25);
-          enemy.health -= dmg;
-          triggerHitFlash(enemy.mesh);
-          createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Buckshot -${dmg}`, "#ff7a3d");
-          if (enemy.health <= 0) defeatEnemy(enemy);
+          damageEnemy(enemy, dmg, "Buckshot", "#ff7a3d");
         }
       }
     }
@@ -6005,11 +6211,8 @@ function triggerSpecialQ() {
   enemies.forEach((enemy) => {
     if (enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) < 140) {
       const dmg = Math.round(getDamage() * 2.2);
-      enemy.health -= dmg;
-      triggerHitFlash(enemy.mesh);
-      createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡ LIGHTNING -${dmg}`, "#7ce0b4");
+      damageEnemy(enemy, dmg, "⚡ LIGHTNING", "#7ce0b4");
       createWallHitEffect(enemy.mesh.position.clone(), true);
-      if (enemy.health <= 0) defeatEnemy(enemy);
     }
   });
 }
@@ -6038,9 +6241,9 @@ function executeSkillByKey(keyChar) {
   const skill = skills.find(s => s.key === keyChar);
   if (!skill) return;
 
-  const val = player.mastery[weapon] || 0;
-  if (val < skill.req) {
-    log(`Skill locked! Need ${skill.req} Mastery for ${skill.name}.`);
+  const masteryLevel = player.mastery[weapon] || 1;
+  if (masteryLevel < skill.req) {
+    log(`Skill locked! Need Mastery ${skill.req} for ${skill.name}.`);
     return;
   }
 
@@ -6113,7 +6316,7 @@ function updateCombatHud() {
   if (!ui.combatHud) return;
 
   const weapon = player.weapon;
-  const val = player.mastery[weapon] || 0;
+  const val = player.masteryXp ? (player.masteryXp[weapon] || 0) : 0;
   const weaponEmojis = { melee: "👊", sword: "⚔️", gun: "🔫", special: "✨" };
   const weaponNames = { melee: "MELEE", sword: "SWORD", gun: "GUN", special: "SPECIAL" };
 
@@ -6121,18 +6324,19 @@ function updateCombatHud() {
   if (ui.combatWeaponName) ui.combatWeaponName.textContent = weaponNames[weapon] || "COMBAT";
 
   const skills = masterySkills[weapon] || [];
-  const maxBarValue = 20;
-  const currentLevel = Math.floor(val / 100) + 1;
-  const needed = Math.max(0, 20 - val);
-  const neededText = needed > 0 ? `(Need ${needed} MP)` : "(Maxed)";
+  const masteryInfo = getMasteryInfo(val);
+  const currentLevel = masteryInfo.level;
+  const currentLevelPoints = masteryInfo.currentLevelPoints;
+  const neededForNext = masteryInfo.neededForNext;
+  const neededText = `(Need ${neededForNext - currentLevelPoints} MP)`;
 
-  if (ui.combatMasteryLabel) ui.combatMasteryLabel.textContent = `Mastery ${val} (Lv. ${currentLevel})`;
-  if (ui.combatMasteryBar) ui.combatMasteryBar.style.width = `${Math.min(100, (val / maxBarValue) * 100)}%`;
-  if (ui.combatMasteryText) ui.combatMasteryText.textContent = `${val}/${maxBarValue} ${neededText}`;
+  if (ui.combatMasteryLabel) ui.combatMasteryLabel.textContent = `Mastery ${currentLevel}`;
+  if (ui.combatMasteryBar) ui.combatMasteryBar.style.width = `${Math.min(100, (currentLevelPoints / neededForNext) * 100)}%`;
+  if (ui.combatMasteryText) ui.combatMasteryText.textContent = `${currentLevelPoints}/${neededForNext} ${neededText}`;
 
   if (ui.combatSkillsList) {
     ui.combatSkillsList.innerHTML = skills.map(skill => {
-      const unlocked = val >= skill.req;
+      const unlocked = currentLevel >= skill.req;
       const cd = skillCooldowns[skill.id] || 0;
       const cdPercent = cd > 0 ? (cd / skill.cd) * 100 : 0;
       const rowClass = `combat-skill-row${unlocked ? "" : " locked"}${unlocked ? " skill-row-glow" : ""}`;
@@ -6142,7 +6346,7 @@ function updateCombatHud() {
           <span class="skill-key">${skill.key}</span>
           <div class="skill-info">
             <span class="skill-name">${skill.name}</span>
-            <span class="skill-req">${unlocked ? "UNLOCKED" : `Req ${skill.req} MP`}</span>
+            <span class="skill-req">${unlocked ? "UNLOCKED" : `Mastery ${skill.req}`}</span>
           </div>
           ${cd > 0 ? `<span class="skill-cd-number">${cd.toFixed(1)}s</span>` : ""}
         </div>`;
@@ -6307,14 +6511,11 @@ function triggerActiveSkill(skillId) {
 
       if (t) {
         const dmg = Math.max(t.maxHealth * 2.5, 9999);
-        t.health -= dmg;
-        triggerHitFlash(t.mesh);
         // Violent knockback
         t.mesh.position.addScaledVector(currentForward, 24);
-        createFloatingText(t.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `FalconPunch -${dmg}`, "#ffcf5a");
         cameraShake = Math.max(cameraShake, 2.2);
         createWallHitEffect(t.mesh.position.clone(), true);
-        if (t.health <= 0) defeatEnemy(t);
+        damageEnemy(t, dmg, "FalconPunch", "#ffcf5a");
       } else {
         cameraShake = Math.max(cameraShake, 0.8);
         const endPos = playerMesh.position.clone().addScaledVector(currentForward, 24);
@@ -6328,10 +6529,7 @@ function triggerActiveSkill(skillId) {
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 48) {
         const dmg = Math.round(getDamage() * 2.2);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Slam -${dmg}`, "#ffcf5a");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "Slam", "#ffcf5a");
       }
     });
 
@@ -6345,10 +6543,7 @@ function triggerActiveSkill(skillId) {
       enemies.forEach(e => {
         if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 30) {
           const dmg = Math.round(getDamage() * 0.38);
-          e.health -= dmg;
-          triggerHitFlash(e.mesh);
-          createFloatingText(e.mesh.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, 8, 0)), `Gatling -${dmg}`, "#ffcf5a");
-          if (e.health <= 0) defeatEnemy(e);
+          damageEnemy(e, dmg, "Gatling", "#ffcf5a");
         }
       });
       count++;
@@ -6363,10 +6558,7 @@ function triggerActiveSkill(skillId) {
       const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
       if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
         const dmg = Math.round(getDamage() * 2.1);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Thrust -${dmg}`, "#f6b73c");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "Thrust", "#f6b73c");
       }
     });
 
@@ -6376,10 +6568,7 @@ function triggerActiveSkill(skillId) {
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 42) {
         const dmg = Math.round(getDamage() * 1.9);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Cyclone -${dmg}`, "#ffcf5a");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "Cyclone", "#ffcf5a");
       }
     });
 
@@ -6395,10 +6584,7 @@ function triggerActiveSkill(skillId) {
         .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
       if (t) {
         const dmg = Math.round(getDamage() * 1.4);
-        t.health -= dmg;
-        triggerHitFlash(t.mesh);
-        createFloatingText(t.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `DoubleTap -${dmg}`, "#9defff");
-        if (t.health <= 0) defeatEnemy(t);
+        damageEnemy(t, dmg, "DoubleTap", "#9defff");
       }
     };
     shoot();
@@ -6414,10 +6600,7 @@ function triggerActiveSkill(skillId) {
       if (toE.length() < 95 && forward.angleTo(toE.normalize()) < 0.5) {
         hits++;
         const dmg = Math.round(getDamage() * 1.3);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Buckshot -${dmg}`, "#ff7a3d");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "Buckshot", "#ff7a3d");
       }
     });
 
@@ -6439,10 +6622,7 @@ function triggerActiveSkill(skillId) {
         const push = e.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
         e.mesh.position.addScaledVector(push, 34);
         const dmg = Math.round(getDamage() * 1.5);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Bubble -${dmg}`, "#7ce0b4");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "Bubble", "#7ce0b4");
       }
     });
 
@@ -6455,11 +6635,8 @@ function triggerActiveSkill(skillId) {
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 140) {
         const dmg = Math.round(getDamage() * 2.2);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡ Storm -${dmg}`, "#7ce0b4");
+        damageEnemy(e, dmg, "⚡ Storm", "#7ce0b4");
         createWallHitEffect(e.mesh.position.clone(), true);
-        if (e.health <= 0) defeatEnemy(e);
       }
     });
 
@@ -6481,10 +6658,7 @@ function triggerActiveSkill(skillId) {
         const toE = e.mesh.position.clone().sub(playerMesh.position);
         if (toE.length() < 95 && forward.angleTo(toE.normalize()) < 0.3) {
           const dmg = Math.round(getDamage() * 0.5);
-          e.health -= dmg;
-          triggerHitFlash(e.mesh);
-          createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `Beam -${dmg}`, "#7ce0b4");
-          if (e.health <= 0) defeatEnemy(e);
+          damageEnemy(e, dmg, "Beam", "#7ce0b4");
         }
       });
       beam.material.opacity = Math.max(0, 0.9 - (tick / 6) * 0.7);
@@ -6519,10 +6693,7 @@ function triggerActiveSkill(skillId) {
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 80) {
         const dmg = Math.round(getDamage() * 4.2);
-        e.health -= dmg;
-        triggerHitFlash(e.mesh);
-        createFloatingText(e.mesh.position.clone().add(new THREE.Vector3(0, 12, 0)), `⚡JUDGMENT -${dmg}`, "#3ce88a");
-        if (e.health <= 0) defeatEnemy(e);
+        damageEnemy(e, dmg, "⚡JUDGMENT", "#3ce88a");
       }
     });
     let f = 0;
@@ -6566,6 +6737,11 @@ function toggleEscMenu(forceState = null) {
       volumeSlider.value = Math.round(audio.volume * 100);
       if (volumeVal) volumeVal.textContent = `${volumeSlider.value}%`;
     }
+    const adminSec = document.querySelector("#esc-admin-section");
+    if (adminSec) {
+      adminSec.classList.toggle("hidden", !player.isAdmin);
+    }
+    updateAdminButtonsUI();
   }
 }
 
@@ -6711,4 +6887,111 @@ volumeSlider?.addEventListener("input", () => {
 audio.setVolume(0.5);
 setGraphicsQuality(5);
 document.body.classList.add("perf-hidden");
+
+function updateAdminButtonsUI() {
+  const godBtn = document.querySelector("#admin-godmode-btn");
+  if (godBtn) {
+    godBtn.textContent = `GOD MODE: ${player.isGodMode ? "ON" : "OFF"}`;
+    godBtn.style.background = player.isGodMode ? "rgba(60, 232, 138, 0.35)" : "rgba(60, 232, 138, 0.15)";
+    godBtn.style.borderColor = player.isGodMode ? "rgba(60, 232, 138, 0.5)" : "rgba(60, 232, 138, 0.3)";
+  }
+  const instaBtn = document.querySelector("#admin-instakill-btn");
+  if (instaBtn) {
+    instaBtn.textContent = `INSTAKILL: ${player.isInstakill ? "ON" : "OFF"}`;
+    instaBtn.style.background = player.isInstakill ? "rgba(255, 96, 72, 0.35)" : "rgba(255, 96, 72, 0.15)";
+    instaBtn.style.borderColor = player.isInstakill ? "rgba(255, 96, 72, 0.5)" : "rgba(255, 96, 72, 0.3)";
+  }
+}
+
+document.querySelector("#admin-godmode-btn")?.addEventListener("click", () => {
+  player.isGodMode = !player.isGodMode;
+  if (player.isGodMode) {
+    player.health = player.maxHealth;
+    player.stamina = player.maxStamina;
+  }
+  updateAdminButtonsUI();
+  saveGame();
+  log(`Admin God Mode toggled: ${player.isGodMode ? "ON" : "OFF"}`);
+});
+
+document.querySelector("#admin-instakill-btn")?.addEventListener("click", () => {
+  player.isInstakill = !player.isInstakill;
+  updateAdminButtonsUI();
+  saveGame();
+  log(`Admin Instakill toggled: ${player.isInstakill ? "ON" : "OFF"}`);
+});
+
+document.querySelector("#admin-cash-btn")?.addEventListener("click", () => {
+  player.money += 10000;
+  updateHud();
+  saveGame();
+  log("Admin Cash granted: +$10,000");
+});
+
+document.querySelector("#admin-mats-btn")?.addEventListener("click", () => {
+  player.materials.ironwood += 10;
+  player.materials.scrap += 10;
+  player.materials.jungleCore += 10;
+  updateHud();
+  saveGame();
+  log("Admin Materials granted: +10 of each resource");
+});
+
+document.querySelector("#admin-levels-btn")?.addEventListener("click", () => {
+  player.level = 100;
+  player.xp = 0;
+  player.xpToNext = 1000000;
+  player.statPoints += 297;
+  
+  Object.keys(player.mastery).forEach(type => {
+    player.mastery[type] = 100;
+    let xp = 0;
+    for (let l = 1; l < 100; l++) {
+      xp += Math.round(40 * Math.pow(1.2, l - 1));
+    }
+    player.masteryXp[type] = xp;
+  });
+  
+  player.haki.unlocked = true;
+  player.haki.level = 5;
+  player.hasSword = true;
+  player.hasGun = true;
+  player.specialUnlocked = true;
+  
+  updateDerivedStats();
+  updateHud();
+  updateCombatHud();
+  saveGame();
+  log("Admin: Max levels, max masteries, and all slots unlocked!");
+});
+
+document.querySelector("#admin-tp-starter")?.addEventListener("click", () => {
+  if (playerMesh && islands[0]) {
+    playerMesh.position.set(0, islands[0].surfaceY + 0.15, 0);
+    verticalVelocity = 0;
+    jumpOffset = 0;
+    toggleEscMenu(false);
+    log("Admin Teleport to Starter Island.");
+  }
+});
+
+document.querySelector("#admin-tp-desert")?.addEventListener("click", () => {
+  if (playerMesh && islands[3]) {
+    playerMesh.position.copy(islands[3].position).setY(islands[3].surfaceY + 0.15);
+    verticalVelocity = 0;
+    jumpOffset = 0;
+    toggleEscMenu(false);
+    log("Admin Teleport to Desert Island.");
+  }
+});
+
+document.querySelector("#admin-tp-jungle")?.addEventListener("click", () => {
+  if (playerMesh && islands[1]) {
+    playerMesh.position.copy(islands[1].position).setY(islands[1].surfaceY + 0.15);
+    verticalVelocity = 0;
+    jumpOffset = 0;
+    toggleEscMenu(false);
+    log("Admin Teleport to Jungle Island.");
+  }
+});
 

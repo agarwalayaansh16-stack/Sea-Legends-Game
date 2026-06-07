@@ -2200,6 +2200,8 @@ body:not(.perf-hidden) #hud {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  max-height: 380px;
+  overflow-y: auto;
 }
 
 .esc-section {
