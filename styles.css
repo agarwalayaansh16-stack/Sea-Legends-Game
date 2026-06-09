@@ -2516,3 +2516,231 @@ body:not(.perf-hidden) #hud {
   display: none !important;
 }
 
+/* ===== 3D Avatar Studio Modal & Designer Styles ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 10, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay:not(.hidden) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-overlay:not(.hidden) .modal-content {
+  transform: scale(1);
+}
+
+.modal-content {
+  background: rgba(6, 18, 28, 0.95);
+  border: 1.5px solid rgba(255, 247, 230, 0.2);
+  border-radius: 24px;
+  width: 960px;
+  max-width: 95vw;
+  height: 640px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: scale(0.95);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 14px 20px;
+  color: rgba(255, 247, 230, 0.55);
+  border-bottom: 3px solid transparent;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-tab-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.modal-tab-btn.active {
+  color: var(--gold) !important;
+  border-bottom-color: var(--gold) !important;
+  font-weight: 800;
+}
+
+.modal-panel-tab {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+.modal-panel-tab.active {
+  display: flex !important;
+}
+
+/* Custom Scrollbar for Studio Panel */
+.panel-controls-side div::-webkit-scrollbar,
+#panel-marketplace div::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.panel-controls-side div::-webkit-scrollbar-track,
+#panel-marketplace div::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 99px;
+}
+
+.panel-controls-side div::-webkit-scrollbar-thumb,
+#panel-marketplace div::-webkit-scrollbar-thumb {
+  background: rgba(255, 247, 230, 0.2);
+  border-radius: 99px;
+}
+
+.panel-controls-side div::-webkit-scrollbar-thumb:hover,
+#panel-marketplace div::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
+/* Marketplace Styling */
+.market-card {
+  background: rgba(8, 27, 40, 0.65);
+  border: 1.5px solid rgba(255, 247, 230, 0.12);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: all 0.22s ease;
+  position: relative;
+}
+
+.market-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(246, 183, 60, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.market-card-preview {
+  height: 130px;
+  background: radial-gradient(circle at center, rgba(16, 44, 66, 0.4) 0%, rgba(4, 12, 20, 0.7) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.market-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.market-card-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.market-card-creator {
+  color: rgba(255, 247, 230, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.market-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+}
+
+.market-card-price {
+  color: #3ce88a;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.market-card-btn {
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.market-card-btn:hover {
+  transform: scale(1.04);
+}
+
+.market-card-btn.danger {
+  background: rgba(235, 94, 85, 0.15);
+  border: 1px solid rgba(235, 94, 85, 0.35);
+  color: #eb5e55;
+}
+
+.market-card-btn.danger:hover {
+  background: #eb5e55;
+  color: #fff;
+}
+
+/* ===== Authentication & Toast Alert Styles ===== */
+#login-screen input {
+  font-family: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+#login-screen input:focus {
+  background: rgba(4, 23, 36, 0.85) !important;
+  border-color: rgba(246, 183, 60, 0.7) !important;
+  box-shadow: 0 0 14px rgba(246, 183, 60, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+#signup-form-container input:focus {
+  border-color: rgba(60, 232, 138, 0.7) !important;
+  box-shadow: 0 0 14px rgba(60, 232, 138, 0.25), inset 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+#login-screen a {
+  transition: all 0.15s ease;
+}
+
+#login-screen button:active {
+  transform: scale(0.97) !important;
+}
+
+#simulated-notification.show {
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+}
+
+
+

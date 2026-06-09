@@ -43,6 +43,120 @@
       </div>
       <canvas id="game"></canvas>
 
+      <!-- Beautiful Auth Overlay (Login/Signup/Forgot Password) -->
+      <section id="login-screen" class="overlay">
+        <div class="panel hero-panel" style="max-width: 460px; margin: 80px auto; padding: 32px 40px;">
+          <p class="eyebrow" style="text-align: center;">Sea Legends Auth</p>
+          <h1 style="text-align: center; margin-bottom: 8px; font-size: 28px; background: linear-gradient(135deg, #fff 30%, #a5c0cc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Access the Seas</h1>
+          <p class="intro" style="text-align: center; margin-bottom: 24px; font-size: 13px; color: rgba(255, 247, 230, 0.6);">Sign up or log in to resume your adventure.</p>
+          
+          <!-- Login Form Container -->
+          <div id="login-form-container">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Username</label>
+                <input id="login-username" type="text" placeholder="Enter username" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(246,183,60,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Password</label>
+                <input id="login-password" type="password" placeholder="Enter password (min. 8 chars)" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(246,183,60,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+              </div>
+              
+              <!-- Verification Math Captcha Container -->
+              <div id="login-captcha-container" class="hidden" style="display: flex; flex-direction: column; gap: 8px; padding: 14px; background: rgba(255, 96, 72, 0.08); border: 1.5px dashed rgba(255, 96, 72, 0.35); border-radius: 12px;">
+                <span style="font-size: 11px; font-weight: 800; color: #ff6048; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">⚠️ Verification Required</span>
+                <span id="login-captcha-prompt" style="font-size: 13px; color: #fff; font-weight: bold;">Solve: 8 + 3 = ?</span>
+                <input id="login-captcha-input" type="text" placeholder="Enter verification answer" style="padding: 10px; border-radius: 8px; border: 1.5px solid rgba(255,96,72,0.4); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 13px;">
+              </div>
+              
+              <div id="login-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
+              
+              <button id="login-submit-btn" type="button" style="background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(246,183,60,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Log In</button>
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 8px;">
+                <a href="#" id="go-to-signup" style="color: #3ce88a; text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Create Account</a>
+                <a href="#" id="go-to-recovery" style="color: rgba(255, 247, 230, 0.5); text-decoration: none; font-weight: 600; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255, 247, 230, 0.5)'">Forgot Password?</a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Signup Form Container (hidden by default) -->
+          <div id="signup-form-container" class="hidden">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Choose Username</label>
+                <input id="signup-username" type="text" placeholder="Username (cannot be duplicate)" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Create Password</label>
+                <input id="signup-password" type="password" placeholder="Min. 8 characters" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Email or Phone Number</label>
+                <input id="signup-recovery" type="text" placeholder="For password recovery verification" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+              </div>
+              
+              <div id="signup-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
+              
+              <button id="signup-submit-btn" type="button" style="background: #3ce88a; color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(60,232,138,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Sign Up</button>
+              
+              <div style="text-align: center; font-size: 12px; margin-top: 8px;">
+                <a href="#" id="go-to-login" style="color: var(--gold); text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Back to Login</a>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Recovery Form Container (Forgot Password) (hidden by default) -->
+          <div id="recovery-form-container" class="hidden">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div id="recovery-step-1">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Recovery Contact</label>
+                  <input id="recovery-contact" type="text" placeholder="Enter registered Email or Phone" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px;">
+                </div>
+                <button id="recovery-send-btn" type="button" style="width: 100%; background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: all 0.2s; margin-top: 14px;">Send Recovery Code</button>
+              </div>
+              
+              <div id="recovery-step-2" class="hidden">
+                <div style="font-size: 12px; line-height: 1.45; color: rgba(255, 247, 230, 0.7); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 10px 14px; border-radius: 10px; margin-bottom: 10px;">
+                  💬 A 6-digit verification code has been simulated for your email/phone. Please enter it below.
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Enter 6-Digit Code</label>
+                  <input id="recovery-code-input" type="text" maxlength="6" placeholder="------" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(3, 16, 26, 0.65); color: #fff; outline: none; letter-spacing: 0.35em; text-align: center; font-size: 20px; font-weight: 900; font-family: monospace;">
+                </div>
+                <button id="recovery-verify-btn" type="button" style="width: 100%; background: #3ce88a; color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: all 0.2s; margin-top: 14px;">Verify Code</button>
+              </div>
+              
+              <div id="recovery-step-3" class="hidden" style="text-align: center; padding: 16px; background: rgba(60, 232, 138, 0.08); border: 1.5px dashed rgba(60, 232, 138, 0.35); border-radius: 12px;">
+                <span style="font-size: 12px; color: rgba(255,247,230,0.7); display: block; margin-bottom: 4px;">Verification successful! Your password is:</span>
+                <h2 id="recovered-password-display" style="color: #3ce88a; font-family: monospace; letter-spacing: 0.06em; margin: 8px 0; font-size: 22px;"></h2>
+                <button id="recovery-login-direct-btn" type="button" style="width: 100%; background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 10px; cursor: pointer; padding: 10px; font-size: 12px; text-transform: uppercase; margin-top: 10px;">Log In Directly</button>
+              </div>
+              
+              <div id="recovery-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
+              
+              <div style="text-align: center; font-size: 12px; margin-top: 8px;">
+                <a href="#" id="recovery-back-to-login" style="color: var(--gold); text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Back to Login</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Beautiful Simulated Notification Overlay for Verification SMS/Email -->
+      <div id="simulated-notification" class="hidden" style="position: fixed; top: 24px; right: 24px; width: 340px; padding: 16px; border-radius: 16px; background: rgba(6, 18, 28, 0.96); border: 1.5px solid rgba(246, 183, 60, 0.45); color: #fff; z-index: 10000; box-shadow: 0 12px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(15px); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform: translateY(-20px); opacity: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px;">
+          <strong style="color: #f6b73c; font-size: 12px; display: flex; align-items: center; gap: 6px;">✉️ MOCK TELECOM</strong>
+          <span style="font-size: 10px; color: rgba(255,255,255,0.4);">Just Now</span>
+        </div>
+        <p id="notification-message" style="margin: 0; font-size: 12px; line-height: 1.45; color: rgba(255,255,255,0.9);"></p>
+        <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-align: right;">(Simulated recovery transmission)</div>
+      </div>
+
       <section id="faction-screen" class="overlay">
         <div class="panel hero-panel">
           <p class="eyebrow">Sea Legends</p>
@@ -56,7 +170,10 @@
                 <strong>Avatar Studio</strong>
                 <span>Choose, preview, edit, create, or delete your human avatar.</span>
               </div>
-              <button id="preview-avatar" type="button">Preview Avatar</button>
+              <div style="display: flex; gap: 10px; align-items: center; pointer-events: auto;">
+                <button id="faction-open-studio-btn" type="button" style="background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 10px 20px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 4px 20px rgba(246, 183, 60, 0.3); transition: all 0.2s;">Open 3D Studio</button>
+                <button id="preview-avatar" type="button">Preview Avatar</button>
+              </div>
             </div>
             <div class="avatar-layout">
               <div>
@@ -86,12 +203,12 @@
                 <p class="section-label">Customize</p>
                 <input id="avatar-name" maxlength="18" placeholder="Avatar name" value="Rookie">
                 <div class="editor-grid">
-                  <label>Skin <input id="skin-color" type="color" value="#c98b62"></label>
-                  <label>Shirt <input id="shirt-color" type="color" value="#1b85aa"></label>
-                  <label>Pants <input id="pants-color" type="color" value="#26364f"></label>
-                  <label>Hair <input id="hair-color" type="color" value="#2a1710"></label>
-                  <label>Eyes <input id="eye-color" type="color" value="#101820"></label>
-                  <label>Boots <input id="boot-color" type="color" value="#23170f"></label>
+                  <label>Skin <input id="skin-color" type="color" value="#eed2b8"></label>
+                  <label>Shirt <input id="shirt-color" type="color" value="#223745"></label>
+                  <label>Pants <input id="pants-color" type="color" value="#4d4637"></label>
+                  <label>Hair <input id="hair-color" type="color" value="#8e4e24"></label>
+                  <label>Eyes <input id="eye-color" type="color" value="#1f3c5b"></label>
+                  <label>Boots <input id="boot-color" type="color" value="#3d2616"></label>
                   <label>
                     Hair Style
                     <select id="hair-style">
@@ -148,6 +265,7 @@
             <button id="nav-btn-stats" class="nav-btn" type="button">Stats</button>
             <button id="nav-btn-items" class="nav-btn" type="button">Inventory</button>
             <button id="nav-btn-shop" class="nav-btn" type="button">Shop</button>
+            <button id="nav-btn-avatar" class="nav-btn" type="button">Studio</button>
             <button id="nav-btn-close" class="nav-btn" type="button">Close</button>
           </div>
           
@@ -204,6 +322,7 @@
               <input id="shiftlock-toggle" type="checkbox" checked>
               <span>Shiftlock enabled</span>
             </label>
+            <button id="hud-logout-btn" type="button" style="background: rgba(255, 96, 72, 0.15); border: 1px solid rgba(255, 96, 72, 0.3); color: #ff6048; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; cursor: pointer; outline: none; margin-left: 6px; transition: all 0.2s;">Log Out</button>
           </div>
         </div>
 
@@ -241,6 +360,13 @@
         <div id="boss-bar" class="boss-bar hidden">
           <strong id="boss-name">Boss</strong>
           <span><i id="boss-health-bar"></i></span>
+        </div>
+
+        <div id="dialogue-panel" class="dialogue-panel hidden">
+          <strong id="dialogue-title">Quest Board</strong>
+          <p id="dialogue-detail">Choose a quest.</p>
+          <div id="quest-options" class="quest-options"></div>
+          <button id="dialogue-close" type="button">Decline</button>
         </div>
 
         <div id="combat-flash" class="combat-flash"></div>
@@ -373,7 +499,11 @@
                   <span>Sprint toggle</span>
                 </div>
                 <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
-                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Left Click</kbd></span>
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">Left / Right Click</kbd></span>
+                  <span>Drag to rotate screen (move camera)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
+                  <span><kbd style="background: rgba(255,255,255,0.12); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px;">R</kbd></span>
                   <span>Strike / Shoot (aim gun at head for 1.5x headshot)</span>
                 </div>
                 <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">
@@ -437,11 +567,265 @@
               </div>
             </div>
           </div>
-          <div class="esc-footer">
-            <button id="esc-resume-btn" class="esc-btn primary" type="button">Resume</button>
-            <button id="esc-reset-btn" class="esc-btn danger" type="button">Reset Character</button>
+          <div class="esc-footer" style="display: flex; gap: 8px;">
+            <button id="esc-resume-btn" class="esc-btn primary" type="button" style="flex: 1;">Resume</button>
+            <button id="esc-logout-btn" class="esc-btn" type="button" style="flex: 1; background: rgba(255, 96, 72, 0.15); border: 1px solid rgba(255, 96, 72, 0.3); color: #ff6048; border-radius: 8px; font-weight: bold; cursor: pointer; border: 1px solid rgba(255, 96, 72, 0.3); font-size: 13px;">Log Out</button>
+            <button id="esc-reset-btn" class="esc-btn danger" type="button" style="flex: 1;">Reset Character</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Beautiful Centered Avatar Studio Overlay Modal -->
+    <div id="avatar-studio-modal" class="modal-overlay hidden" style="position: fixed; inset: 0; background: rgba(2, 6, 10, 0.85); backdrop-filter: blur(15px); z-index: 9999; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;">
+      <div class="modal-content" style="background: rgba(6, 18, 28, 0.95); border: 1.5px solid rgba(255, 247, 230, 0.2); border-radius: 24px; width: 960px; max-width: 95vw; height: 640px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1); transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+        
+        <!-- Modal Header -->
+        <div class="modal-header" style="padding: 16px 24px; border-bottom: 1.5px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center;">
+          <div style="text-align: left;">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 0.05em; text-transform: uppercase;">AVATAR STUDIO & DESIGNER</h2>
+            <p style="margin: 2px 0 0; font-size: 12px; color: rgba(255, 247, 230, 0.55); font-weight: 500;">Design your unique character and trade with other players in the marketplace</p>
+          </div>
+          <button id="avatar-studio-close-btn" style="background: transparent; border: none; font-size: 28px; color: rgba(255, 247, 230, 0.5); cursor: pointer; transition: color 0.2s; outline: none; line-height: 1; pointer-events: auto;">&times;</button>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <div class="modal-tabs" style="display: flex; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding: 0 16px;">
+          <button id="tab-btn-designer" class="modal-tab-btn active" style="background: transparent; border: none; padding: 14px 20px; color: var(--gold); border-bottom: 3px solid var(--gold); font-weight: 800; text-transform: uppercase; font-size: 13px; letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; pointer-events: auto;">Avatar Designer</button>
+          <button id="tab-btn-marketplace" class="modal-tab-btn" style="background: transparent; border: none; padding: 14px 20px; color: rgba(255, 247, 230, 0.55); border-bottom: 3px solid transparent; font-weight: 700; text-transform: uppercase; font-size: 13px; letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; pointer-events: auto;">Marketplace</button>
+        </div>
+
+        <!-- Modal Panels Container -->
+        <div class="modal-panels" style="flex: 1; display: flex; overflow: hidden; position: relative;">
+          
+          <!-- Designer Tab Panel -->
+          <div id="panel-designer" class="modal-panel-tab active" style="flex: 1; display: flex; overflow: hidden; height: 100%;">
+            
+            <!-- Left Side: 3D Interactive Preview Studio -->
+            <div class="panel-preview-side" style="width: 380px; border-right: 1.5px solid rgba(255, 255, 255, 0.08); background: radial-gradient(circle at center, rgba(16, 44, 66, 0.5) 0%, rgba(6, 18, 28, 0.95) 100%); display: flex; flex-direction: column; position: relative;">
+              <!-- 3D Canvas Container -->
+              <div id="avatar-3d-preview-container" style="flex: 1; width: 100%; height: 100%; cursor: grab; position: relative; overflow: hidden; pointer-events: auto;">
+                <!-- We will append Three.js canvas here -->
+              </div>
+              
+              <!-- Info overlay -->
+              <div style="position: absolute; top: 12px; left: 12px; pointer-events: none; background: rgba(0, 0, 0, 0.5); padding: 4px 8px; border-radius: 6px; font-size: 10px; color: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.1);">
+                🖱️ Drag to rotate model
+              </div>
+
+              <!-- Avatar Details Overlay -->
+              <div style="padding: 16px; background: rgba(4, 12, 20, 0.85); border-top: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong id="studio-preview-name" style="color: #fff; font-size: 16px;">Tavern Hero</strong>
+                  <span id="studio-preview-traits-label" style="font-size: 11px; background: rgba(246, 183, 60, 0.15); color: var(--gold); border: 1px solid rgba(246, 183, 60, 0.3); padding: 2px 6px; border-radius: 4px; font-weight: 700;">Balanced bulk</span>
+                </div>
+                <p id="studio-preview-traits" style="margin: 0; font-size: 11px; color: rgba(255, 247, 230, 0.45); line-height: 1.4; min-height: 32px; text-align: left;"></p>
+              </div>
+            </div>
+
+            <!-- Right Side: Customizer & Action controls -->
+            <div class="panel-controls-side" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: rgba(6, 18, 28, 0.4);">
+              
+              <!-- Customizer Form (Scrollable) -->
+              <div style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; pointer-events: auto;">
+                
+                <!-- Saved Avatars Row -->
+                <div>
+                  <h4 style="margin: 0 0 8px; color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; text-align: left;">Saved Templates</h4>
+                  <div id="studio-avatar-list" class="avatar-list" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; max-height: none;"></div>
+                </div>
+
+                <!-- Basic settings (Name & Preset controls) -->
+                <div style="display: flex; gap: 12px; align-items: center; text-align: left;">
+                  <div style="flex: 1;">
+                    <label style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Avatar Name</label>
+                    <input id="studio-avatar-name" type="text" maxlength="18" placeholder="Enter name..." style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; box-sizing: border-box;">
+                  </div>
+                </div>
+
+                <!-- Customizer Grid -->
+                <div>
+                  <h4 style="margin: 0 0 10px; color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; text-align: left;">Body & Apparel Styling</h4>
+                  <div class="studio-designer-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left;">
+                    
+                    <!-- Color Pickers Column 1 -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Skin Color</span>
+                        <input id="studio-skin-color" type="color" value="#eed2b8" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Torso (Shirt)</span>
+                        <input id="studio-shirt-color" type="color" value="#223745" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Left Arm Color</span>
+                        <input id="studio-left-arm-color" type="color" value="#223745" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Right Arm Color</span>
+                        <input id="studio-right-arm-color" type="color" value="#223745" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Hair Color</span>
+                        <input id="studio-hair-color" type="color" value="#8e4e24" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Eye Color</span>
+                        <input id="studio-eye-color" type="color" value="#1f3c5b" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                    </div>
+                    
+                    <!-- Color Pickers Column 2 -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Left Leg Color</span>
+                        <input id="studio-left-leg-color" type="color" value="#4d4637" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Right Leg Color</span>
+                        <input id="studio-right-leg-color" type="color" value="#4d4637" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Pants (Leg Base)</span>
+                        <input id="studio-pants-color" type="color" value="#4d4637" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Boots Color</span>
+                        <input id="studio-boot-color" type="color" value="#3d2616" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Belt Color</span>
+                        <input id="studio-belt-color" type="color" value="#3d2616" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                      <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size: 12px; color: rgba(255, 247, 230, 0.8); font-weight: 600;">Cape Color</span>
+                        <input id="studio-cape-color" type="color" value="#a82020" style="border: none; width: 26px; height: 26px; border-radius: 4px; cursor: pointer; background: transparent;">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Dropdowns & Sliders Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left;">
+                  <!-- Dropdowns -->
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                      <label style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Hair Style</label>
+                      <select id="studio-hair-style" style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 8px; border-radius: 8px; outline: none; font-weight: 600; cursor: pointer;">
+                        <option value="short">Short</option>
+                        <option value="spiky">Spiky</option>
+                        <option value="cap">Captain Cap</option>
+                        <option value="messy">Messy</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Outfit Style</label>
+                      <select id="studio-outfit-style" style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 8px; border-radius: 8px; outline: none; font-weight: 600; cursor: pointer;">
+                        <option value="sailor">Sailor</option>
+                        <option value="coat">Long Coat</option>
+                        <option value="armor">Light Armor</option>
+                        <option value="adventurer">Adventurer Vest</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Cape Style</label>
+                      <select id="studio-cape-style" style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 8px; border-radius: 8px; outline: none; font-weight: 600; cursor: pointer;">
+                        <option value="none">No Cape</option>
+                        <option value="normal">Royal Cape</option>
+                        <option value="long">Long Flowing Cape</option>
+                        <option value="torn">Tattered Cape</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Range Sliders -->
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <label style="font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700;">Height Scale</label>
+                        <span id="studio-val-height" style="font-size: 10px; color: var(--gold); font-weight: bold;">100%</span>
+                      </div>
+                      <input id="studio-height-scale" type="range" min="85" max="125" value="100" style="width: 100%; accent-color: var(--gold); cursor: pointer;">
+                    </div>
+                    <div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <label style="font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700;">Bulk (Build)</label>
+                        <span id="studio-val-build" style="font-size: 10px; color: var(--gold); font-weight: bold;">100%</span>
+                      </div>
+                      <input id="studio-build-scale" type="range" min="80" max="130" value="100" style="width: 100%; accent-color: var(--gold); cursor: pointer;">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Sell to Marketplace Section -->
+                <div style="margin-top: 10px; padding: 14px; background: rgba(246, 183, 60, 0.05); border: 1px solid rgba(246, 183, 60, 0.18); border-radius: 12px; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                  <div>
+                    <h5 style="margin: 0; font-size: 13px; color: var(--gold); font-weight: bold;">Sell This Avatar Design</h5>
+                    <p style="margin: 2px 0 0; font-size: 11px; color: rgba(255, 247, 230, 0.6);">Publish this design blueprint to the Marketplace. NPC players will buy it if the price is right!</p>
+                  </div>
+                  <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="position: relative; flex: 1;">
+                      <span style="position: absolute; left: 10px; top: 7px; color: rgba(255,255,255,0.4); font-size: 13px; font-weight: bold;">$</span>
+                      <input id="studio-sell-price" type="number" min="50" max="50000" value="500" style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 7px 10px 7px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; box-sizing: border-box;">
+                    </div>
+                    <button id="studio-publish-btn" type="button" style="background: #3ce88a; color: #06121c; border: none; font-weight: 800; border-radius: 8px; cursor: pointer; padding: 8px 16px; font-size: 12px; transition: all 0.2s; white-space: nowrap; pointer-events: auto;">Publish Design</button>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Action Buttons footer -->
+              <div style="padding: 16px 20px; border-top: 1.5px solid rgba(255, 255, 255, 0.08); background: rgba(3, 9, 14, 0.8); display: flex; justify-content: space-between; gap: 10px; pointer-events: auto;">
+                <button id="studio-delete-avatar" class="danger-button" type="button" style="padding: 10px 16px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; border: 1.5px solid rgba(235, 94, 85, 0.4); background: rgba(235, 94, 85, 0.1); color: #eb5e55; pointer-events: auto;">Delete Selected</button>
+                <div style="display: flex; gap: 8px;">
+                  <button id="studio-save-avatar" type="button" style="padding: 10px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; border: 1.5px solid rgba(255, 247, 230, 0.2); background: rgba(6, 25, 34, 0.56); color: #fff; pointer-events: auto;">Save Changes</button>
+                  <button id="studio-create-avatar" type="button" style="padding: 10px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; border: none; background: var(--gold); color: var(--ink); pointer-events: auto;">Create New</button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- Marketplace Tab Panel -->
+          <div id="panel-marketplace" class="modal-panel-tab" style="flex: 1; display: none; flex-direction: column; overflow: hidden; height: 100%; background: rgba(6, 18, 28, 0.3);">
+            <!-- Marketplace Header Info -->
+            <div style="padding: 16px 20px; border-bottom: 1.5px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(3, 9, 14, 0.4);">
+              <div style="text-align: left;">
+                <h3 style="margin: 0; color: #fff; font-size: 15px; font-weight: 700;">Global Design Market</h3>
+                <p style="margin: 2px 0 0; font-size: 11px; color: rgba(255, 247, 230, 0.55);">Buy designs from other creators, or view your active listings</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 15px; pointer-events: auto;">
+                <span id="market-player-cash" style="font-size: 14px; font-weight: 800; color: #3ce88a; background: rgba(60, 232, 138, 0.1); border: 1px solid rgba(60, 232, 138, 0.25); padding: 4px 10px; border-radius: 6px;">Cash: $0</span>
+              </div>
+            </div>
+
+            <!-- Scrollable Marketplace Grid & Your Listings split -->
+            <div style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 24px; pointer-events: auto;">
+              
+              <!-- Active Listings Section -->
+              <div style="text-align: left;">
+                <h4 style="margin: 0 0 10px; color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800;">Your Active Listings</h4>
+                <div id="market-your-listings" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                  <!-- Populated by JS -->
+                  <div style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.3); font-size: 12px; padding: 15px; background: rgba(255,255,255,0.01); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.05);">You have no designs published for sale. Customize an avatar and set a price to publish!</div>
+                </div>
+              </div>
+
+              <!-- Available Designs Section -->
+              <div style="text-align: left;">
+                <h4 style="margin: 0 0 10px; color: var(--gold); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800;">Browse Designs for Sale</h4>
+                <div id="market-browse-listings" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </div>
 

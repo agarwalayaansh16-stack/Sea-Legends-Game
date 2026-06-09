@@ -297,6 +297,58 @@ const previewName = document.querySelector("#preview-name");
 const avatarPreview = document.querySelector("#avatar-preview");
 const avatarTraits = document.querySelector("#avatar-traits");
 
+// Advanced body designing selectors
+const leftArmColorInput = document.querySelector("#left-arm-color");
+const rightArmColorInput = document.querySelector("#right-arm-color");
+const leftLegColorInput = document.querySelector("#left-leg-color");
+const rightLegColorInput = document.querySelector("#right-leg-color");
+const beltColorInput = document.querySelector("#belt-color");
+const capeColorInput = document.querySelector("#cape-color");
+const capeStyleInput = document.querySelector("#cape-style");
+
+// Studio Customizer Selectors
+const studioAvatarList = document.querySelector("#studio-avatar-list");
+const studioAvatarNameInput = document.querySelector("#studio-avatar-name");
+const studioSkinColorInput = document.querySelector("#studio-skin-color");
+const studioShirtColorInput = document.querySelector("#studio-shirt-color");
+const studioLeftArmColorInput = document.querySelector("#studio-left-arm-color");
+const studioRightArmColorInput = document.querySelector("#studio-right-arm-color");
+const studioHairColorInput = document.querySelector("#studio-hair-color");
+const studioEyeColorInput = document.querySelector("#studio-eye-color");
+const studioLeftLegColorInput = document.querySelector("#studio-left-leg-color");
+const studioRightLegColorInput = document.querySelector("#studio-right-leg-color");
+const studioPantsColorInput = document.querySelector("#studio-pants-color");
+const studioBootColorInput = document.querySelector("#studio-boot-color");
+const studioBeltColorInput = document.querySelector("#studio-belt-color");
+const studioCapeColorInput = document.querySelector("#studio-cape-color");
+const studioHairStyleInput = document.querySelector("#studio-hair-style");
+const studioOutfitStyleInput = document.querySelector("#studio-outfit-style");
+const studioCapeStyleInput = document.querySelector("#studio-cape-style");
+const studioHeightScaleInput = document.querySelector("#studio-height-scale");
+const studioBuildScaleInput = document.querySelector("#studio-build-scale");
+const studioCreateAvatarButton = document.querySelector("#studio-create-avatar");
+const studioSaveAvatarButton = document.querySelector("#studio-save-avatar");
+const studioDeleteAvatarButton = document.querySelector("#studio-delete-avatar");
+const studioPreviewName = document.querySelector("#studio-preview-name");
+const studioPreviewTraits = document.querySelector("#studio-preview-traits");
+const studioPreviewTraitsLabel = document.querySelector("#studio-preview-traits-label");
+
+const avatarPreview3D = {
+  scene: null,
+  camera: null,
+  renderer: null,
+  characterGroup: null,
+  animationFrameId: null,
+  isDragging: false,
+  previousMouseX: 0,
+  rotationY: -0.5,
+  autoRotate: true,
+};
+
+const marketState = {
+  listings: []
+};
+
 const ui = {
   playerTitle: document.querySelector("#player-title"),
   level: document.querySelector("#level-readout"),
@@ -428,6 +480,8 @@ const player = {
   isBlocking: false,
   isDashing: false,
   dashCooldown: 0,
+  stunTimer: 0,
+  knockedDown: false,
   lastMoveSpeed: 0,
   lastFallVelocity: 0,
   haki: {
@@ -467,7 +521,7 @@ const player = {
   specialUnlocked: false,
   unlockedQuestsSeen: { starter: true },
   newQuestUnlocked: false,
-  isAdmin: true,
+  isAdmin: false,
   isGodMode: false,
   isInstakill: false,
 };
@@ -555,10 +609,43 @@ const questCatalog = {
     rewardMoney: 180,
     rewardXp: 120,
   },
+  monkey10: {
+    id: "monkey10",
+    title: "Monkey Mischief",
+    detail: "Defeat 5 jungle monkeys.",
+    targetType: "monkey",
+    target: 5,
+    defeated: 0,
+    minLevel: 10,
+    rewardMoney: 380,
+    rewardXp: 950,
+  },
+  gorilla15: {
+    id: "gorilla15",
+    title: "Gorilla Strength",
+    detail: "Defeat 5 wild gorillas.",
+    targetType: "gorilla",
+    target: 5,
+    defeated: 0,
+    minLevel: 15,
+    rewardMoney: 550,
+    rewardXp: 1600,
+  },
+  gorillaKing20: {
+    id: "gorillaKing20",
+    title: "The Gorilla King",
+    detail: "Defeat the Gorilla King boss.",
+    targetType: "gorilla_king",
+    target: 1,
+    defeated: 0,
+    minLevel: 20,
+    rewardMoney: 1200,
+    rewardXp: 4500,
+  },
   pirates30: {
     id: "pirates30",
     title: "Pirate Ambush",
-    detail: "Defeat 6 katana pirates at the outpost.",
+    detail: "Defeat 6 katana pirates at Pirate Town.",
     targetType: "pirate",
     target: 6,
     defeated: 0,
@@ -576,6 +663,72 @@ const questCatalog = {
     minLevel: 40,
     rewardMoney: 940,
     rewardXp: 3300,
+  },
+  buggy50: {
+    id: "buggy50",
+    title: "Buggy the Clown",
+    detail: "Defeat Captain Buggy.",
+    targetType: "buggy",
+    target: 1,
+    defeated: 0,
+    minLevel: 50,
+    rewardMoney: 1500,
+    rewardXp: 6000,
+  },
+  desertBandits60: {
+    id: "desertBandits60",
+    title: "Desert Bandits",
+    detail: "Defeat 5 desert bandits.",
+    targetType: "desert_bandit",
+    target: 5,
+    defeated: 0,
+    minLevel: 60,
+    rewardMoney: 1800,
+    rewardXp: 8500,
+  },
+  desertOfficers70: {
+    id: "desertOfficers70",
+    title: "Desert Officers",
+    detail: "Defeat 5 desert officers.",
+    targetType: "desert_officer",
+    target: 5,
+    defeated: 0,
+    minLevel: 70,
+    rewardMoney: 2500,
+    rewardXp: 12000,
+  },
+  frozenBandits90: {
+    id: "frozenBandits90",
+    title: "Frozen Bandits",
+    detail: "Defeat 5 frozen bandits at Snowy Village.",
+    targetType: "frozen_bandit",
+    target: 5,
+    defeated: 0,
+    minLevel: 90,
+    rewardMoney: 3400,
+    rewardXp: 18000,
+  },
+  snowmen100: {
+    id: "snowmen100",
+    title: "Snowman Swarm",
+    detail: "Defeat 5 snowmen at Snowy Village.",
+    targetType: "snowman",
+    target: 5,
+    defeated: 0,
+    minLevel: 100,
+    rewardMoney: 4500,
+    rewardXp: 26000,
+  },
+  yeti110: {
+    id: "yeti110",
+    title: "The Yeti Boss",
+    detail: "Defeat the Yeti boss at Snowy Village.",
+    targetType: "yeti",
+    target: 1,
+    defeated: 0,
+    minLevel: 110,
+    rewardMoney: 6800,
+    rewardXp: 48000,
   },
 };
 
@@ -662,31 +815,16 @@ ring.rotation.x = -Math.PI / 2;
 ring.position.y = 0.01;
 scene.add(ring);
 
-createStatButtons();
-renderInventory();
-renderAvatarChoices();
-createWorld();
-createPlayer();
-applyAvatarToPlayer();
-updateDerivedStats();
-updateHud();
-resize();
-requestAnimationFrame(loop);
-
-// Auto-Load Save Game if it exists
-checkAndLoadSave();
-
-// Periodic Auto-Save every 5 seconds
-setInterval(saveGame, 5000);
+// Initialization moved to the end of the file to prevent TDZ errors.
 
 document.querySelectorAll("[data-faction]").forEach((button) => {
   button.addEventListener("click", () => startGame(button.dataset.faction));
 });
 
-createAvatarButton.addEventListener("click", createCustomAvatar);
-saveAvatarButton.addEventListener("click", saveSelectedAvatar);
-deleteAvatarButton.addEventListener("click", deleteSelectedAvatar);
-previewAvatarButton.addEventListener("click", previewAvatarFromForm);
+createAvatarButton?.addEventListener("click", createCustomAvatar);
+saveAvatarButton?.addEventListener("click", saveSelectedAvatar);
+deleteAvatarButton?.addEventListener("click", deleteSelectedAvatar);
+previewAvatarButton?.addEventListener("click", previewAvatarFromForm);
 
 settingsCollapseButton?.addEventListener("click", () => {
   const collapsed = settingsBar?.classList.toggle("collapsed");
@@ -772,9 +910,18 @@ boatMenuClose?.addEventListener("click", hideBoatMenu);
   outfitStyleInput,
   heightScaleInput,
   buildScaleInput,
+  leftArmColorInput,
+  rightArmColorInput,
+  leftLegColorInput,
+  rightLegColorInput,
+  beltColorInput,
+  capeColorInput,
+  capeStyleInput,
 ].forEach((input) => {
-  input.addEventListener("input", previewAvatarFromForm);
-  input.addEventListener("change", previewAvatarFromForm);
+  if (input) {
+    input.addEventListener("input", previewAvatarFromForm);
+    input.addEventListener("change", previewAvatarFromForm);
+  }
 });
 
 const movementCodeMap = {
@@ -788,16 +935,20 @@ const movementCodeMap = {
   arrowright: "KeyD",
   q: "KeyA",
 };
-const allowedMovementCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
+const allowedMovementCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "KeyR"]);
 
 window.addEventListener("keydown", (event) => {
+  // Prevent key events from moving character or performing actions when typing in inputs
+  if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable)) {
+    return;
+  }
   if (event.code === "Escape") {
     event.preventDefault();
     toggleEscMenu();
     return;
   }
   if (escMenuOpen) return;
-  if (!gameStarted || player.health <= 0) return;
+  if (!gameStarted || player.health <= 0 || player.stunTimer > 0) return;
   const code = event.code;
   const key = event.key.toLowerCase();
   const mappedCode = movementCodeMap[key] || code;
@@ -819,6 +970,9 @@ window.addEventListener("keydown", (event) => {
   }
   if (code === "KeyQ") {
     dash();
+  }
+  if (code === "KeyR") {
+    attack();
   }
   if (code === "KeyZ") {
     event.preventDefault();
@@ -857,6 +1011,9 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable)) {
+    return;
+  }
   if (escMenuOpen) return;
   const code = event.code;
   const key = event.key.toLowerCase();
@@ -875,15 +1032,13 @@ window.addEventListener("resize", resize);
 
 canvas.addEventListener("pointerdown", (event) => {
   if (escMenuOpen) return;
-  if (player.health <= 0) return;
-  if (event.button === 0 && gameStarted) {
-    attack(event);
-    return;
+  if (player.health <= 0 || player.stunTimer > 0) return;
+  // Left click (0) and Right click (2) are both used for camera/screen rotation
+  if (event.button === 0 || event.button === 2) {
+    isPointerDown = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
   }
-  if (event.button !== 2) return;
-  isPointerDown = true;
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
 });
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -1130,6 +1285,36 @@ function canBuyInventoryItem(item) {
   });
 }
 
+function renderStudioAvatarChoices() {
+  if (!studioAvatarList) return;
+  studioAvatarList.innerHTML = "";
+  avatarState.avatars.forEach((avatar) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `avatar-option${avatar.id === avatarState.selectedId ? " selected" : ""}`;
+    button.textContent = avatar.name;
+    // Styling matching the beautiful studio template buttons
+    button.style.cssText = `
+      padding: 8px 14px;
+      background: ${avatar.id === avatarState.selectedId ? "var(--gold)" : "rgba(255,255,255,0.04)"};
+      color: ${avatar.id === avatarState.selectedId ? "var(--ink)" : "#fff"};
+      border: 1px solid ${avatar.id === avatarState.selectedId ? "var(--gold)" : "rgba(255,255,255,0.1)"};
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    `;
+    button.addEventListener("click", () => {
+      avatarState.selectedId = avatar.id;
+      applyAvatarToPlayer();
+      renderAvatarChoices();
+    });
+    studioAvatarList.append(button);
+  });
+}
+
 function renderAvatarChoices() {
   if (!avatarList) return;
   avatarList.innerHTML = "";
@@ -1138,7 +1323,7 @@ function renderAvatarChoices() {
     button.type = "button";
     button.className = `avatar-option${avatar.id === avatarState.selectedId ? " selected" : ""}`;
     button.textContent = avatar.name;
-    button.style.boxShadow = `inset 0 -5px 0 ${avatar.shirt}`;
+    button.style.boxShadow = `inset 0 -5px 0 ${avatar.shirt || avatar.torsoColor || "#1b85aa"}`;
     button.addEventListener("click", () => {
       avatarState.selectedId = avatar.id;
       applyAvatarToPlayer();
@@ -1146,10 +1331,32 @@ function renderAvatarChoices() {
     });
     avatarList.append(button);
   });
-  loadAvatarIntoEditor(getSelectedAvatar());
+
+  // Sync the Faction select screen dropdown
+  const dropdown = document.querySelector("#faction-avatar-dropdown");
+  if (dropdown) {
+    dropdown.innerHTML = "";
+    avatarState.avatars.forEach((avatar) => {
+      const option = document.createElement("option");
+      option.value = avatar.id;
+      option.textContent = avatar.name;
+      option.selected = (avatar.id === avatarState.selectedId);
+      dropdown.appendChild(option);
+    });
+  }
+
+  const activeAvatar = getSelectedAvatar();
+  loadAvatarIntoEditor(activeAvatar);
   if (playerMesh) applyAvatarToPlayer();
-  updateAvatarPreview(getSelectedAvatar());
+  
+  // Safe update for 3D Customizer Preview
+  updateAvatarPreview3D(activeAvatar);
+
   if (deleteAvatarButton) deleteAvatarButton.disabled = avatarState.avatars.length <= 1;
+
+  // Render studio templates choices
+  renderStudioAvatarChoices();
+  if (studioDeleteAvatarButton) studioDeleteAvatarButton.disabled = avatarState.avatars.length <= 1;
 }
 
 function createCustomAvatar() {
@@ -1160,6 +1367,14 @@ function createCustomAvatar() {
   log(`Created avatar: ${avatar.name}.`);
 }
 
+function createStudioCustomAvatar() {
+  const avatar = { ...getAvatarFromStudioEditor(), id: `custom-${Date.now()}` };
+  avatarState.avatars.push(avatar);
+  avatarState.selectedId = avatar.id;
+  renderAvatarChoices();
+  log(`Created avatar in studio: ${avatar.name}.`);
+}
+
 function saveSelectedAvatar() {
   const selected = getSelectedAvatar();
   Object.assign(selected, getAvatarFromEditor(), { id: selected.id });
@@ -1167,6 +1382,15 @@ function saveSelectedAvatar() {
   renderAvatarChoices();
   updateHud();
   log(`Saved avatar: ${selected.name}.`);
+}
+
+function saveStudioSelectedAvatar() {
+  const selected = getSelectedAvatar();
+  Object.assign(selected, getAvatarFromStudioEditor(), { id: selected.id });
+  updateDerivedStats(selected);
+  renderAvatarChoices();
+  updateHud();
+  log(`Saved avatar from studio: ${selected.name}.`);
 }
 
 function deleteSelectedAvatar() {
@@ -1182,9 +1406,90 @@ function deleteSelectedAvatar() {
   log(`Deleted avatar: ${selected.name}.`);
 }
 
+function deleteStudioSelectedAvatar() {
+  if (avatarState.avatars.length <= 1) {
+    log("You need at least one avatar.");
+    return;
+  }
+
+  const selected = getSelectedAvatar();
+  avatarState.avatars = avatarState.avatars.filter((avatar) => avatar.id !== selected.id);
+  avatarState.selectedId = avatarState.avatars[0].id;
+  renderAvatarChoices();
+  log(`Deleted avatar from studio: ${selected.name}.`);
+}
+
+function sync2DTo3D() {
+  if (avatarNameInput && studioAvatarNameInput) studioAvatarNameInput.value = avatarNameInput.value;
+  if (skinColorInput && studioSkinColorInput) studioSkinColorInput.value = skinColorInput.value;
+  if (shirtColorInput && studioShirtColorInput) {
+    studioShirtColorInput.value = shirtColorInput.value;
+    if (studioLeftArmColorInput) studioLeftArmColorInput.value = shirtColorInput.value;
+    if (studioRightArmColorInput) studioRightArmColorInput.value = shirtColorInput.value;
+    if (studioCapeColorInput) studioCapeColorInput.value = shirtColorInput.value;
+  }
+  if (pantsColorInput && studioPantsColorInput) {
+    studioPantsColorInput.value = pantsColorInput.value;
+    if (studioLeftLegColorInput) studioLeftLegColorInput.value = pantsColorInput.value;
+    if (studioRightLegColorInput) studioRightLegColorInput.value = pantsColorInput.value;
+  }
+  if (hairColorInput && studioHairColorInput) studioHairColorInput.value = hairColorInput.value;
+  if (eyeColorInput && studioEyeColorInput) studioEyeColorInput.value = eyeColorInput.value;
+  if (bootColorInput && studioBootColorInput) {
+    studioBootColorInput.value = bootColorInput.value;
+    if (studioBeltColorInput) studioBeltColorInput.value = bootColorInput.value;
+  }
+  if (hairStyleInput && studioHairStyleInput) studioHairStyleInput.value = hairStyleInput.value;
+  if (outfitStyleInput && studioOutfitStyleInput) studioOutfitStyleInput.value = outfitStyleInput.value;
+  if (heightScaleInput && studioHeightScaleInput) {
+    studioHeightScaleInput.value = heightScaleInput.value;
+    const heightValText = document.querySelector("#studio-val-height");
+    if (heightValText) heightValText.textContent = `${heightScaleInput.value}%`;
+  }
+  if (buildScaleInput && studioBuildScaleInput) {
+    studioBuildScaleInput.value = buildScaleInput.value;
+    const buildValText = document.querySelector("#studio-val-build");
+    if (buildValText) buildValText.textContent = `${buildScaleInput.value}%`;
+  }
+}
+
+function sync3DTo2D() {
+  if (studioAvatarNameInput && avatarNameInput) avatarNameInput.value = studioAvatarNameInput.value;
+  if (studioSkinColorInput && skinColorInput) skinColorInput.value = studioSkinColorInput.value;
+  if (studioShirtColorInput && shirtColorInput) shirtColorInput.value = studioShirtColorInput.value;
+  if (studioPantsColorInput && pantsColorInput) pantsColorInput.value = studioPantsColorInput.value;
+  if (studioHairColorInput && hairColorInput) hairColorInput.value = studioHairColorInput.value;
+  if (studioEyeColorInput && eyeColorInput) eyeColorInput.value = studioEyeColorInput.value;
+  if (studioBootColorInput && bootColorInput) bootColorInput.value = studioBootColorInput.value;
+  if (studioHairStyleInput && hairStyleInput) hairStyleInput.value = studioHairStyleInput.value;
+  if (studioOutfitStyleInput && outfitStyleInput) outfitStyleInput.value = studioOutfitStyleInput.value;
+  if (studioHeightScaleInput && heightScaleInput) heightScaleInput.value = studioHeightScaleInput.value;
+  if (studioBuildScaleInput && buildScaleInput) buildScaleInput.value = studioBuildScaleInput.value;
+}
+
 function previewAvatarFromForm() {
+  sync2DTo3D();
   const avatar = getAvatarFromEditor();
-  updateAvatarPreview(avatar);
+  updateAvatarPreview3D(avatar);
+  const avatarPreviewCard = document.querySelector("#avatar-preview");
+  if (avatarPreviewCard && previewName && avatarTraits) {
+    updateAvatarPreview(avatar);
+  }
+  updateDerivedStats(avatar);
+  updateHud();
+  if (!gameStarted) {
+    applyTemporaryAvatarToPlayer(avatar);
+  }
+}
+
+function previewStudioAvatarFromForm() {
+  sync3DTo2D();
+  const avatar = getAvatarFromStudioEditor();
+  updateAvatarPreview3D(avatar);
+  const avatarPreviewCard = document.querySelector("#avatar-preview");
+  if (avatarPreviewCard && previewName && avatarTraits) {
+    updateAvatarPreview(avatar);
+  }
   updateDerivedStats(avatar);
   updateHud();
   if (!gameStarted) {
@@ -1206,21 +1511,90 @@ function getAvatarFromEditor() {
     outfit: outfitStyleInput.value,
     height: Number(heightScaleInput.value),
     build: Number(buildScaleInput.value),
+    
+    // New Advanced Styling Options
+    leftArmColor: leftArmColorInput ? leftArmColorInput.value : shirtColorInput.value,
+    rightArmColor: rightArmColorInput ? rightArmColorInput.value : shirtColorInput.value,
+    leftLegColor: leftLegColorInput ? leftLegColorInput.value : pantsColorInput.value,
+    rightLegColor: rightLegColorInput ? rightLegColorInput.value : pantsColorInput.value,
+    beltColor: beltColorInput ? beltColorInput.value : bootColorInput.value,
+    capeColor: capeColorInput ? capeColorInput.value : shirtColorInput.value,
+    capeStyle: capeStyleInput ? capeStyleInput.value : "normal",
+  };
+}
+
+function getAvatarFromStudioEditor() {
+  return {
+    id: avatarState.selectedId,
+    name: studioAvatarNameInput.value.trim() || `Avatar ${avatarState.avatars.length + 1}`,
+    skin: studioSkinColorInput.value,
+    shirt: studioShirtColorInput.value,
+    pants: studioPantsColorInput.value,
+    hair: studioHairColorInput.value,
+    eyes: studioEyeColorInput.value,
+    boots: studioBootColorInput.value,
+    hairStyle: studioHairStyleInput.value,
+    outfit: studioOutfitStyleInput.value,
+    height: Number(studioHeightScaleInput.value),
+    build: Number(studioBuildScaleInput.value),
+    
+    leftArmColor: studioLeftArmColorInput.value,
+    rightArmColor: studioRightArmColorInput.value,
+    leftLegColor: studioLeftLegColorInput.value,
+    rightLegColor: studioRightLegColorInput.value,
+    beltColor: studioBeltColorInput.value,
+    capeColor: studioCapeColorInput.value,
+    capeStyle: studioCapeStyleInput.value,
   };
 }
 
 function loadAvatarIntoEditor(avatar) {
-  avatarNameInput.value = avatar.name;
-  skinColorInput.value = avatar.skin;
-  shirtColorInput.value = avatar.shirt;
-  pantsColorInput.value = avatar.pants;
-  hairColorInput.value = avatar.hair;
-  eyeColorInput.value = avatar.eyes || "#101820";
-  bootColorInput.value = avatar.boots || "#23170f";
-  hairStyleInput.value = avatar.hairStyle || "short";
-  outfitStyleInput.value = avatar.outfit || "sailor";
-  heightScaleInput.value = avatar.height || 100;
-  buildScaleInput.value = avatar.build || 100;
+  if (avatarNameInput) avatarNameInput.value = avatar.name;
+  if (skinColorInput) skinColorInput.value = avatar.skin;
+  if (shirtColorInput) shirtColorInput.value = avatar.shirt;
+  if (pantsColorInput) pantsColorInput.value = avatar.pants;
+  if (hairColorInput) hairColorInput.value = avatar.hair;
+  if (eyeColorInput) eyeColorInput.value = avatar.eyes || "#101820";
+  if (bootColorInput) bootColorInput.value = avatar.boots || "#23170f";
+  if (hairStyleInput) hairStyleInput.value = avatar.hairStyle || "short";
+  if (outfitStyleInput) outfitStyleInput.value = avatar.outfit || "sailor";
+  if (heightScaleInput) heightScaleInput.value = avatar.height || 100;
+  if (buildScaleInput) buildScaleInput.value = avatar.build || 100;
+
+  // New Advanced Options Loading
+  if (leftArmColorInput) leftArmColorInput.value = avatar.leftArmColor || avatar.shirt || avatar.skin;
+  if (rightArmColorInput) rightArmColorInput.value = avatar.rightArmColor || avatar.shirt || avatar.skin;
+  if (leftLegColorInput) leftLegColorInput.value = avatar.leftLegColor || avatar.pants;
+  if (rightLegColorInput) rightLegColorInput.value = avatar.rightLegColor || avatar.pants;
+  if (beltColorInput) beltColorInput.value = avatar.beltColor || avatar.boots || "#23170f";
+  if (capeColorInput) capeColorInput.value = avatar.capeColor || avatar.shirt || "#a82020";
+  if (capeStyleInput) capeStyleInput.value = avatar.capeStyle || "normal";
+
+  // Now, also load into studio inputs if they exist!
+  if (studioAvatarNameInput) studioAvatarNameInput.value = avatar.name;
+  if (studioSkinColorInput) studioSkinColorInput.value = avatar.skin;
+  if (studioShirtColorInput) studioShirtColorInput.value = avatar.shirt;
+  if (studioLeftArmColorInput) studioLeftArmColorInput.value = avatar.leftArmColor || avatar.shirt || avatar.skin;
+  if (studioRightArmColorInput) studioRightArmColorInput.value = avatar.rightArmColor || avatar.shirt || avatar.skin;
+  if (studioHairColorInput) studioHairColorInput.value = avatar.hair;
+  if (studioEyeColorInput) studioEyeColorInput.value = avatar.eyes || "#101820";
+  if (studioLeftLegColorInput) studioLeftLegColorInput.value = avatar.leftLegColor || avatar.pants;
+  if (studioRightLegColorInput) studioRightLegColorInput.value = avatar.rightLegColor || avatar.pants;
+  if (studioPantsColorInput) studioPantsColorInput.value = avatar.pants;
+  if (studioBootColorInput) studioBootColorInput.value = avatar.boots || "#23170f";
+  if (studioBeltColorInput) studioBeltColorInput.value = avatar.beltColor || avatar.boots || "#23170f";
+  if (studioCapeColorInput) studioCapeColorInput.value = avatar.capeColor || avatar.shirt || "#a82020";
+  if (studioHairStyleInput) studioHairStyleInput.value = avatar.hairStyle || "short";
+  if (studioOutfitStyleInput) studioOutfitStyleInput.value = avatar.outfit || "sailor";
+  if (studioCapeStyleInput) studioCapeStyleInput.value = avatar.capeStyle || "normal";
+  if (studioHeightScaleInput) studioHeightScaleInput.value = avatar.height || 100;
+  if (studioBuildScaleInput) studioBuildScaleInput.value = avatar.build || 100;
+  
+  // Update slider readouts
+  const heightValText = document.querySelector("#studio-val-height");
+  const buildValText = document.querySelector("#studio-val-build");
+  if (heightValText) heightValText.textContent = `${avatar.height || 100}%`;
+  if (buildValText) buildValText.textContent = `${avatar.build || 100}%`;
 }
 
 function updateAvatarPreview(avatar) {
@@ -1322,6 +1696,671 @@ function formatMultiplier(value) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
+// ==========================================
+// 3D Avatar Customizer & Studio Renderer
+// ==========================================
+
+function initAvatar3DPreview() {
+  const container = document.querySelector("#avatar-3d-preview-container");
+  if (!container || avatarPreview3D.renderer) return;
+
+  const width = container.clientWidth || 380;
+  const height = container.clientHeight || 400;
+
+  // Scene setup
+  const scene = new THREE.Scene();
+  avatarPreview3D.scene = scene;
+
+  // Camera setup
+  const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
+  camera.position.set(0, 7.5, 23); // Centered relative to mesh height
+  avatarPreview3D.camera = camera;
+
+  // Renderer setup
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+  avatarPreview3D.renderer = renderer;
+
+  // Ambient & directional lighting for realistic detail shading
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x111620, 0.85);
+  scene.add(hemiLight);
+
+  const dirLight = new THREE.DirectionalLight(0xfff5e6, 0.75);
+  dirLight.position.set(5, 12, 8);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 1024;
+  dirLight.shadow.mapSize.height = 1024;
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 25;
+  dirLight.shadow.camera.left = -6;
+  dirLight.shadow.camera.right = 6;
+  dirLight.shadow.camera.top = 10;
+  dirLight.shadow.camera.bottom = -4;
+  dirLight.shadow.bias = -0.0005;
+  scene.add(dirLight);
+
+  const fillLight = new THREE.DirectionalLight(0x90b0d0, 0.35);
+  fillLight.position.set(-6, 4, -4);
+  scene.add(fillLight);
+
+  // Platform and grid helper
+  const platformGeo = new THREE.CylinderGeometry(4.2, 4.4, 0.4, 32);
+  const platformMat = new THREE.MeshStandardMaterial({
+    color: 0x11202e,
+    roughness: 0.85,
+    metalness: 0.1,
+  });
+  const platform = new THREE.Mesh(platformGeo, platformMat);
+  platform.position.y = -0.2;
+  platform.receiveShadow = true;
+  scene.add(platform);
+
+  const gridHelper = new THREE.GridHelper(8, 8, 0xf6b73c, 0x1b3c52);
+  gridHelper.position.y = 0.01;
+  scene.add(gridHelper);
+
+  // click and drag interaction to orbit-rotate
+  container.addEventListener("pointerdown", (e) => {
+    avatarPreview3D.isDragging = true;
+    avatarPreview3D.previousMouseX = e.clientX;
+    avatarPreview3D.autoRotate = false;
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if (!avatarPreview3D.isDragging) return;
+    const deltaX = e.clientX - avatarPreview3D.previousMouseX;
+    avatarPreview3D.rotationY += deltaX * 0.007;
+    avatarPreview3D.previousMouseX = e.clientX;
+    if (avatarPreview3D.characterGroup) {
+      avatarPreview3D.characterGroup.rotation.y = avatarPreview3D.rotationY;
+    }
+  });
+
+  const stopDrag = () => {
+    if (avatarPreview3D.isDragging) {
+      avatarPreview3D.isDragging = false;
+      setTimeout(() => {
+        if (!avatarPreview3D.isDragging) {
+          avatarPreview3D.autoRotate = true;
+        }
+      }, 4000);
+    }
+  };
+  window.addEventListener("pointerup", stopDrag);
+  window.addEventListener("pointercancel", stopDrag);
+
+  // auto-adjust viewport on container dimensions change
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (let entry of entries) {
+      const w = entry.contentRect.width || 380;
+      const h = entry.contentRect.height || 400;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+  });
+  resizeObserver.observe(container);
+
+  // Render Loop
+  function animatePreview() {
+    avatarPreview3D.animationFrameId = requestAnimationFrame(animatePreview);
+
+    if (avatarPreview3D.autoRotate && avatarPreview3D.characterGroup) {
+      avatarPreview3D.rotationY += 0.005;
+      avatarPreview3D.characterGroup.rotation.y = avatarPreview3D.rotationY;
+    }
+
+    renderer.render(scene, camera);
+  }
+  animatePreview();
+}
+
+function updateAvatarPreview3D(avatar) {
+  if (!avatarPreview3D.scene) {
+    initAvatar3DPreview();
+  }
+  const scene = avatarPreview3D.scene;
+  if (!scene) return;
+
+  // Clear previous mesh instances to avoid memory leaks
+  if (avatarPreview3D.characterGroup) {
+    scene.remove(avatarPreview3D.characterGroup);
+    avatarPreview3D.characterGroup.traverse((node) => {
+      if (node.isMesh) {
+        node.geometry.dispose();
+        if (Array.isArray(node.material)) {
+          node.material.forEach(m => m.dispose());
+        } else {
+          node.material.dispose();
+        }
+      }
+    });
+  }
+
+  // Build new mesh model on the customizer platform
+  const model = createHumanAvatarModel(avatar, { showName: false, showSword: true });
+  model.position.y = 0.05;
+  model.rotation.y = avatarPreview3D.rotationY;
+  
+  scene.add(model);
+  avatarPreview3D.characterGroup = model;
+
+  // Sync editor labels and stats
+  const previewNameText = document.querySelector("#studio-preview-name");
+  const traitsLabel = document.querySelector("#studio-preview-traits-label");
+  const traitsDetail = document.querySelector("#studio-preview-traits");
+  
+  if (previewNameText) previewNameText.textContent = avatar.name;
+  
+  const traits = getAvatarTraits(avatar);
+  if (traitsLabel) {
+    traitsLabel.textContent = traits.label || "Balanced bulk";
+  }
+  if (traitsDetail) {
+    traitsDetail.innerHTML = formatAvatarTraitsHTML(traits);
+  }
+}
+
+function formatAvatarTraitsHTML(traits) {
+  return `
+    <strong>Health Multiplier:</strong> ${(traits.healthMultiplier * 100).toFixed(0)}% | 
+    <strong>Damage Multiplier:</strong> ${(traits.damageMultiplier * 100).toFixed(0)}%<br>
+    <strong>Speed Multiplier:</strong> ${(traits.speedMultiplier * 100).toFixed(0)}% | 
+    <strong>Range Multiplier:</strong> ${(traits.rangeMultiplier * 100).toFixed(0)}%
+  `;
+}
+
+// ==========================================
+// Custom Popup Alerts Notification
+// ==========================================
+
+function showMarketplaceAlert(title, message) {
+  let alertEl = document.querySelector("#marketplace-alert");
+  if (!alertEl) {
+    alertEl = document.createElement("div");
+    alertEl.id = "marketplace-alert";
+    alertEl.style.cssText = `
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: rgba(6, 18, 28, 0.95);
+      border: 1.5px solid var(--gold);
+      border-radius: 12px;
+      padding: 12px 20px;
+      color: #fff;
+      z-index: 100000;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      text-align: center;
+      min-width: 250px;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+    `;
+    document.body.appendChild(alertEl);
+  }
+  
+  alertEl.innerHTML = `
+    <strong style="display: block; color: var(--gold); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">${title}</strong>
+    <span style="font-size: 12px; color: rgba(255, 247, 230, 0.85);">${message}</span>
+  `;
+  
+  // Slide down & fade in
+  alertEl.style.transform = "translateX(-50%) translateY(0)";
+  alertEl.style.opacity = "1";
+  
+  // Slide back up after 3.5 seconds
+  setTimeout(() => {
+    alertEl.style.transform = "translateX(-50%) translateY(-100px)";
+    alertEl.style.opacity = "0";
+  }, 3500);
+}
+
+// ==========================================
+// Simulated Trading Marketplace Mechanics
+// ==========================================
+
+const npcCreators = [
+  "Captain Redbeard",
+  "Sea Rogue Luffy",
+  "Dread Pirate Roberts",
+  "Admiral Koby",
+  "Nami the Stylist",
+  "Sogeking",
+  "Zoro Solo",
+  "Black Leg Sanji",
+  "Chop Chop Buggy",
+  "Whitebeard Jr",
+  "Jewelry Bonney",
+  "Portgas D. Ace"
+];
+
+function getRandomColor() {
+  const letters = "0123456789ABCDEF";
+  let color = "#";
+  for (let i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  return color;
+}
+
+function generateMockListing(id) {
+  const npcName = npcCreators[Math.floor(Math.random() * npcCreators.length)];
+  const hairStyles = ["short", "spiky", "cap", "messy"];
+  const outfitStyles = ["sailor", "coat", "armor", "adventurer"];
+  const capeStyles = ["none", "normal", "long", "torn"];
+  
+  const skinCol = getRandomColor();
+  const shirtCol = getRandomColor();
+  const pantsCol = getRandomColor();
+  const hairCol = getRandomColor();
+  const eyesCol = getRandomColor();
+  const bootsCol = getRandomColor();
+  
+  const hStyle = hairStyles[Math.floor(Math.random() * hairStyles.length)];
+  const oStyle = outfitStyles[Math.floor(Math.random() * outfitStyles.length)];
+  const cStyle = capeStyles[Math.floor(Math.random() * capeStyles.length)];
+  
+  const height = Math.floor(Math.random() * 41) + 85; // 85% to 125%
+  const build = Math.floor(Math.random() * 51) + 80;   // 80% to 130%
+  
+  const names = [
+    "Dread Admiral", "Abyss Raider", "Jungle Ranger", "Desert Nomad", 
+    "Scurvy Mate", "Coral Defender", "Wave Master", "Storm Vanguard", 
+    "Shadow Assassin", "Glory Captain", "Red Corsair", "Blue Mariner"
+  ];
+  const avatarName = names[Math.floor(Math.random() * names.length)];
+
+  return {
+    id: id || `npc-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    price: Math.floor(Math.random() * 12) * 100 + 300, // $300 to $1400
+    creator: npcName,
+    isPlayerListing: false,
+    avatar: {
+      id: `avatar-template-${Math.floor(Math.random() * 100000)}`,
+      name: avatarName,
+      skin: skinCol,
+      shirt: shirtCol,
+      pants: pantsCol,
+      hair: hairCol,
+      eyes: eyesCol,
+      boots: bootsCol,
+      hairStyle: hStyle,
+      outfit: oStyle,
+      height: height,
+      build: build,
+      
+      leftArmColor: getRandomColor(),
+      rightArmColor: getRandomColor(),
+      leftLegColor: getRandomColor(),
+      rightLegColor: getRandomColor(),
+      beltColor: getRandomColor(),
+      capeColor: getRandomColor(),
+      capeStyle: cStyle,
+    }
+  };
+}
+
+function initMarketState() {
+  const saveStr = localStorage.getItem("sea_legends_save");
+  if (saveStr) {
+    try {
+      const saveData = JSON.parse(saveStr);
+      if (saveData.marketListings) {
+        marketState.listings = saveData.marketListings;
+        return;
+      }
+    } catch (e) {
+      console.error("Failed to parse market save data", e);
+    }
+  }
+  
+  // Pre-populate with 6 mock NPC listings
+  marketState.listings = [];
+  for (let i = 0; i < 6; i++) {
+    marketState.listings.push(generateMockListing(`npc-init-${i}`));
+  }
+}
+
+function renderMarketplace() {
+  const cashDisplay = document.querySelector("#market-player-cash");
+  if (cashDisplay) {
+    cashDisplay.textContent = `Cash: $${player.money}`;
+  }
+
+  const yourListingsContainer = document.querySelector("#market-your-listings");
+  const browseListingsContainer = document.querySelector("#market-browse-listings");
+
+  if (!yourListingsContainer || !browseListingsContainer) return;
+
+  yourListingsContainer.innerHTML = "";
+  browseListingsContainer.innerHTML = "";
+
+  const playerListings = marketState.listings.filter(l => l.isPlayerListing);
+  const npcListings = marketState.listings.filter(l => !l.isPlayerListing);
+
+  if (playerListings.length === 0) {
+    yourListingsContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.3); font-size: 12px; padding: 15px; background: rgba(255,255,255,0.01); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.05);">You have no designs published for sale. Customize an avatar and set a price to publish!</div>`;
+  } else {
+    playerListings.forEach(l => {
+      yourListingsContainer.appendChild(createMarketCard(l));
+    });
+  }
+
+  if (npcListings.length === 0) {
+    browseListingsContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.3); font-size: 12px; padding: 15px; background: rgba(255,255,255,0.01); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.05);">No listings currently available. Check back later!</div>`;
+  } else {
+    npcListings.forEach(l => {
+      browseListingsContainer.appendChild(createMarketCard(l));
+    });
+  }
+}
+
+function createMarketCard(listing) {
+  const card = document.createElement("div");
+  card.className = "market-card";
+  
+  const colorDots = `
+    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.skin};" title="Skin"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.torsoColor || listing.avatar.shirt};" title="Torso"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.leftArmColor || listing.avatar.shirt};" title="Left Arm"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.rightArmColor || listing.avatar.shirt};" title="Right Arm"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.leftLegColor || listing.avatar.pants};" title="Left Leg"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.rightLegColor || listing.avatar.pants};" title="Right Leg"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.hair};" title="Hair"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.eyes};" title="Eyes"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.boots || listing.avatar.bootsColor || '#23170f'};" title="Boots"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.beltColor || listing.avatar.boots || '#23170f'};" title="Belt"></span>
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: ${listing.avatar.capeColor || listing.avatar.shirt || '#a82020'};" title="Cape"></span>
+    </div>
+  `;
+
+  const detailsText = `
+    <div style="font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.3;">
+      Style: <strong>${listing.avatar.outfit}</strong> / ${listing.avatar.hairStyle}<br>
+      Height: ${listing.avatar.height || 100}% | Build: ${listing.avatar.build || 100}%
+    </div>
+  `;
+
+  card.innerHTML = `
+    <div class="market-card-preview">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+        <span style="font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">👕</span>
+        <span style="font-size: 11px; font-weight: bold; background: rgba(0,0,0,0.4); color: #fff; padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">${listing.avatar.name}</span>
+      </div>
+    </div>
+    <div class="market-card-details">
+      <h5 class="market-card-name">${listing.avatar.name}</h5>
+      <span class="market-card-creator">Creator: ${listing.creator}</span>
+      ${colorDots}
+      ${detailsText}
+    </div>
+    <div class="market-card-footer">
+      <span class="market-card-price">$${listing.price}</span>
+      ${listing.isPlayerListing 
+        ? `<button class="market-card-btn danger" onclick="cancelListing('${listing.id}')">Cancel</button>` 
+        : `<button class="market-card-btn" onclick="buyListing('${listing.id}')">Buy Template</button>`
+      }
+    </div>
+  `;
+  
+  return card;
+}
+
+window.cancelListing = function(listingId) {
+  const listing = marketState.listings.find(l => l.id === listingId);
+  if (!listing) return;
+  
+  marketState.listings = marketState.listings.filter(l => l.id !== listingId);
+  log(`Cancelled sale listing for design '${listing.avatar.name}'.`);
+  
+  saveGame();
+  renderMarketplace();
+};
+
+window.buyListing = function(listingId) {
+  const listing = marketState.listings.find(l => l.id === listingId);
+  if (!listing) return;
+
+  if (player.money < listing.price) {
+    log(`❌ Insufficient funds! You need $${listing.price} to buy this template.`);
+    showMarketplaceAlert("❌ Insufficient Funds", `You need $${listing.price} to purchase this design.`);
+    return;
+  }
+
+  player.money -= listing.price;
+  
+  const newAvatar = {
+    ...listing.avatar,
+    id: `custom-bought-${Date.now()}`
+  };
+  avatarState.avatars.push(newAvatar);
+  avatarState.selectedId = newAvatar.id;
+  
+  marketState.listings = marketState.listings.filter(l => l.id !== listingId);
+  
+  log(`🛒 Purchased template '${listing.avatar.name}' for $${listing.price}! Added to templates.`);
+  showMarketplaceAlert("🎉 Design Purchased", `You successfully bought "${listing.avatar.name}" design!`);
+  
+  applyAvatarToPlayer();
+  renderAvatarChoices();
+  loadAvatarIntoEditor(newAvatar);
+  updateAvatarPreview3D(newAvatar);
+  
+  saveGame();
+  renderMarketplace();
+};
+
+function publishListing() {
+  const priceInput = document.querySelector("#studio-sell-price");
+  if (!priceInput) return;
+  const price = Math.round(Number(priceInput.value));
+  if (isNaN(price) || price < 50) {
+    log("❌ Invalid price! Sale price must be at least $50.");
+    showMarketplaceAlert("❌ Invalid Price", "Please enter a price of $50 or more.");
+    return;
+  }
+
+  const currentAvatar = getAvatarFromStudioEditor();
+  
+  const newListing = {
+    id: `player-list-${Date.now()}`,
+    price: price,
+    creator: "You",
+    isPlayerListing: true,
+    avatar: { ...currentAvatar, id: `avatar-copy-${Date.now()}` }
+  };
+
+  marketState.listings.push(newListing);
+  log(`🛒 Published design "${currentAvatar.name}" for sale at $${price}!`);
+  showMarketplaceAlert("✨ Design Published", `"${currentAvatar.name}" is now listed in the shop for $${price}!`);
+
+  saveGame();
+  renderMarketplace();
+}
+
+function runMarketplaceNPCSimulation() {
+  const playerListings = marketState.listings.filter(l => l.isPlayerListing);
+  if (playerListings.length === 0) return;
+
+  const targetListing = playerListings[Math.floor(Math.random() * playerListings.length)];
+  const price = targetListing.price;
+  let chance = 0.05;
+  
+  if (price <= 200) chance = 0.35;
+  else if (price <= 500) chance = 0.22;
+  else if (price <= 1500) chance = 0.12;
+  else if (price <= 5000) chance = 0.05;
+  else if (price <= 20000) chance = 0.02;
+  else chance = 0.005;
+
+  if (Math.random() < chance) {
+    const buyerName = npcCreators[Math.floor(Math.random() * npcCreators.length)];
+    marketState.listings = marketState.listings.filter(l => l.id !== targetListing.id);
+    player.money += targetListing.price;
+    
+    log(`✨ [Marketplace] NPC ${buyerName} bought your design "${targetListing.avatar.name}" for $${targetListing.price}!`);
+    showMarketplaceAlert("💰 Item Sold!", `${buyerName} bought your design "${targetListing.avatar.name}" for $${targetListing.price}!`);
+    audio.playQuestComplete();
+    
+    saveGame();
+    renderMarketplace();
+  }
+}
+
+function runMarketplaceNPCListingSimulation() {
+  const npcListings = marketState.listings.filter(l => !l.isPlayerListing);
+  
+  if (npcListings.length < 8 && Math.random() < 0.35) {
+    const newListing = generateMockListing();
+    marketState.listings.push(newListing);
+    log(`[Marketplace] A new design template by ${newListing.creator} has been listed!`);
+    renderMarketplace();
+    saveGame();
+  }
+}
+
+// Set up periodic simulation cycles
+setInterval(runMarketplaceNPCSimulation, 25000);
+setInterval(runMarketplaceNPCListingSimulation, 45000);
+
+function initAvatarStudioUI() {
+  const dropdown = document.querySelector("#faction-avatar-dropdown");
+  if (dropdown) {
+    dropdown.addEventListener("change", () => {
+      avatarState.selectedId = dropdown.value;
+      applyAvatarToPlayer();
+      renderAvatarChoices();
+    });
+  }
+
+  const tabBtnDesigner = document.querySelector("#tab-btn-designer");
+  const tabBtnMarketplace = document.querySelector("#tab-btn-marketplace");
+  const panelDesigner = document.querySelector("#panel-designer");
+  const panelMarketplace = document.querySelector("#panel-marketplace");
+
+  if (tabBtnDesigner && tabBtnMarketplace && panelDesigner && panelMarketplace) {
+    tabBtnDesigner.addEventListener("click", () => {
+      tabBtnDesigner.classList.add("active");
+      tabBtnMarketplace.classList.remove("active");
+      panelDesigner.classList.add("active");
+      panelMarketplace.classList.remove("active");
+      const activeAvatar = getAvatarFromStudioEditor();
+      updateAvatarPreview3D(activeAvatar);
+    });
+
+    tabBtnMarketplace.addEventListener("click", () => {
+      tabBtnMarketplace.classList.add("active");
+      tabBtnDesigner.classList.remove("active");
+      panelMarketplace.classList.add("active");
+      panelDesigner.classList.remove("active");
+      renderMarketplace();
+    });
+  }
+
+  const studioModal = document.querySelector("#avatar-studio-modal");
+  const studioCloseBtn = document.querySelector("#avatar-studio-close-btn");
+  const factionOpenStudioBtn = document.querySelector("#faction-open-studio-btn");
+  const navBtnAvatar = document.querySelector("#nav-btn-avatar");
+
+  function openStudioModal() {
+    if (!studioModal) return;
+    studioModal.classList.remove("hidden");
+    setTimeout(() => {
+      studioModal.style.opacity = "1";
+      studioModal.style.pointerEvents = "auto";
+      const modalContent = studioModal.querySelector(".modal-content");
+      if (modalContent) modalContent.style.transform = "scale(1)";
+    }, 10);
+
+    const activeAvatar = getSelectedAvatar();
+    loadAvatarIntoEditor(activeAvatar);
+    updateAvatarPreview3D(activeAvatar);
+  }
+
+  function closeStudioModal() {
+    if (!studioModal) return;
+    studioModal.style.opacity = "0";
+    studioModal.style.pointerEvents = "none";
+    const modalContent = studioModal.querySelector(".modal-content");
+    if (modalContent) modalContent.style.transform = "scale(0.95)";
+    setTimeout(() => {
+      studioModal.classList.add("hidden");
+    }, 300);
+
+    if (avatarPreview3D.animationFrameId) {
+      cancelAnimationFrame(avatarPreview3D.animationFrameId);
+      avatarPreview3D.animationFrameId = null;
+    }
+  }
+
+  if (studioCloseBtn) studioCloseBtn.addEventListener("click", closeStudioModal);
+  if (factionOpenStudioBtn) factionOpenStudioBtn.addEventListener("click", openStudioModal);
+  if (navBtnAvatar) navBtnAvatar.addEventListener("click", openStudioModal);
+
+  const publishBtn = document.querySelector("#studio-publish-btn");
+  if (publishBtn) {
+    publishBtn.addEventListener("click", publishListing);
+  }
+
+  const heightValText = document.querySelector("#studio-val-height");
+  const buildValText = document.querySelector("#studio-val-build");
+
+  if (studioHeightScaleInput && heightValText) {
+    studioHeightScaleInput.addEventListener("input", () => {
+      heightValText.textContent = `${studioHeightScaleInput.value}%`;
+    });
+  }
+  if (studioBuildScaleInput && buildValText) {
+    studioBuildScaleInput.addEventListener("input", () => {
+      buildValText.textContent = `${studioBuildScaleInput.value}%`;
+    });
+  }
+
+  // Bind event listeners to studio inputs
+  [
+    studioAvatarNameInput,
+    studioSkinColorInput,
+    studioShirtColorInput,
+    studioLeftArmColorInput,
+    studioRightArmColorInput,
+    studioHairColorInput,
+    studioEyeColorInput,
+    studioLeftLegColorInput,
+    studioRightLegColorInput,
+    studioPantsColorInput,
+    studioBootColorInput,
+    studioBeltColorInput,
+    studioCapeColorInput,
+    studioHairStyleInput,
+    studioOutfitStyleInput,
+    studioCapeStyleInput,
+    studioHeightScaleInput,
+    studioBuildScaleInput,
+  ].forEach((input) => {
+    if (input) {
+      input.addEventListener("input", previewStudioAvatarFromForm);
+      input.addEventListener("change", previewStudioAvatarFromForm);
+    }
+  });
+
+  // Bind click listeners to studio action buttons
+  if (studioCreateAvatarButton) {
+    studioCreateAvatarButton.addEventListener("click", createStudioCustomAvatar);
+  }
+  if (studioSaveAvatarButton) {
+    studioSaveAvatarButton.addEventListener("click", saveStudioSelectedAvatar);
+  }
+  if (studioDeleteAvatarButton) {
+    studioDeleteAvatarButton.addEventListener("click", deleteStudioSelectedAvatar);
+  }
+}
+
 function getMasteryInfo(totalPoints) {
   let level = 1;
   let pointsLeft = Math.max(0, totalPoints);
@@ -1370,8 +2409,158 @@ function addMasteryXp(type, amount) {
   saveGame();
 }
 
+let currentUsername = "";
+let failedAttempts = 0;
+let captchaAnswer = "";
+let recoveryCode = "";
+let recoveryUser = null;
+
+const DEFAULT_AVATARS = [
+  {
+    id: "tavern-hero",
+    name: "Tavern Hero",
+    skin: "#eed2b8",
+    shirt: "#223745",
+    pants: "#4d4637",
+    hair: "#8e4e24",
+    eyes: "#1f3c5b",
+    boots: "#3d2616",
+    hairStyle: "messy",
+    outfit: "adventurer",
+    height: 100,
+    build: 100,
+  },
+  {
+    id: "wave-runner",
+    name: "Wave Runner",
+    skin: "#c98b62",
+    shirt: "#1b85aa",
+    pants: "#26364f",
+    hair: "#2a1710",
+    eyes: "#101820",
+    boots: "#23170f",
+    hairStyle: "short",
+    outfit: "sailor",
+    height: 100,
+    build: 100,
+  },
+  {
+    id: "reef-guard",
+    name: "Reef Guard",
+    skin: "#8f5d3d",
+    shirt: "#2f8f54",
+    pants: "#3f3228",
+    hair: "#101010",
+    eyes: "#172b3a",
+    boots: "#1a110b",
+    hairStyle: "spiky",
+    outfit: "armor",
+    height: 106,
+    build: 112,
+  },
+  {
+    id: "sun-captain",
+    name: "Sun Captain",
+    skin: "#e3ad7a",
+    shirt: "#d66b36",
+    pants: "#10212d",
+    hair: "#73421f",
+    eyes: "#1b3c66",
+    boots: "#2a1810",
+    hairStyle: "cap",
+    outfit: "coat",
+    height: 98,
+    build: 94,
+  }
+];
+
+function resetPlayerState() {
+  player.faction = "Neutral";
+  player.level = 1;
+  player.xp = 0;
+  player.xpToNext = 100;
+  player.money = 0;
+  player.materials = { ironwood: 0, scrap: 0, jungleCore: 0 };
+  player.statPoints = 0;
+  player.health = 120;
+  player.maxHealth = 120;
+  player.stamina = 100;
+  player.maxStamina = 100;
+  player.oxygen = 100;
+  player.movementMode = "walk";
+  player.isSwimming = false;
+  player.isBlocking = false;
+  player.isDashing = false;
+  player.dashCooldown = 0;
+  player.stunTimer = 0;
+  player.knockedDown = false;
+  player.lastMoveSpeed = 0;
+  player.lastFallVelocity = 0;
+  player.haki = { unlocked: false, active: false, level: 0, kills: 0, nextKills: 8 };
+  player.stats = { melee: 1, defense: 1, sword: 1, gun: 1, special: 0 };
+  player.mastery = { melee: 1, defense: 1, sword: 1, gun: 1, special: 1 };
+  player.masteryXp = { melee: 0, defense: 0, sword: 0, gun: 0, special: 0 };
+  player.armoredWillCooldown = 0;
+  player.blockStartTime = 0;
+  player.shieldTimer = 0;
+  player.weapon = "melee";
+  player.hasSword = false;
+  player.hasGun = false;
+  player.specialUnlocked = false;
+  player.unlockedQuestsSeen = { starter: true };
+  player.newQuestUnlocked = false;
+  player.isAdmin = false;
+  player.isGodMode = false;
+  player.isInstakill = false;
+
+  activeQuest = null;
+  if (typeof isHelming !== 'undefined' && isHelming) {
+    unhelmBoat();
+  }
+
+  // Restore default avatars
+  avatarState.selectedId = "tavern-hero";
+  avatarState.avatars = JSON.parse(JSON.stringify(DEFAULT_AVATARS));
+}
+
+function showNotification(message) {
+  const notif = document.querySelector("#simulated-notification");
+  const msgEl = document.querySelector("#notification-message");
+  if (notif && msgEl) {
+    msgEl.innerHTML = message;
+    notif.classList.remove("hidden");
+    // Force reflow
+    notif.offsetWidth;
+    notif.classList.add("show");
+    
+    // Hide after 7 seconds
+    setTimeout(() => {
+      notif.classList.remove("show");
+      setTimeout(() => {
+        notif.classList.add("hidden");
+      }, 300);
+    }, 7000);
+  }
+}
+
+function generateCaptcha() {
+  const num1 = Math.floor(Math.random() * 9) + 2;
+  const num2 = Math.floor(Math.random() * 9) + 2;
+  const answer = num1 + num2;
+  captchaAnswer = String(answer);
+  
+  const promptEl = document.querySelector("#login-captcha-prompt");
+  if (promptEl) {
+    promptEl.textContent = `Solve: ${num1} + ${num2} = ?`;
+  }
+  const captchaContainer = document.querySelector("#login-captcha-container");
+  if (captchaContainer) {
+    captchaContainer.classList.remove("hidden");
+  }
+}
+
 function saveGame() {
-  if (!gameStarted) return;
+  if (!gameStarted || !currentUsername) return;
   const saveData = {
     level: player.level,
     xp: player.xp,
@@ -1389,52 +2578,84 @@ function saveGame() {
     selectedAvatarId: avatarState.selectedId,
     isGodMode: player.isGodMode,
     isInstakill: player.isInstakill,
+    avatars: avatarState.avatars,
+    marketListings: marketState.listings,
   };
-  localStorage.setItem("sea_legends_save", JSON.stringify(saveData));
+  
+  const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
+  try {
+    const accounts = JSON.parse(accountsStr);
+    const account = accounts.find(a => a.username.toLowerCase() === currentUsername.toLowerCase());
+    if (account) {
+      account.saveData = saveData;
+      localStorage.setItem("sea_legends_accounts", JSON.stringify(accounts));
+    }
+  } catch (e) {
+    console.error("Failed to save progress to account database:", e);
+  }
 }
 
 function checkAndLoadSave() {
-  const saveStr = localStorage.getItem("sea_legends_save");
-  if (!saveStr) return;
+  const activeUser = localStorage.getItem("sea_legends_current_user");
+  if (!activeUser) {
+    showLoginScreen();
+    return;
+  }
+  
+  currentUsername = activeUser;
+  player.isAdmin = (currentUsername.toLowerCase() === "sans");
+  
+  // Toggle escape menu admin panel section based on isAdmin
+  const adminSec = document.querySelector("#esc-admin-section");
+  if (adminSec) {
+    adminSec.classList.toggle("hidden", !player.isAdmin);
+  }
+  
+  const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
   try {
-    const saveData = JSON.parse(saveStr);
-    if (!saveData) return;
+    const accounts = JSON.parse(accountsStr);
+    const account = accounts.find(a => a.username.toLowerCase() === currentUsername.toLowerCase());
+    if (!account) {
+      performLogout();
+      return;
+    }
     
+    // Hide login screen overlay
+    const loginScreen = document.querySelector("#login-screen");
+    if (loginScreen) loginScreen.classList.add("hidden");
+    
+    const saveData = account.saveData;
+    if (!saveData || !saveData.faction) {
+      // If fresh account or no faction chosen, show faction screen
+      const fscreen = document.querySelector("#faction-screen");
+      if (fscreen) fscreen.classList.remove("hidden");
+      return;
+    }
+    
+    // Load save data
     if (saveData.level !== undefined) player.level = saveData.level;
     if (saveData.xp !== undefined) player.xp = saveData.xp;
     if (saveData.xpToNext !== undefined) player.xpToNext = saveData.xpToNext;
     if (saveData.money !== undefined) player.money = saveData.money;
-    if (saveData.materials) {
-      player.materials = { ...player.materials, ...saveData.materials };
-    }
-    if (saveData.stats) {
-      player.stats = { ...player.stats, ...saveData.stats };
-    }
-    if (saveData.mastery) {
-      player.mastery = { ...player.mastery, ...saveData.mastery };
-    }
-    if (saveData.masteryXp) {
-      player.masteryXp = { ...player.masteryXp, ...saveData.masteryXp };
-    }
+    if (saveData.materials) player.materials = { ...player.materials, ...saveData.materials };
+    if (saveData.stats) player.stats = { ...player.stats, ...saveData.stats };
+    if (saveData.mastery) player.mastery = { ...player.mastery, ...saveData.mastery };
+    if (saveData.masteryXp) player.masteryXp = { ...player.masteryXp, ...saveData.masteryXp };
     if (saveData.hasSword !== undefined) player.hasSword = saveData.hasSword;
     if (saveData.hasGun !== undefined) player.hasGun = saveData.hasGun;
     if (saveData.specialUnlocked !== undefined) player.specialUnlocked = saveData.specialUnlocked;
-    if (saveData.haki) {
-      player.haki = { ...player.haki, ...saveData.haki };
-    }
+    if (saveData.haki) player.haki = { ...player.haki, ...saveData.haki };
     if (saveData.faction !== undefined) player.faction = saveData.faction;
-    if (saveData.selectedAvatarId !== undefined) {
-      avatarState.selectedId = saveData.selectedAvatarId;
-    }
+    if (saveData.avatars) avatarState.avatars = saveData.avatars;
+    if (saveData.marketListings) marketState.listings = saveData.marketListings;
+    if (saveData.selectedAvatarId !== undefined) avatarState.selectedId = saveData.selectedAvatarId;
     if (saveData.isGodMode !== undefined) player.isGodMode = saveData.isGodMode;
     if (saveData.isInstakill !== undefined) player.isInstakill = saveData.isInstakill;
     
-    // Apply visual systems
     applyAvatarToPlayer();
     updateDerivedStats();
     updateHud();
     
-    // Start game bypassing faction select screen
     audio.init();
     const fscreen = document.querySelector("#faction-screen");
     if (fscreen) fscreen.classList.add("hidden");
@@ -1444,10 +2665,292 @@ function checkAndLoadSave() {
     setWeapon(player.weapon);
     updateCombatHud();
     
-    log("💾 Saved progress loaded! Welcome back to the First Sea.");
+    log(`💾 Progress loaded for account: ${currentUsername}. Welcome back!`);
   } catch (e) {
-    console.error("Failed to load save:", e);
+    console.error("Failed to parse user save data:", e);
   }
+}
+
+function showLoginScreen() {
+  const loginScreen = document.querySelector("#login-screen");
+  if (loginScreen) loginScreen.classList.remove("hidden");
+  
+  const fscreen = document.querySelector("#faction-screen");
+  if (fscreen) fscreen.classList.add("hidden");
+  
+  if (hud) hud.classList.add("hidden");
+  gameStarted = false;
+}
+
+function performLogout() {
+  // Save progress before clearing
+  if (gameStarted && currentUsername) {
+    saveGame();
+  }
+  
+  resetPlayerState();
+  currentUsername = "";
+  localStorage.removeItem("sea_legends_current_user");
+  
+  // Close any open HUD menus
+  if (typeof toggleEscMenu !== 'undefined') {
+    toggleEscMenu(false);
+  }
+  
+  showLoginScreen();
+  log("🚪 You have logged out successfully.");
+}
+
+function initAuthSystem() {
+  const loginForm = document.querySelector("#login-form-container");
+  const signupForm = document.querySelector("#signup-form-container");
+  const recoveryForm = document.querySelector("#recovery-form-container");
+  
+  const loginUsernameInput = document.querySelector("#login-username");
+  const loginPasswordInput = document.querySelector("#login-password");
+  const loginCaptchaInput = document.querySelector("#login-captcha-input");
+  const loginErrorMsg = document.querySelector("#login-error-msg");
+  
+  const signupUsernameInput = document.querySelector("#signup-username");
+  const signupPasswordInput = document.querySelector("#signup-password");
+  const signupRecoveryInput = document.querySelector("#signup-recovery");
+  const signupErrorMsg = document.querySelector("#signup-error-msg");
+  
+  const recoveryContactInput = document.querySelector("#recovery-contact");
+  const recoveryCodeInput = document.querySelector("#recovery-code-input");
+  const recoveredPasswordDisplay = document.querySelector("#recovered-password-display");
+  const recoveryErrorMsg = document.querySelector("#recovery-error-msg");
+  
+  const recoveryStep1 = document.querySelector("#recovery-step-1");
+  const recoveryStep2 = document.querySelector("#recovery-step-2");
+  const recoveryStep3 = document.querySelector("#recovery-step-3");
+  
+  // Transition links
+  document.querySelector("#go-to-signup")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    loginForm.classList.add("hidden");
+    signupForm.classList.remove("hidden");
+    signupErrorMsg.textContent = "";
+  });
+  
+  document.querySelector("#go-to-login")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    signupForm.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    loginErrorMsg.textContent = "";
+  });
+  
+  document.querySelector("#go-to-recovery")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    loginForm.classList.add("hidden");
+    recoveryForm.classList.remove("hidden");
+    recoveryStep1.classList.remove("hidden");
+    recoveryStep2.classList.add("hidden");
+    recoveryStep3.classList.add("hidden");
+    recoveryErrorMsg.textContent = "";
+  });
+  
+  document.querySelector("#recovery-back-to-login")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    recoveryForm.classList.add("hidden");
+    loginForm.classList.remove("hidden");
+    loginErrorMsg.textContent = "";
+  });
+  
+  document.querySelector("#recovery-login-direct-btn")?.addEventListener("click", () => {
+    if (recoveryUser) {
+      currentUsername = recoveryUser.username;
+      localStorage.setItem("sea_legends_current_user", currentUsername);
+      recoveryForm.classList.add("hidden");
+      loginForm.classList.remove("hidden");
+      checkAndLoadSave();
+    }
+  });
+
+  // Login Submit
+  document.querySelector("#login-submit-btn")?.addEventListener("click", () => {
+    const username = loginUsernameInput.value.trim();
+    const password = loginPasswordInput.value;
+    
+    if (!username) {
+      loginErrorMsg.textContent = "Username cannot be empty!";
+      return;
+    }
+    if (!password) {
+      loginErrorMsg.textContent = "Password cannot be empty!";
+      return;
+    }
+    
+    // Captcha validation
+    if (failedAttempts >= 10) {
+      const captchaAttempt = loginCaptchaInput.value.trim();
+      if (captchaAttempt !== captchaAnswer) {
+        loginErrorMsg.textContent = "Verification failed! Correct answer required.";
+        generateCaptcha(); // Refresh captcha
+        return;
+      }
+    }
+    
+    const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
+    try {
+      const accounts = JSON.parse(accountsStr);
+      const account = accounts.find(a => a.username.toLowerCase() === username.toLowerCase());
+      
+      if (!account || account.password !== password) {
+        failedAttempts++;
+        loginErrorMsg.textContent = "Invalid username or password!";
+        
+        if (failedAttempts >= 10) {
+          generateCaptcha();
+        }
+        return;
+      }
+      
+      // Success
+      failedAttempts = 0;
+      loginErrorMsg.textContent = "";
+      loginUsernameInput.value = "";
+      loginPasswordInput.value = "";
+      loginCaptchaInput.value = "";
+      document.querySelector("#login-captcha-container")?.classList.add("hidden");
+      
+      currentUsername = account.username;
+      localStorage.setItem("sea_legends_current_user", currentUsername);
+      checkAndLoadSave();
+    } catch (e) {
+      console.error(e);
+      loginErrorMsg.textContent = "Database error occurred!";
+    }
+  });
+  
+  // Registration Submit
+  document.querySelector("#signup-submit-btn")?.addEventListener("click", () => {
+    const username = signupUsernameInput.value.trim();
+    const password = signupPasswordInput.value;
+    const recovery = signupRecoveryInput.value.trim();
+    
+    if (!username) {
+      signupErrorMsg.textContent = "Username is required!";
+      return;
+    }
+    if (password.length < 8) {
+      signupErrorMsg.textContent = "Password must be at least 8 characters long!";
+      return;
+    }
+    if (!recovery) {
+      signupErrorMsg.textContent = "Recovery Phone or Email is required!";
+      return;
+    }
+    
+    const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
+    try {
+      const accounts = JSON.parse(accountsStr);
+      const exists = accounts.some(a => a.username.toLowerCase() === username.toLowerCase());
+      if (exists) {
+        signupErrorMsg.textContent = "Username already exists! Choose another.";
+        return;
+      }
+      
+      // Create new account object
+      const newAccount = {
+        username,
+        password,
+        recovery,
+        saveData: {
+          faction: "Neutral",
+          level: 1,
+          xp: 0,
+          xpToNext: 100,
+          money: 0,
+          materials: { ironwood: 0, scrap: 0, jungleCore: 0 },
+          stats: { melee: 1, defense: 1, sword: 1, gun: 1, special: 0 },
+          mastery: { melee: 1, defense: 1, sword: 1, gun: 1, special: 1 },
+          masteryXp: { melee: 0, defense: 0, sword: 0, gun: 0, special: 0 },
+          selectedAvatarId: "tavern-hero",
+          isGodMode: false,
+          isInstakill: false,
+          avatars: JSON.parse(JSON.stringify(DEFAULT_AVATARS)),
+          marketListings: []
+        }
+      };
+      
+      accounts.push(newAccount);
+      localStorage.setItem("sea_legends_accounts", JSON.stringify(accounts));
+      
+      signupUsernameInput.value = "";
+      signupPasswordInput.value = "";
+      signupRecoveryInput.value = "";
+      signupErrorMsg.textContent = "";
+      
+      // Switch back to login panel and log in
+      signupForm.classList.add("hidden");
+      loginForm.classList.remove("hidden");
+      
+      currentUsername = username;
+      localStorage.setItem("sea_legends_current_user", currentUsername);
+      checkAndLoadSave();
+    } catch (e) {
+      console.error(e);
+      signupErrorMsg.textContent = "Database error occurred!";
+    }
+  });
+  
+  // Recovery Send Code
+  document.querySelector("#recovery-send-btn")?.addEventListener("click", () => {
+    const contact = recoveryContactInput.value.trim();
+    if (!contact) {
+      recoveryErrorMsg.textContent = "Enter your recovery email or phone number!";
+      return;
+    }
+    
+    const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
+    try {
+      const accounts = JSON.parse(accountsStr);
+      const account = accounts.find(a => a.recovery.toLowerCase() === contact.toLowerCase());
+      if (!account) {
+        recoveryErrorMsg.textContent = "No account found with this recovery info.";
+        return;
+      }
+      
+      recoveryUser = account;
+      
+      // Generate code
+      const code = Math.floor(100000 + Math.random() * 900000);
+      recoveryCode = String(code);
+      recoveryErrorMsg.textContent = "";
+      
+      // Transition to code step
+      recoveryStep1.classList.add("hidden");
+      recoveryStep2.classList.remove("hidden");
+      
+      // Show simulated notification toast containing code
+      showNotification(`✉️ <strong>SMS/Email:</strong> Verification code for <strong>${account.username}</strong> is: <span style="font-size:16px; font-weight:900; color:#ffcf5a; letter-spacing:0.04em;">${recoveryCode}</span>`);
+    } catch (e) {
+      console.error(e);
+      recoveryErrorMsg.textContent = "Database error occurred!";
+    }
+  });
+  
+  // Recovery Verify Code
+  document.querySelector("#recovery-verify-btn")?.addEventListener("click", () => {
+    const attempt = recoveryCodeInput.value.trim();
+    if (attempt !== recoveryCode) {
+      recoveryErrorMsg.textContent = "Incorrect verification code!";
+      return;
+    }
+    
+    recoveryErrorMsg.textContent = "";
+    recoveryStep2.classList.add("hidden");
+    recoveryStep3.classList.remove("hidden");
+    
+    if (recoveredPasswordDisplay && recoveryUser) {
+      recoveredPasswordDisplay.textContent = recoveryUser.password;
+    }
+  });
+  
+  // Bind Settings Bar and Escape Menu logouts
+  document.querySelector("#hud-logout-btn")?.addEventListener("click", performLogout);
+  document.querySelector("#esc-logout-btn")?.addEventListener("click", performLogout);
 }
 
 function clamp(value, min, max) {
@@ -1475,14 +2978,16 @@ function createWorld() {
   for (let i = 0; i < 10; i += 1) {
     const angle = i * 0.62;
     const distance = i === 0 ? 0 : i === 1 ? 2750 : 5200 + i * 950;
-    const radius = i === 0 ? STARTER_RADIUS : i === 1 ? 1450 : i === 2 ? 920 : i === 3 ? 1120 : 90 + i * 36;
+    const radius = i === 0 ? STARTER_RADIUS : i === 1 ? 1450 : i === 2 ? 2400 : i === 3 ? 1120 : i === 4 ? 900 : 90 + i * 36;
     const position = i === 1
       ? new THREE.Vector3(2280, 0, -1420)
       : i === 2
-        ? new THREE.Vector3(-2350, 0, -1850)
+        ? new THREE.Vector3(-3400, 0, -3200)
         : i === 3
           ? new THREE.Vector3(-4550, 0, 980)
-          : new THREE.Vector3(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
+          : i === 4
+            ? new THREE.Vector3(4800, 0, 3600)
+            : new THREE.Vector3(Math.cos(angle) * distance, 0, Math.sin(angle) * distance);
     const island = createIsland(position, radius, i);
     islands.push({ index: i, position, radius, mesh: island, surfaceY: getIslandSurfaceY(i) });
   }
@@ -1502,12 +3007,20 @@ function createWorld() {
   const tel1Y = getIslandSurfaceHeightAt(438, -310, starterIsland);
   createTeleporter(new THREE.Vector3(438, tel1Y, -310), new THREE.Vector3(islands[1].position.x - 620, islands[1].surfaceY + 0.15, islands[1].position.z + 430));
   
+  // Secondary teleporter nearby on Starter Island
+  const tel3Y = getIslandSurfaceHeightAt(458, -290, starterIsland);
+  createTeleporter(new THREE.Vector3(458, tel3Y, -290), new THREE.Vector3(islands[1].position.x - 620, islands[1].surfaceY + 0.15, islands[1].position.z + 430));
+  
   const tel2Y = getIslandSurfaceHeightAt(-380, -360, starterIsland);
-  createTeleporter(new THREE.Vector3(-380, tel2Y, -360), new THREE.Vector3(islands[2].position.x + 160, islands[2].surfaceY + 0.15, islands[2].position.z + 120));
+  createTeleporter(new THREE.Vector3(-380, tel2Y, -360), new THREE.Vector3(islands[2].position.x + 50, islands[2].surfaceY + 0.15, islands[2].position.z + 50), true);
+
+  // Teleporter to Snowy Village (on east edge of Starter Island)
+  const tel4Y = getIslandSurfaceHeightAt(480, 220, starterIsland);
+  createTeleporter(new THREE.Vector3(480, tel4Y, 220), new THREE.Vector3(islands[4]?.position.x - 400, islands[4]?.surfaceY + 0.15, islands[4]?.position.z - 200));
   
   createBanditCamp();
   
-  const oqgPos = islands[2].position.clone().add(new THREE.Vector3(-80, 0, 40));
+  const oqgPos = islands[2].position.clone().add(new THREE.Vector3(0, 0, 0));
   oqgPos.y = getIslandSurfaceHeightAt(oqgPos.x, oqgPos.z, islands[2]);
   createOutpostQuestGiver(oqgPos);
   
@@ -1518,9 +3031,48 @@ function createWorld() {
   spawnPirateCamp(islands[2]);
   spawnBruteCamp(islands[2]);
   
+  // Spawn Buggy Boss at Pirate Town
   const buggyPos = islands[2].position.clone().add(new THREE.Vector3(260, 0, -220));
   buggyPos.y = getIslandSurfaceHeightAt(buggyPos.x, buggyPos.z, islands[2]);
   spawnBuggyBoss(buggyPos);
+
+  // Jungle Island additional spawns
+  const jungle = islands[1];
+  if (jungle) {
+    spawnJungleCamps(jungle);
+
+    const jQuestPos = new THREE.Vector3(jungle.position.x + 350, getIslandSurfaceHeightAt(jungle.position.x + 350, jungle.position.z + 300, jungle), jungle.position.z + 300);
+    createJungleQuestGiver(jQuestPos);
+    createReturnTeleporter(jQuestPos.clone().add(new THREE.Vector3(25, 0, 25)));
+
+    const jPulsePos = new THREE.Vector3(jungle.position.x - 150, getIslandSurfaceHeightAt(jungle.position.x - 150, jungle.position.z - 200, jungle), jungle.position.z - 200);
+    createJunglePulseTrainer(jPulsePos);
+    createReturnTeleporter(jPulsePos.clone().add(new THREE.Vector3(-25, 0, -25)));
+  }
+
+  // Desert Island additional spawns
+  const desert = islands[3];
+  if (desert) {
+    spawnDesertCamps(desert);
+
+    const dQuestPos = new THREE.Vector3(desert.position.x + 200, getIslandSurfaceHeightAt(desert.position.x + 200, desert.position.z + 200, desert), desert.position.z + 200);
+    createDesertQuestGiver(dQuestPos);
+    createReturnTeleporter(dQuestPos.clone().add(new THREE.Vector3(25, 0, 25)));
+    
+    // Teleporter near Haki Trainer
+    const dHakiTelPos = htPos.clone().add(new THREE.Vector3(-25, 0, -25));
+    createReturnTeleporter(dHakiTelPos);
+  }
+
+  // Snowy Village additional spawns
+  const snowy = islands[4];
+  if (snowy) {
+    spawnSnowyCamps(snowy);
+
+    const sQuestPos = new THREE.Vector3(snowy.position.x + 280, getIslandSurfaceHeightAt(snowy.position.x + 280, snowy.position.z + 180, snowy), snowy.position.z + 180);
+    createSnowyQuestGiver(sQuestPos);
+    createReturnTeleporter(sQuestPos.clone().add(new THREE.Vector3(30, 0, 30)));
+  }
 }
 
 function createIsland(position, radius, index) {
@@ -1528,14 +3080,14 @@ function createIsland(position, radius, index) {
   group.position.copy(position);
   const height = getIslandHeight(index);
 
-  const baseGeometry = makeIrregularCylinderGeometry(radius, height, index <= 1 ? 128 : 40, index + 3);
+  const baseGeometry = makeIrregularCylinderGeometry(radius, height, index <= 1 ? 128 : index === 4 ? 64 : 40, index + 3);
   const base = new THREE.Mesh(
     baseGeometry,
     new THREE.MeshStandardMaterial({
-      color: index === 0 ? 0x78654b : index === 1 ? 0x394235 : 0x8f8066,
+      color: index === 0 ? 0x78654b : index === 1 ? 0x394235 : index === 4 ? 0xb5c0cb : 0x8f8066,
       roughness: 0.86,
       metalness: 0.08,
-      emissive: index === 0 ? 0x332711 : 0x1f1a16,
+      emissive: index === 0 ? 0x332711 : index === 4 ? 0x1a2430 : 0x1f1a16,
       emissiveIntensity: 0.06,
       flatShading: true,
     }),
@@ -1547,7 +3099,11 @@ function createIsland(position, radius, index) {
 
   const grass = new THREE.Mesh(
     makeIrregularDiscGeometry(radius * 0.88, index <= 1 ? 128 : 40, index + 9, height),
-    new THREE.MeshStandardMaterial({ color: index === 0 ? 0x3fb05b : index === 1 ? 0x1f6f3a : 0x4aa65e, roughness: 0.78, metalness: 0.05 }),
+    new THREE.MeshStandardMaterial({ 
+      color: index === 0 ? 0x3fb05b : index === 1 ? 0x1f6f3a : index === 4 ? 0xffffff : 0x4aa65e, 
+      roughness: 0.82, 
+      metalness: 0.02 
+    }),
   );
   grass.rotation.x = -Math.PI / 2;
   grass.position.y = height + 0.16;
@@ -1574,21 +3130,23 @@ function createIsland(position, radius, index) {
   if (index !== 1) {
     const marker = new THREE.Mesh(
       new THREE.CylinderGeometry(index === 0 ? 2.5 : 0.4, index === 0 ? 2.5 : 0.4, index === 0 ? 48 : 9 + index * 0.8, 8),
-      new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0x3a2300 }),
+      new THREE.MeshStandardMaterial({ color: index === 4 ? 0x88ccff : 0xffd25a, emissive: index === 4 ? 0x1a3a5c : 0x3a2300 }),
     );
     marker.position.set(0, height + (index === 0 ? 26 : 8 + index * 0.45), 0);
     group.add(marker);
 
-    const label = makeLabel(`Island ${index + 1}`, 2 + index * 0.2);
+    const islandLabel = index === 4 ? "Snowy Village" : `Island ${index + 1}`;
+    const label = makeLabel(islandLabel, 2 + index * 0.2);
     label.position.set(0, height + (index === 0 ? 55 : 10 + index * 0.55), 0);
     group.add(label);
   }
 
   if (index > 0 && index !== 1) {
-    for (let t = 0; t < Math.min(8, index + 2); t += 1) {
-      const tree = createTree();
+    const treeCount = index === 4 ? 22 : Math.min(8, index + 2);
+    for (let t = 0; t < treeCount; t += 1) {
+      const tree = index === 4 ? createSnowyTree() : createTree();
       const a = Math.random() * Math.PI * 2;
-      const d = radius * (0.2 + Math.random() * 0.45);
+      const d = radius * (0.15 + Math.random() * 0.55);
       tree.position.set(Math.cos(a) * d, 3.2 + index * 0.1, Math.sin(a) * d);
       group.add(tree);
     }
@@ -1613,6 +3171,7 @@ function getIslandHeight(index) {
   if (index === 1) return 62;
   if (index === 2) return 48;
   if (index === 3) return 54;
+  if (index === 4) return 58;
   return 3 + index * 0.2;
 }
 
@@ -1630,6 +3189,35 @@ function addCollisionCircle(center, radius, label, options = {}) {
     material: options.material || "stone",
     toughness: options.toughness ?? 1,
   });
+}
+
+function createSnowyTree() {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, 0.45, 2.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0x5c4033 }),
+  );
+  trunk.position.y = 1.25;
+  trunk.castShadow = true;
+  group.add(trunk);
+
+  const leaves = new THREE.Mesh(
+    new THREE.ConeGeometry(1.8, 3.5, 9),
+    new THREE.MeshStandardMaterial({ color: 0xcdebeb, roughness: 0.9, flatShading: true }),
+  );
+  leaves.position.y = 3.5;
+  leaves.castShadow = true;
+  group.add(leaves);
+
+  const snowCap = new THREE.Mesh(
+    new THREE.ConeGeometry(1.2, 1.5, 9),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }),
+  );
+  snowCap.position.y = 4.8;
+  snowCap.castShadow = true;
+  group.add(snowCap);
+
+  return group;
 }
 
 function createTree() {
@@ -1829,25 +3417,31 @@ function createCrossingDock() {
 
 function createJungleTree(height, trunkRadius) {
   const group = new THREE.Group();
+  const modifiedRadius = trunkRadius * 0.55; // Reduce tree radius to take up less space
   const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x5d3b24, roughness: 0.94 });
   const leafMaterial = new THREE.MeshStandardMaterial({ color: 0x145c32, roughness: 0.86, flatShading: true });
 
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkRadius * 0.72, trunkRadius, height, 10), trunkMaterial);
+  // Extremely blocky Box trunk
+  const trunk = new THREE.Mesh(
+    new THREE.BoxGeometry(modifiedRadius * 2, height, modifiedRadius * 2),
+    trunkMaterial
+  );
   trunk.position.y = height / 2;
   trunk.castShadow = true;
   group.add(trunk);
 
+  // Extremely blocky Box foliage
   for (let i = 0; i < 5; i += 1) {
+    const size = modifiedRadius * (2.8 - i * 0.28); // foliage size multiplier is reduced to take up less space
     const crown = new THREE.Mesh(
-      new THREE.SphereGeometry(trunkRadius * (4.6 - i * 0.34), 14, 10),
+      new THREE.BoxGeometry(size * 2, size * 2, size * 2),
       leafMaterial,
     );
     crown.position.set(
-      Math.sin(i * 1.7) * trunkRadius * 1.4,
-      height - i * trunkRadius * 1.6,
-      Math.cos(i * 1.2) * trunkRadius * 1.4,
+      Math.sin(i * 1.7) * modifiedRadius * 0.7,
+      height - i * modifiedRadius * 0.9,
+      Math.cos(i * 1.2) * modifiedRadius * 0.7,
     );
-    crown.scale.y = 0.68;
     crown.castShadow = true;
     group.add(crown);
   }
@@ -1902,7 +3496,14 @@ function addOutpostIslandDetails(group, radius, height, index) {
   const stone = new THREE.MeshStandardMaterial({ color: 0x5c5a54, roughness: 0.96, flatShading: true });
   const wood = new THREE.MeshStandardMaterial({ color: 0x68432c, roughness: 0.9 });
 
-  [[0, 0, 520, 34, 0.6], [-160, 120, 380, 28, -0.35], [180, -160, 340, 28, 1.2]].forEach(([x, z, l, w, r]) => {
+  // Paths along the bridge
+  [
+    [-600, -200, 420, 34, 0.32],
+    [-300, -100, 420, 34, 0.32],
+    [0, 0, 420, 34, 0.32],
+    [300, 100, 420, 34, 0.32],
+    [600, 200, 420, 34, 0.32]
+  ].forEach(([x, z, l, w, r]) => {
     const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, l), dirt);
     const pY = getLocalSurfaceHeightAt(x, z, radius, height, 2);
     path.position.set(x, pY + 0.6, z);
@@ -1910,12 +3511,21 @@ function addOutpostIslandDetails(group, radius, height, index) {
     group.add(path);
   });
 
+  // Ruins distributed on the two parts
   for (let i = 0; i < 18; i += 1) {
     const ruin = new THREE.Mesh(new THREE.BoxGeometry(26 + (i % 4) * 8, 24 + (i % 3) * 12, 18), stone);
     const angle = i * 1.17;
-    const dist = radius * (0.18 + ((i * 41) % 54) / 100);
-    const rx = Math.cos(angle) * dist;
-    const rz = Math.sin(angle) * dist;
+    const dist = 200 + (i % 3) * 140;
+    let rx, rz;
+    if (i < 9) {
+      // Pirate area ruins
+      rx = -900 + Math.cos(angle) * dist;
+      rz = -300 + Math.sin(angle) * dist;
+    } else {
+      // Brute area ruins
+      rx = 900 + Math.cos(angle) * dist;
+      rz = 300 + Math.sin(angle) * dist;
+    }
     const rY = getLocalSurfaceHeightAt(rx, rz, radius, height, 2);
     ruin.position.set(rx, rY + ruin.geometry.parameters.height / 2, rz);
     ruin.rotation.y = angle;
@@ -1924,24 +3534,33 @@ function addOutpostIslandDetails(group, radius, height, index) {
     group.add(ruin);
   }
 
-  for (let i = 0; i < 9; i += 1) {
+  // Towers on the two parts
+  for (let i = 0; i < 8; i += 1) {
     const tower = new THREE.Mesh(new THREE.CylinderGeometry(10, 14, 58, 6), stone);
-    const angle = i * 0.7;
-    const dist = radius * 0.58;
-    const tx = Math.cos(angle) * dist;
-    const tz = Math.sin(angle) * dist;
+    const angle = i * 1.57;
+    let tx, tz;
+    if (i < 4) {
+      // Pirate towers
+      tx = -900 + Math.cos(angle) * 450;
+      tz = -300 + Math.sin(angle) * 450;
+    } else {
+      // Brute towers
+      tx = 900 + Math.cos(angle) * 450;
+      tz = 300 + Math.sin(angle) * 450;
+    }
     const tY = getLocalSurfaceHeightAt(tx, tz, radius, height, 2);
     tower.position.set(tx, tY + 29, tz);
     tower.castShadow = true;
     group.add(tower);
   }
 
-  const dockX = -radius * 0.54;
-  const dockZ = radius * 0.62;
+  // Dock at the edge of Pirate Part
+  const dockX = -1850;
+  const dockZ = -300;
   const dockY = getLocalSurfaceHeightAt(dockX, dockZ, radius, height, 2);
   const dock = new THREE.Mesh(new THREE.BoxGeometry(42, 2.5, 210), wood);
   dock.position.set(dockX, dockY + 1.2, dockZ);
-  dock.rotation.y = -0.58;
+  dock.rotation.y = Math.PI / 2; // running East-West
   dock.castShadow = true;
   group.add(dock);
 }
@@ -2740,9 +4359,41 @@ function createQuestGiver(position) {
   });
 }
 
-function createTeleporter(position, destination) {
+function createTeleporter(position, destination, isDirect = false) {
   const teleporter = new THREE.Group();
   teleporter.position.copy(position);
+
+  // Auto-detect destination island
+  let destIslandName = "Unknown Island";
+  let requiredLevel = 1;
+
+  if (islands.length > 0) {
+    let bestDist = Infinity;
+    let bestIdx = 0;
+    for (let i = 0; i < Math.min(5, islands.length); i++) {
+      const dist = destination.distanceTo(islands[i].position);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === 0) {
+      destIslandName = "Starter Island";
+      requiredLevel = 1;
+    } else if (bestIdx === 1) {
+      destIslandName = "Jungle Island";
+      requiredLevel = 15;
+    } else if (bestIdx === 2) {
+      destIslandName = "Pirate Town";
+      requiredLevel = 1;
+    } else if (bestIdx === 3) {
+      destIslandName = "Desert Island";
+      requiredLevel = 60;
+    } else if (bestIdx === 4) {
+      destIslandName = "Snowy Village";
+      requiredLevel = 85;
+    }
+  }
 
   const base = new THREE.Mesh(
     new THREE.CylinderGeometry(18, 22, 4, 40),
@@ -2755,7 +4406,7 @@ function createTeleporter(position, destination) {
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(14, 1.2, 14, 96),
-    new THREE.MeshBasicMaterial({ color: 0x7ce0b4, transparent: true, opacity: 0.82 }),
+    new THREE.MeshBasicMaterial({ color: isDirect ? 0xd1a65c : 0x7ce0b4, transparent: true, opacity: 0.82 }),
   );
   ring.position.y = 11;
   ring.rotation.x = Math.PI / 2;
@@ -2763,12 +4414,12 @@ function createTeleporter(position, destination) {
 
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(7, 7, 34, 32),
-    new THREE.MeshBasicMaterial({ color: 0x7ce0b4, transparent: true, opacity: 0.22 }),
+    new THREE.MeshBasicMaterial({ color: isDirect ? 0xd1a65c : 0x7ce0b4, transparent: true, opacity: 0.22 }),
   );
   beam.position.y = 18;
   teleporter.add(beam);
 
-  const label = makeLabel("Teleporter", 1.15);
+  const label = makeLabel(isDirect ? `To ${destIslandName}` : "Teleporter", 1.15);
   label.position.y = 39;
   teleporter.add(label);
 
@@ -2776,10 +4427,12 @@ function createTeleporter(position, destination) {
   animatedWorldObjects.push({ mesh: ring, type: "teleporter", speed: 0.022, phase: position.x * 0.01 });
   animatedWorldObjects.push({ mesh: beam, type: "teleporterBeam", baseY: beam.position.y, speed: 0.003, phase: position.z * 0.01 });
   interactables.push({
-    type: "teleporter",
+    type: isDirect ? "teleporter" : "menuTeleporter",
     mesh: teleporter,
     destination,
-    prompt: "Press E: Teleport to Jungle Island",
+    destIslandName,
+    requiredLevel,
+    prompt: isDirect ? `Press E: Teleport to ${destIslandName}` : "Press E: Open Teleporter Menu",
   });
   addCollisionCircle(position, 12, "Teleporter base", { damage: 0 });
 }
@@ -2870,7 +4523,7 @@ function createOutpostQuestGiver(position) {
   const giver = new THREE.Group();
   giver.position.copy(position);
   giver.add(createHumanAvatarModel({
-    name: "Outpost Captain",
+    name: "Pirate Town Captain",
     skin: "#c98b62",
     shirt: "#3d5f72",
     pants: "#2b2624",
@@ -2882,15 +4535,363 @@ function createOutpostQuestGiver(position) {
     height: 106,
     build: 108,
   }, { showSword: true, showName: false }));
-  const label = makeLabel("Quest Hub", 1.25);
+  const label = makeLabel("Pirate Town Quests", 1.25);
   label.position.y = 15;
   giver.add(label);
   scene.add(giver);
   interactables.push({
     type: "questHub",
     mesh: giver,
-    prompt: "Press E: View Outpost quests",
+    hubType: "pirateTown",
+    prompt: "Press E: View Pirate Town quests",
   });
+}
+
+function createJungleQuestGiver(position) {
+  const giver = new THREE.Group();
+  giver.position.copy(position);
+  giver.add(createHumanAvatarModel({
+    name: "Jungle Quest Giver",
+    skin: "#d9ab7e",
+    shirt: "#16503c",
+    pants: "#254428",
+    hair: "#2b1c11",
+    eyes: "#0a0a0a",
+    boots: "#3a2512",
+    hairStyle: "messy",
+    outfit: "sailor",
+    height: 100,
+    build: 90,
+  }, { showSword: false, showName: false }));
+
+  const label = makeLabel("Jungle Quest Giver", 0.9);
+  label.position.y = 14;
+  giver.add(label);
+
+  scene.add(giver);
+
+  interactables.push({
+    type: "questHub",
+    mesh: giver,
+    hubType: "jungle",
+    prompt: "Press E: View Jungle quests",
+  });
+}
+
+function createJunglePulseTrainer(position) {
+  const trainer = new THREE.Group();
+  trainer.position.copy(position);
+  trainer.add(createHumanAvatarModel({
+    name: "Jungle Pulse Trainer",
+    skin: "#e5c59e",
+    shirt: "#7a378b",
+    pants: "#3f2048",
+    hair: "#fbc531",
+    eyes: "#0d0d0d",
+    boots: "#1d0c24",
+    hairStyle: "cap",
+    outfit: "adventurer",
+    height: 108,
+    build: 95,
+  }, { showSword: false, showName: false }));
+
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(5.5, 0.2, 8, 42),
+    new THREE.MeshBasicMaterial({ color: 0x8e44ad, transparent: true, opacity: 0.8 }),
+  );
+  aura.position.y = 2;
+  aura.rotation.x = Math.PI / 2;
+  trainer.add(aura);
+
+  const label = makeLabel("Jungle Pulse Trainer", 1);
+  label.position.y = 15;
+  trainer.add(label);
+
+  scene.add(trainer);
+  animatedWorldObjects.push({ mesh: aura, type: "teleporter", speed: 0.018, phase: 1.5 });
+
+  interactables.push({
+    type: "junglePulseTrainer",
+    mesh: trainer,
+    prompt: "Press E: Learn Jungle Pulse",
+  });
+}
+
+function createDesertQuestGiver(position) {
+  const giver = new THREE.Group();
+  giver.position.copy(position);
+  giver.add(createHumanAvatarModel({
+    name: "Desert Quest Giver",
+    skin: "#eed2b8",
+    shirt: "#b8860b",
+    pants: "#8b6508",
+    hair: "#3a2512",
+    eyes: "#111111",
+    boots: "#4a3319",
+    hairStyle: "short",
+    outfit: "adventurer",
+    height: 102,
+    build: 105,
+  }, { showSword: false, showName: false }));
+
+  const label = makeLabel("Desert Quest Giver", 0.9);
+  label.position.y = 14;
+  giver.add(label);
+
+  scene.add(giver);
+
+  interactables.push({
+    type: "questHub",
+    mesh: giver,
+    hubType: "desert",
+    prompt: "Press E: View Desert quests",
+  });
+}
+
+function createSnowyQuestGiver(position) {
+  const giver = new THREE.Group();
+  giver.position.copy(position);
+  giver.add(createHumanAvatarModel({
+    name: "Snowy Quest Giver",
+    skin: "#f0e0d0",
+    shirt: "#a8c8e8",
+    pants: "#4a5f78",
+    hair: "#e8e8f0",
+    eyes: "#1a3a5c",
+    boots: "#2a3a4a",
+    hairStyle: "short",
+    outfit: "adventurer",
+    height: 104,
+    build: 100,
+  }, { showSword: false, showName: false }));
+
+  // Snowflake aura ring
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(5.5, 0.18, 8, 42),
+    new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7 }),
+  );
+  aura.position.y = 2;
+  aura.rotation.x = Math.PI / 2;
+  giver.add(aura);
+
+  const label = makeLabel("Snowy Quest Giver", 0.9);
+  label.position.y = 15;
+  giver.add(label);
+
+  scene.add(giver);
+  animatedWorldObjects.push({ mesh: aura, type: "teleporter", speed: 0.014, phase: 0.8 });
+
+  interactables.push({
+    type: "questHub",
+    mesh: giver,
+    hubType: "snowy",
+    prompt: "Press E: View Snowy Village quests",
+  });
+}
+
+
+function createReturnTeleporter(position) {
+  const starterIslandPos = new THREE.Vector3(0, islands[0].surfaceY + 0.15, 0);
+  const teleporter = new THREE.Group();
+  teleporter.position.copy(position);
+
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(6, 6.5, 0.8, 16),
+    new THREE.MeshStandardMaterial({ color: 0x112233, roughness: 0.6, metalness: 0.8 })
+  );
+  base.position.y = 0.4;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  teleporter.add(base);
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(5, 0.3, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x3ce88a, transparent: true, opacity: 0.6 })
+  );
+  ring.position.y = 0.5;
+  ring.rotation.x = Math.PI / 2;
+  teleporter.add(ring);
+
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(4.8, 4.8, 18, 16, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x3ce88a, transparent: true, opacity: 0.12, side: THREE.DoubleSide })
+  );
+  beam.position.y = 9;
+  teleporter.add(beam);
+
+  const label = makeLabel("Teleporter", 1.15);
+  label.position.y = 15;
+  teleporter.add(label);
+
+  scene.add(teleporter);
+  animatedWorldObjects.push({ mesh: ring, type: "teleporter", speed: 0.022, phase: position.x * 0.01 });
+  animatedWorldObjects.push({ mesh: beam, type: "teleporterBeam", baseY: beam.position.y, speed: 0.003, phase: position.z * 0.01 });
+
+  interactables.push({
+    type: "returnTeleporter",
+    mesh: teleporter,
+    prompt: "Press E: Return to Starter Island",
+    destination: starterIslandPos,
+  });
+}
+
+function learnJunglePulse() {
+  if (player.specialUnlocked) {
+    log("You already know Jungle Pulse. Press 4 to equip it.");
+    return;
+  }
+  if (!quest.complete) {
+    log("The Jungle Pulse Trainer says: Complete the Starter Island quest before training with me.");
+    return;
+  }
+  player.specialUnlocked = true;
+  player.stats.special = Math.max(1, player.stats.special);
+  updateHud();
+  log("Jungle Pulse special ability unlocked!");
+  saveGame();
+}
+
+function showTeleporterMenu() {
+  if (!dialoguePanel || !questOptions) return;
+  dialoguePanel.classList.remove("hidden");
+  dialogueTitle.textContent = "Sea Teleporter Node";
+  dialogueDetail.textContent = "Select an island destination:";
+  questOptions.innerHTML = "";
+
+  const jungleBtn = document.createElement("button");
+  jungleBtn.type = "button";
+  jungleBtn.className = "quest-option";
+  jungleBtn.innerHTML = "<strong>Jungle Island</strong><span>Travel to the dense tropical forest. (Requires Level 15)</span>";
+  jungleBtn.addEventListener("click", () => {
+    if (player.level < 15) {
+      log("You need to be level 15+ to access Jungle Island.");
+      return;
+    }
+    showTeleporterSubMenu("Jungle");
+  });
+  questOptions.append(jungleBtn);
+
+  const pirateBtn = document.createElement("button");
+  pirateBtn.type = "button";
+  pirateBtn.className = "quest-option";
+  pirateBtn.innerHTML = "<strong>Pirate Town</strong><span>Travel to the pirate town.</span>";
+  pirateBtn.addEventListener("click", () => {
+    showTeleporterSubMenu("PirateTown");
+  });
+  questOptions.append(pirateBtn);
+
+  const desertBtn = document.createElement("button");
+  desertBtn.type = "button";
+  desertBtn.className = "quest-option";
+  desertBtn.innerHTML = "<strong>The Desert Island</strong><span>Travel to the dry, burning sands. (Requires Level 60)</span>";
+  desertBtn.addEventListener("click", () => {
+    if (player.level < 60) {
+      log("You need to be level 60+ to access Desert Island.");
+      return;
+    }
+    showTeleporterSubMenu("Desert");
+  });
+  questOptions.append(desertBtn);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "quest-option danger-button";
+  closeBtn.style.background = "rgba(235, 94, 85, 0.15)";
+  closeBtn.style.borderColor = "rgba(235, 94, 85, 0.3)";
+  closeBtn.style.color = "#eb5e55";
+  closeBtn.innerHTML = "<strong>Cancel</strong><span>Close menu</span>";
+  closeBtn.addEventListener("click", () => {
+    dialoguePanel.classList.add("hidden");
+  });
+  questOptions.append(closeBtn);
+}
+
+function showTeleporterSubMenu(island) {
+  if (!dialoguePanel || !questOptions) return;
+  const friendlyName = island === "PirateTown" ? "Pirate Town" : `${island} Island`;
+  dialogueTitle.textContent = `${friendlyName} Locations`;
+  dialogueDetail.textContent = "Select a specific coordinate to teleport to:";
+  questOptions.innerHTML = "";
+
+  if (island === "PirateTown") {
+    const questGiverBtn = document.createElement("button");
+    questGiverBtn.type = "button";
+    questGiverBtn.className = "quest-option";
+    questGiverBtn.innerHTML = "<strong>Quest Giver</strong><span>Teleport near the island's quest dealer.</span>";
+    questGiverBtn.addEventListener("click", () => {
+      dialoguePanel.classList.add("hidden");
+      teleportToLocation(island, "questGiver");
+    });
+    questOptions.append(questGiverBtn);
+  } else {
+    const questGiverBtn = document.createElement("button");
+    questGiverBtn.type = "button";
+    questGiverBtn.className = "quest-option";
+    questGiverBtn.innerHTML = "<strong>Quest Giver</strong><span>Teleport near the island's quest dealer.</span>";
+    questGiverBtn.addEventListener("click", () => {
+      dialoguePanel.classList.add("hidden");
+      teleportToLocation(island, "questGiver");
+    });
+    questOptions.append(questGiverBtn);
+
+    const specialBtn = document.createElement("button");
+    specialBtn.type = "button";
+    specialBtn.className = "quest-option";
+    const abilityName = island === "Jungle" ? "Jungle Pulse Trainer" : "Armament Haki Trainer";
+    specialBtn.innerHTML = `<strong>${abilityName}</strong><span>Teleport to the special ability trainer.</span>`;
+    specialBtn.addEventListener("click", () => {
+      dialoguePanel.classList.add("hidden");
+      teleportToLocation(island, "special");
+    });
+    questOptions.append(specialBtn);
+  }
+
+  const backBtn = document.createElement("button");
+  backBtn.type = "button";
+  backBtn.className = "quest-option";
+  backBtn.innerHTML = "<strong>&larr; Back</strong><span>Return to island selection</span>";
+  backBtn.addEventListener("click", () => {
+    showTeleporterMenu();
+  });
+  questOptions.append(backBtn);
+}
+
+function teleportToLocation(island, type) {
+  let dest;
+  if (island === "Jungle") {
+    const jungle = islands[JUNGLE_ISLAND_INDEX];
+    if (!jungle) return;
+    if (type === "questGiver") {
+      dest = new THREE.Vector3(jungle.position.x + 350, getIslandSurfaceHeightAt(jungle.position.x + 350, jungle.position.z + 300, jungle) + 0.15, jungle.position.z + 300);
+    } else {
+      dest = new THREE.Vector3(jungle.position.x - 150, getIslandSurfaceHeightAt(jungle.position.x - 150, jungle.position.z - 200, jungle) + 0.15, jungle.position.z - 200);
+    }
+    log("Teleported to Jungle Island.");
+  } else if (island === "PirateTown") {
+    const pt = islands[2];
+    if (!pt) return;
+    if (type === "questGiver") {
+      dest = new THREE.Vector3(pt.position.x, getIslandSurfaceHeightAt(pt.position.x, pt.position.z, pt) + 0.15, pt.position.z);
+    }
+    log("Teleported to Pirate Town.");
+  } else if (island === "Desert") {
+    const desert = islands[3];
+    if (!desert) return;
+    if (type === "questGiver") {
+      dest = new THREE.Vector3(desert.position.x + 200, getIslandSurfaceHeightAt(desert.position.x + 200, desert.position.z + 200, desert) + 0.15, desert.position.z + 200);
+    } else {
+      dest = desert.position.clone().add(new THREE.Vector3(70, 0.15, -60));
+    }
+    log("Teleported to Desert Island.");
+  }
+
+  if (dest) {
+    playerMesh.position.copy(dest);
+    jumpOffset = 0;
+    verticalVelocity = 0;
+    isGrounded = true;
+    createWallHitEffect(playerMesh.position.clone(), false);
+  }
 }
 
 function createHakiTrainer(position) {
@@ -3062,34 +5063,293 @@ function spawnBruteCamp(island) {
   }
 }
 
+function spawnJungleCamps(island) {
+  const center = island.position;
+
+  // Spawn 5 Monkeys in a camp/bunch
+  const monkeyCenter = center.clone().add(new THREE.Vector3(-250, 0, -250));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 100;
+    const pz = Math.sin(angle) * 100;
+    const spawnPos = monkeyCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "monkey");
+  }
+
+  // Spawn 5 Gorillas in a camp/bunch
+  const gorillaCenter = center.clone().add(new THREE.Vector3(250, 0, -250));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 120;
+    const pz = Math.sin(angle) * 120;
+    const spawnPos = gorillaCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "gorilla");
+  }
+
+  // Spawn 1 Gorilla King (Boss)
+  const gkPos = center.clone().add(new THREE.Vector3(0, 0, 200));
+  gkPos.y = getIslandSurfaceHeightAt(gkPos.x, gkPos.z, island);
+  spawnAdvancedEnemy(gkPos, 0, "gorilla_king");
+}
+
+function spawnDesertCamps(island) {
+  const center = island.position;
+  
+  // Spawn 5 Desert Bandits in a bunch
+  const banditCenter = center.clone().add(new THREE.Vector3(200, 0, -150));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 120;
+    const pz = Math.sin(angle) * 120;
+    const spawnPos = banditCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "desert_bandit");
+  }
+
+  // Spawn 5 Desert Officers in a bunch
+  const officerCenter = center.clone().add(new THREE.Vector3(-200, 0, 150));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 120;
+    const pz = Math.sin(angle) * 120;
+    const spawnPos = officerCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "desert_officer");
+  }
+}
+
+function spawnSnowyCamps(island) {
+  const center = island.position;
+
+  // Spawn 5 Frozen Bandits in a bunch (West side)
+  const banditCenter = center.clone().add(new THREE.Vector3(-250, 0, -150));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 110;
+    const pz = Math.sin(angle) * 110;
+    const spawnPos = banditCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "frozen_bandit");
+  }
+
+  // Spawn 5 Snowmen in a bunch (East side)
+  const snowmanCenter = center.clone().add(new THREE.Vector3(250, 0, -150));
+  for (let i = 0; i < 5; i += 1) {
+    const angle = i * (Math.PI * 2 / 5);
+    const px = Math.cos(angle) * 110;
+    const pz = Math.sin(angle) * 110;
+    const spawnPos = snowmanCenter.clone().add(new THREE.Vector3(px, 0, pz));
+    spawnPos.y = getIslandSurfaceHeightAt(spawnPos.x, spawnPos.z, island);
+    spawnAdvancedEnemy(spawnPos, i, "snowman");
+  }
+
+  // Spawn 1 Yeti Boss (North side)
+  const yetiPos = center.clone().add(new THREE.Vector3(0, 0, 250));
+  yetiPos.y = getIslandSurfaceHeightAt(yetiPos.x, yetiPos.z, island);
+  spawnAdvancedEnemy(yetiPos, 0, "yeti");
+}
+
 function spawnAdvancedEnemy(position, index, type) {
   const group = new THREE.Group();
   group.position.copy(position);
   const isBrute = type === "brute";
   const isBoss = type === "buggy";
+  const isOfficer = type === "desert_officer";
+  const isDesertBandit = type === "desert_bandit";
+  const isGorillaKing = type === "gorilla_king";
+  const isGorilla = type === "gorilla";
+  const isMonkey = type === "monkey";
+  const isFrozenBandit = type === "frozen_bandit";
+  const isSnowman = type === "snowman";
+  const isYeti = type === "yeti";
+
+  let name = `Pirate ${index + 1}`;
+  if (isBoss) name = "Buggy";
+  else if (isBrute) name = `Brute ${index + 1}`;
+  else if (isOfficer) name = `Desert Officer ${index + 1}`;
+  else if (isDesertBandit) name = `Desert Bandit ${index + 1}`;
+  else if (isGorillaKing) name = "Gorilla King";
+  else if (isGorilla) name = `Gorilla ${index + 1}`;
+  else if (isMonkey) name = `Monkey ${index + 1}`;
+  else if (isFrozenBandit) name = `Frozen Bandit ${index + 1}`;
+  else if (isSnowman) name = `Snowman ${index + 1}`;
+  else if (isYeti) name = "Yeti";
+
+  let skinColor = "#b97852";
+  let shirtColor = "#722b30";
+  let pantsColor = "#222a34";
+  let hairColor = "#1b120d";
+  let hairStyle = "short";
+  let outfit = "coat";
+  let height = 104;
+  let build = 108;
+
+  if (isBoss) {
+    skinColor = "#f1c29b";
+    shirtColor = "#d74343";
+    pantsColor = "#7a4f9d";
+    hairColor = "#1f67c7";
+    hairStyle = "cap";
+    height = 118;
+    build = 126;
+  } else if (isBrute) {
+    skinColor = "#b97852";
+    shirtColor = "#3e3430";
+    pantsColor = "#222a34";
+    hairColor = "#1b120d";
+    outfit = "armor";
+    height = 126;
+    build = 142;
+  } else if (isOfficer) {
+    skinColor = "#d2b48c";
+    shirtColor = "#4a708b";
+    pantsColor = "#2f4f4f";
+    hairColor = "#000000";
+    hairStyle = "spiky";
+    outfit = "coat";
+    height = 110;
+    build = 110;
+  } else if (isDesertBandit) {
+    skinColor = "#eed2b8";
+    shirtColor = "#8b7355";
+    pantsColor = "#4a3b32";
+    hairColor = "#3a2512";
+    hairStyle = "short";
+    outfit = "sailor";
+    height = 102;
+    build = 98;
+  } else if (isMonkey) {
+    skinColor = "#8b5a2b";
+    shirtColor = "#8b5a2b";
+    pantsColor = "#5c4033";
+    hairColor = "#5c4033";
+    hairStyle = "short";
+    outfit = "sailor";
+    height = 75;
+    build = 80;
+  } else if (isGorilla) {
+    skinColor = "#2f4f4f";
+    shirtColor = "#1a1a1a";
+    pantsColor = "#1a1a1a";
+    hairColor = "#1a1a1a";
+    hairStyle = "messy";
+    outfit = "armor";
+    height = 120;
+    build = 140;
+  } else if (isGorillaKing) {
+    skinColor = "#1a1a1a";
+    shirtColor = "#ffd700";
+    pantsColor = "#1a1a1a";
+    hairColor = "#ffd700";
+    hairStyle = "spiky";
+    outfit = "armor";
+    height = 150;
+    build = 160;
+  } else if (isFrozenBandit) {
+    skinColor = "#c8dce8";
+    shirtColor = "#3a6a8a";
+    pantsColor = "#1e3f5a";
+    hairColor = "#d0e8f8";
+    hairStyle = "short";
+    outfit = "armor";
+    height = 106;
+    build = 112;
+  } else if (isSnowman) {
+    skinColor = "#f0f8ff";
+    shirtColor = "#e0e8f0";
+    pantsColor = "#d0dce8";
+    hairColor = "#404040";
+    hairStyle = "short";
+    outfit = "sailor";
+    height = 100;
+    build = 120;
+  } else if (isYeti) {
+    skinColor = "#e8f0f8";
+    shirtColor = "#c8d8e8";
+    pantsColor = "#a0b8c8";
+    hairColor = "#f0f8ff";
+    hairStyle = "messy";
+    outfit = "armor";
+    height = 155;
+    build = 170;
+  }
+
+  const showSword = !isBrute && !isMonkey && !isGorilla && !isGorillaKing && !isSnowman && !isYeti;
+
   group.add(createHumanAvatarModel({
     id: `${type}-${index}`,
-    name: isBoss ? "Buggy" : isBrute ? `Brute ${index + 1}` : `Pirate ${index + 1}`,
-    skin: isBoss ? "#f1c29b" : "#b97852",
-    shirt: isBoss ? "#d74343" : isBrute ? "#3e3430" : "#722b30",
-    pants: isBoss ? "#7a4f9d" : "#222a34",
-    hair: isBoss ? "#1f67c7" : "#1b120d",
+    name,
+    skin: skinColor,
+    shirt: shirtColor,
+    pants: pantsColor,
+    hair: hairColor,
     eyes: "#101010",
     boots: "#1a120d",
-    hairStyle: isBoss ? "cap" : "short",
-    outfit: isBrute ? "armor" : "coat",
-    height: isBoss ? 118 : isBrute ? 126 : 104,
-    build: isBoss ? 126 : isBrute ? 142 : 108,
-  }, { showSword: !isBrute, showName: false, bandanaColor: isBoss ? "#ff3131" : "#b92832" }));
+    hairStyle,
+    outfit,
+    height,
+    build,
+  }, { 
+    showSword: showSword, 
+    showName: false, 
+    bandanaColor: isBoss ? "#ff3131" : isOfficer ? "#4682b4" : isGorillaKing ? "#ffd700" : "#b92832" 
+  }));
+
   if (isBrute) addMaceToEnemy(group);
+  if (isOfficer) {
+    addGunToEnemy(group);
+    // Hide sword, show gun initially
+    group.children.forEach(child => {
+      if (child.name === "gun") child.visible = true;
+    });
+    const avatar = group.children[0];
+    if (avatar) {
+      avatar.children.forEach(child => {
+        if (child.name === "swordGroup") child.visible = false;
+      });
+    }
+  }
+
+  // Icy shell mesh for Frozen Bandits (transparent blue box around body)
+  if (isFrozenBandit) {
+    const shellGeo = new THREE.BoxGeometry(9, 14, 7);
+    const shellMat = new THREE.MeshStandardMaterial({
+      color: 0x88ccff,
+      transparent: true,
+      opacity: 0.45,
+      roughness: 0.1,
+      metalness: 0.2,
+      side: THREE.DoubleSide,
+    });
+    const iceShell = new THREE.Mesh(shellGeo, shellMat);
+    iceShell.name = "iceShell";
+    iceShell.position.set(0, 6, 0);
+    group.add(iceShell);
+  }
+
   scene.add(group);
+  
+  let maxHp = 95;
+  if (isBoss) maxHp = 850;
+  else if (isBrute) maxHp = 180;
+  else if (isOfficer) maxHp = 340;
+  else if (isDesertBandit) maxHp = 260;
+  else if (isGorillaKing) maxHp = 750;
+  else if (isGorilla) maxHp = 160;
+  else if (isMonkey) maxHp = 100;
+  else if (isFrozenBandit) maxHp = 500;
+  else if (isSnowman) maxHp = 650;
+  else if (isYeti) maxHp = 2000;
+
   const enemyObj = {
     id: `${type}-${index}`,
     type,
     mesh: group,
     spawn: position.clone(),
-    health: isBoss ? 850 : isBrute ? 180 : 95,
-    maxHealth: isBoss ? 850 : isBrute ? 180 : 95,
+    health: maxHp,
+    maxHealth: maxHp,
     alive: true,
     respawnTimer: 0,
     hitTimer: 0,
@@ -3104,6 +5364,17 @@ function spawnAdvancedEnemy(position, index, type) {
   };
   if (isBoss) {
     enemyObj.parts = group.children[0]?.userData?.parts;
+  }
+  if (isBrute) {
+    enemyObj.mace = group.children[1];
+    enemyObj.maceHead = enemyObj.mace.children[0];
+  }
+  if (isFrozenBandit) {
+    // iceShell mesh is the last child in the group
+    enemyObj.iceShell = group.children[group.children.length - 1];
+    enemyObj.iceShellHp = 180;   // shell has its own HP pool
+    enemyObj.iceShellMax = 180;
+    enemyObj.shellBroken = false;
   }
   enemies.push(enemyObj);
 }
@@ -3124,8 +5395,64 @@ function addMaceToEnemy(group) {
     new THREE.DodecahedronGeometry(1.25, 0),
     new THREE.MeshStandardMaterial({ color: 0x2f2d2b, roughness: 0.82, metalness: 0.5 }),
   );
-  head.position.set(5.2, 3.5, 0.8);
-  group.add(head);
+  head.position.set(2.4, -0.15, 0);
+  mace.add(head);
+}
+
+function addGunToEnemy(group) {
+  const gunGroup = new THREE.Group();
+  gunGroup.name = "gun";
+
+  // Barrel
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.2, 3.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2 })
+  );
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0, 1.6);
+  gunGroup.add(barrel);
+
+  // Handle / Grip
+  const grip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 1.2, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8 })
+  );
+  grip.position.set(0, -0.5, 0.1);
+  grip.rotation.x = -0.4;
+  gunGroup.add(grip);
+
+  // Lock plate
+  const lock = new THREE.Mesh(
+    new THREE.BoxGeometry(0.15, 0.4, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x777777, metalness: 0.9, roughness: 0.3 })
+  );
+  lock.position.set(0.2, 0.15, 0.4);
+  gunGroup.add(lock);
+
+  // Position gun similarly to held weapons
+  gunGroup.position.set(2.55, 4.7, -0.55);
+  gunGroup.rotation.set(0, 0, -0.62);
+  group.add(gunGroup);
+  return gunGroup;
+}
+
+function createFlintlockTracer(position, direction) {
+  const geometry = new THREE.SphereGeometry(0.4, 8, 8);
+  const material = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.copy(position);
+  scene.add(mesh);
+
+  projectiles.push({
+    mesh,
+    direction: direction.clone(),
+    speed: 150,
+    damage: 20,
+    age: 0,
+    duration: 1.5,
+    owner: "enemy",
+    isBullet: true
+  });
 }
 
 function spawnBandit(position, index) {
@@ -3183,24 +5510,34 @@ function createHumanAvatarModel(avatar, options = {}) {
   const heightScale = (avatar.height || 100) / 100;
   const buildScale = (avatar.build || 100) / 100;
   const skin = new THREE.MeshStandardMaterial({ color: avatar.skin, roughness: 0.72 });
-  const shirt = new THREE.MeshStandardMaterial({ color: avatar.shirt, roughness: 0.84 });
-  const pants = new THREE.MeshStandardMaterial({ color: avatar.pants, roughness: 0.86 });
+  const shirt = new THREE.MeshStandardMaterial({ color: avatar.shirt || "#1b85aa", roughness: 0.84 });
+  const pants = new THREE.MeshStandardMaterial({ color: avatar.pants || "#26364f", roughness: 0.86 });
   const hair = new THREE.MeshStandardMaterial({ color: avatar.hair, roughness: 0.9 });
   const eyes = new THREE.MeshStandardMaterial({ color: avatar.eyes || "#101820", roughness: 0.4 });
   const boots = new THREE.MeshStandardMaterial({ color: avatar.boots || "#23170f", roughness: 0.9 });
+  
+  // Custom Granular Materials for Advanced Customization
+  const torsoMat = new THREE.MeshStandardMaterial({ color: avatar.torsoColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
+  const leftArmMat = new THREE.MeshStandardMaterial({ color: avatar.leftArmColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
+  const rightArmMat = new THREE.MeshStandardMaterial({ color: avatar.rightArmColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
+  const leftLegMat = new THREE.MeshStandardMaterial({ color: avatar.leftLegColor || avatar.pants || "#26364f", roughness: 0.86 });
+  const rightLegMat = new THREE.MeshStandardMaterial({ color: avatar.rightLegColor || avatar.pants || "#26364f", roughness: 0.86 });
+  const beltMat = new THREE.MeshStandardMaterial({ color: avatar.beltColor || avatar.boots || "#23170f", roughness: 0.9 });
+  const bootsMat = new THREE.MeshStandardMaterial({ color: avatar.boots || "#23170f", roughness: 0.9 });
+
   const metal = new THREE.MeshStandardMaterial({ color: 0xc8d7df, metalness: 0.7, roughness: 0.25 });
   const trim = new THREE.MeshStandardMaterial({ color: avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", roughness: 0.65 });
   const leather = new THREE.MeshStandardMaterial({ color: "#5c3d21", roughness: 0.82 });
   const darkLeather = new THREE.MeshStandardMaterial({ color: "#362a22", roughness: 0.88 });
 
   const torsoWidth = 3.2 * buildScale;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, 4.1, 1.6), shirt);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, 4.1, 1.6), torsoMat);
   torso.position.y = 5.7;
   torso.castShadow = true;
   group.add(torso);
 
   if (avatar.outfit === "coat") {
-    const coat = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth + 0.45, 5.4, 1.85), shirt);
+    const coat = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth + 0.45, 5.4, 1.85), torsoMat);
     coat.position.y = 5.0;
     coat.castShadow = true;
     group.add(coat);
@@ -3277,10 +5614,10 @@ function createHumanAvatarModel(avatar, options = {}) {
   collar.castShadow = true;
   group.add(collar);
 
-  const leftArm = addLimb(group, -2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, -0.15, shirt);
-  const rightArm = addLimb(group, 2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, 0.15, shirt);
-  const leftLeg = addLimb(group, -0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, pants, 0.04);
-  const rightLeg = addLimb(group, 0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, pants, -0.04);
+  const leftArm = addLimb(group, -2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, -0.15, leftArmMat);
+  const rightArm = addLimb(group, 2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, 0.15, rightArmMat);
+  const leftLeg = addLimb(group, -0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, leftLegMat, 0.04);
+  const rightLeg = addLimb(group, 0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, rightLegMat, -0.04);
 
   // Armor accessories (shoulder pads, gauntlets) if wearing armor outfit
   if (avatar.outfit === "armor") {
@@ -3313,12 +5650,12 @@ function createHumanAvatarModel(avatar, options = {}) {
   rightHand.position.set(0, -2.75, 0);
   rightArm.add(rightHand);
 
-  const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), boots);
+  const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), bootsMat);
   leftBoot.position.set(0, -3.85, 0.14);
   leftBoot.castShadow = true;
   leftLeg.add(leftBoot);
 
-  const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), boots);
+  const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), bootsMat);
   rightBoot.position.set(0, -3.85, 0.14);
   rightBoot.castShadow = true;
   rightLeg.add(rightBoot);
@@ -3334,7 +5671,7 @@ function createHumanAvatarModel(avatar, options = {}) {
   rightBootCuff.castShadow = true;
   rightLeg.add(rightBootCuff);
 
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(3.4 * buildScale, 0.38, 1.75), boots);
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(3.4 * buildScale, 0.38, 1.75), beltMat);
   belt.position.y = 3.7;
   belt.castShadow = true;
   group.add(belt);
@@ -3480,20 +5817,42 @@ function createHumanAvatarModel(avatar, options = {}) {
   }
 
   let cape;
-  if (avatar.outfit !== "adventurer") {
-    // Flowing royal cape on the back
-    const capeColor = avatar.shirt || "#111111";
+  const capeStyle = avatar.capeStyle || (avatar.outfit !== "adventurer" ? "normal" : "none");
+  if (capeStyle !== "none") {
+    const capeColorVal = avatar.capeColor || avatar.shirt || "#a82020";
     const capeMat = new THREE.MeshStandardMaterial({
-      color: capeColor,
+      color: capeColorVal,
       roughness: 0.85,
       metalness: 0.1,
       side: THREE.DoubleSide
     });
-    cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
-    cape.position.set(0, 4.4, -0.92);
-    cape.rotation.x = 0.12;
-    cape.castShadow = true;
-    group.add(cape);
+    if (capeStyle === "normal") {
+      cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
+      cape.position.set(0, 4.4, -0.92);
+      cape.rotation.x = 0.12;
+      cape.castShadow = true;
+      group.add(cape);
+    } else if (capeStyle === "long") {
+      cape = new THREE.Mesh(new THREE.BoxGeometry(3.0 * buildScale, 6.2, 0.15), capeMat);
+      cape.position.set(0, 3.8, -0.92);
+      cape.rotation.x = 0.15;
+      cape.castShadow = true;
+      group.add(cape);
+    } else if (capeStyle === "torn") {
+      const leftStrip = new THREE.Mesh(new THREE.BoxGeometry(1.1 * buildScale, 4.8, 0.12), capeMat);
+      leftStrip.position.set(-0.6 * buildScale, 4.4, -0.92);
+      leftStrip.rotation.set(0.15, 0, 0.05);
+      leftStrip.castShadow = true;
+      group.add(leftStrip);
+
+      const rightStrip = new THREE.Mesh(new THREE.BoxGeometry(1.1 * buildScale, 4.6, 0.12), capeMat);
+      rightStrip.position.set(0.6 * buildScale, 4.5, -0.92);
+      rightStrip.rotation.set(0.12, 0, -0.08);
+      rightStrip.castShadow = true;
+      group.add(rightStrip);
+
+      cape = leftStrip;
+    }
   }
 
   avatarParts.leftArm = leftArm;
@@ -3509,11 +5868,14 @@ function createHumanAvatarModel(avatar, options = {}) {
   group.userData.parts = avatarParts;
 
   if (showSword) {
+    const swordGroup = new THREE.Group();
+    swordGroup.name = "swordGroup";
+
     const sword = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), metal);
     sword.position.set(2.55, 4.7, -0.55);
     sword.rotation.z = -0.62;
     sword.castShadow = true;
-    group.add(sword);
+    swordGroup.add(sword);
 
     const swordHandle = new THREE.Mesh(
       new THREE.BoxGeometry(0.85, 0.22, 0.22),
@@ -3521,11 +5883,13 @@ function createHumanAvatarModel(avatar, options = {}) {
     );
     swordHandle.position.set(1.35, 6.1, -0.55);
     swordHandle.rotation.z = -0.62;
-    group.add(swordHandle);
+    swordGroup.add(swordHandle);
 
     const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), metal);
     pommel.position.set(1.1, 5.2, -0.55);
-    group.add(pommel);
+    swordGroup.add(pommel);
+
+    group.add(swordGroup);
   }
 
   if (showName) {
@@ -3931,6 +6295,44 @@ function updatePlayer(dt) {
     player.lastMoveSpeed = 0;
     return;
   }
+  
+  if (player.stunTimer > 0) {
+    player.stunTimer = Math.max(0, player.stunTimer - dt);
+    player.lastMoveSpeed = 0;
+    player.isBlocking = false;
+    
+    updateStamina(dt, false);
+    updatePlayerAnimation(dt);
+    
+    const island = getIslandUnderPlayer();
+    if (!island) {
+      updateSwimming(dt);
+      verticalVelocity = 0;
+      jumpOffset = 0;
+    } else {
+      player.isSwimming = false;
+      player.oxygen = Math.min(100, player.oxygen + dt * 18);
+      playerMesh.position.y = getIslandSurfaceHeightAt(playerMesh.position.x, playerMesh.position.z, island) + 0.15;
+      updateJump(dt);
+    }
+    
+    attackCooldown = Math.max(0, attackCooldown - dt);
+    wallHitCooldown = Math.max(0, wallHitCooldown - dt);
+    player.dashCooldown = Math.max(0, player.dashCooldown - dt);
+    
+    if (player.knockedDown) {
+      playerMesh.rotation.z = Math.PI / 2;
+    } else {
+      playerMesh.rotation.z = 0;
+    }
+    return;
+  } else {
+    if (player.knockedDown) {
+      player.knockedDown = false;
+      playerMesh.rotation.z = 0;
+    }
+  }
+
   if (player.isGodMode) {
     player.health = player.maxHealth;
     player.stamina = player.maxStamina;
@@ -3941,7 +6343,7 @@ function updatePlayer(dt) {
   }
 
   // Gatling Flurry rapid melee punches
-  if (isPointerDown && player.weapon === "melee" && player.mastery.melee >= 50 && attackCooldown <= 0) {
+  if (keys.has("KeyR") && player.weapon === "melee" && player.mastery.melee >= 50 && attackCooldown <= 0) {
     attack();
   }
 
@@ -4461,7 +6863,25 @@ function updateJump(dt) {
   playerMesh.position.y += jumpOffset;
 }
 
+function setEnemyWeaponVisuals(enemy, weapon) {
+  if (!enemy.mesh) return;
+  enemy.mesh.children.forEach(child => {
+    if (child.name === "gun") {
+      child.visible = (weapon === "gun");
+    }
+  });
+  const avatar = enemy.mesh.children[0];
+  if (avatar) {
+    avatar.children.forEach(child => {
+      if (child.name === "swordGroup") {
+        child.visible = (weapon === "sword");
+      }
+    });
+  }
+}
+
 function updateEnemies(dt) {
+  updateSurgeRocks(dt);
   enemies.forEach((enemy) => {
     if (!enemy.alive) {
       enemy.respawnTimer -= dt;
@@ -4506,44 +6926,479 @@ function updateEnemies(dt) {
       }
     }
 
-    enemy.ai = enemy.ai || { cooldown: 0, rush: 1, slash: 1, slam: 1, dodge: 1 };
-    enemy.ai.cooldown = Math.max(0, enemy.ai.cooldown - dt);
-    enemy.ai.rush = Math.max(0, enemy.ai.rush - dt);
-    enemy.ai.slash = Math.max(0, enemy.ai.slash - dt);
-    enemy.ai.slam = Math.max(0, enemy.ai.slam - dt);
-    enemy.ai.dodge = Math.max(0, enemy.ai.dodge - dt);
-    const distance = enemy.mesh.position.distanceTo(playerMesh.position);
-    const aggroRange = enemy.type ? 170 : 90;
-    if (distance < aggroRange) {
-      const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
-      const speed = enemy.type === "brute" ? 18 : enemy.type === "buggy" ? 42 : enemy.type === "pirate" ? 36 : 26;
-      if (enemy.type === "pirate" && enemy.ai.dodge <= 0 && distance < 38) {
-        const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(Math.random() > 0.5 ? 1 : -1);
-        enemy.mesh.position.addScaledVector(side, dt * 80);
-        enemy.ai.dodge = 1.2;
+    if (enemy.type === "brute") {
+      enemy.comboStep = enemy.comboStep !== undefined ? enemy.comboStep : 0;
+      enemy.comboCooldown = enemy.comboCooldown !== undefined ? enemy.comboCooldown : 0;
+      enemy.groundSurgeCooldown = enemy.groundSurgeCooldown !== undefined ? enemy.groundSurgeCooldown : 6.0;
+      enemy.deadlyComboCooldown = enemy.deadlyComboCooldown !== undefined ? enemy.deadlyComboCooldown : 10.0;
+      enemy.activeComboState = enemy.activeComboState !== undefined ? enemy.activeComboState : null;
+      enemy.deadlyComboTimer = enemy.deadlyComboTimer !== undefined ? enemy.deadlyComboTimer : 0;
+      enemy.deadlyComboHits = enemy.deadlyComboHits !== undefined ? enemy.deadlyComboHits : 0;
+      enemy.finisherStep = enemy.finisherStep !== undefined ? enemy.finisherStep : 0;
+      enemy.finisherTimer = enemy.finisherTimer !== undefined ? enemy.finisherTimer : 0;
+      enemy.swingTimer = enemy.swingTimer !== undefined ? enemy.swingTimer : 0;
+      enemy.swingType = enemy.swingType !== undefined ? enemy.swingType : null;
+      
+      enemy.comboCooldown = Math.max(0, enemy.comboCooldown - dt);
+      enemy.groundSurgeCooldown = Math.max(0, enemy.groundSurgeCooldown - dt);
+      enemy.deadlyComboCooldown = Math.max(0, enemy.deadlyComboCooldown - dt);
+
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 170;
+
+      // Mace swing animation update
+      if (enemy.swingTimer > 0) {
+        enemy.swingTimer -= dt;
+        if (enemy.mace) {
+          if (enemy.swingType === "left") {
+            enemy.mace.rotation.y = Math.sin(enemy.swingTimer * 10) * 1.5;
+          } else if (enemy.swingType === "right") {
+            enemy.mace.rotation.y = -Math.sin(enemy.swingTimer * 10) * 1.5;
+          } else if (enemy.swingType === "uppercut") {
+            enemy.mace.rotation.x = -Math.sin(enemy.swingTimer * 10) * 1.5;
+            enemy.mace.position.y = 5.2 + Math.sin(enemy.swingTimer * 10) * 3;
+          } else if (enemy.swingType === "slam") {
+            enemy.mace.rotation.x = Math.sin(enemy.swingTimer * 10) * 2.0;
+            enemy.mace.position.y = 5.2 - Math.sin(enemy.swingTimer * 10) * 2;
+          }
+        }
       } else {
+        if (enemy.mace) {
+          enemy.mace.rotation.set(0, 0, -0.72);
+          enemy.mace.position.set(3.5, 5.2, 0.8);
+        }
+      }
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (enemy.activeComboState === "deadly") {
+          enemy.deadlyComboTimer += dt;
+          const speed = 35;
+          if (distance > 18) {
+            enemy.mesh.position.addScaledVector(direction, dt * speed);
+          }
+
+          const hitTimes = [0.4, 0.7, 1.0, 1.3];
+          hitTimes.forEach((hitTime, idx) => {
+            if (enemy.deadlyComboHits === idx && enemy.deadlyComboTimer >= hitTime) {
+              enemy.deadlyComboHits += 1;
+              if (distance < 50) {
+                damagePlayer(8, "Deadly Combo Strike");
+                player.stunTimer = 0.5;
+                enemy.swingType = idx % 2 === 0 ? "left" : "right";
+                enemy.swingTimer = 0.25;
+              }
+            }
+          });
+
+          if (enemy.deadlyComboTimer >= 1.8) {
+            if (distance < 50) {
+              if (player.health < 100) {
+                enemy.activeComboState = "finisher";
+                enemy.finisherTimer = 0;
+                enemy.finisherStep = 0;
+                
+                damagePlayer(30, "Mace Finisher Slam");
+                player.knockedDown = true;
+                player.stunTimer = 4.0;
+                verticalVelocity = -220;
+                jumpOffset = 0;
+                createGroundSlam(playerMesh.position.clone(), enemy);
+                log("Special Finisher! The Brute slams you down and prepares to pierce!");
+              } else {
+                damagePlayer(25, "Deadly Combo Slam");
+                player.knockedDown = true;
+                player.stunTimer = 1.5;
+                createGroundSlam(playerMesh.position.clone(), enemy);
+                
+                enemy.activeComboState = null;
+                enemy.deadlyComboCooldown = 15.0;
+                enemy.comboCooldown = 2.5;
+              }
+            } else {
+              enemy.activeComboState = null;
+              enemy.deadlyComboCooldown = 15.0;
+              enemy.comboCooldown = 2.0;
+            }
+          }
+        } else if (enemy.activeComboState === "finisher") {
+          enemy.finisherTimer += dt;
+          if (distance > 12) {
+            enemy.mesh.position.addScaledVector(direction, dt * 15);
+          }
+
+          if (enemy.finisherStep === 0 && enemy.finisherTimer >= 1.0) {
+            enemy.finisherStep = 1;
+            damagePlayer(70, "Mace Finisher Pierce");
+            enemy.swingType = "slam";
+            enemy.swingTimer = 0.5;
+            createDustCloud(playerMesh.position.clone());
+            cameraShake = Math.max(cameraShake, 2.5);
+            log("Crucial Pierce! You took massive finisher damage!");
+          }
+
+          if (enemy.finisherTimer >= 2.0) {
+            enemy.activeComboState = null;
+            enemy.deadlyComboCooldown = 20.0;
+            enemy.comboCooldown = 3.0;
+          }
+        } else {
+          const speed = 18;
+          if (enemy.comboCooldown <= 0) {
+            if (enemy.deadlyComboCooldown <= 0 && distance < 65) {
+              enemy.activeComboState = "deadly";
+              enemy.deadlyComboTimer = 0;
+              enemy.deadlyComboHits = 0;
+            } else if (enemy.groundSurgeCooldown <= 0 && distance > 50 && distance < 150) {
+              enemy.activeComboState = "surge";
+              enemy.comboCooldown = 1.5;
+              createGroundSurge(enemy);
+              enemy.groundSurgeCooldown = 10.0;
+            } else if (distance < 44) {
+              if (enemy.comboStep === 0) {
+                damagePlayer(15, "Mace Swing Left");
+                player.stunTimer = 0.5;
+                enemy.swingType = "left";
+                enemy.swingTimer = 0.3;
+                enemy.comboCooldown = 0.5;
+                enemy.comboStep = 1;
+              } else if (enemy.comboStep === 1) {
+                damagePlayer(15, "Mace Swing Right");
+                player.stunTimer = 0.5;
+                enemy.swingType = "right";
+                enemy.swingTimer = 0.3;
+                enemy.comboCooldown = 0.5;
+                enemy.comboStep = 2;
+              } else if (enemy.comboStep === 2) {
+                damagePlayer(20, "Mace Uppercut");
+                player.stunTimer = 1.0;
+                verticalVelocity = 160;
+                isGrounded = false;
+                enemy.swingType = "uppercut";
+                enemy.swingTimer = 0.4;
+                enemy.comboCooldown = 0.5;
+                enemy.comboStep = 3;
+              } else if (enemy.comboStep === 3) {
+                damagePlayer(25, "Mace Ground Slam");
+                player.knockedDown = true;
+                player.stunTimer = 2.0;
+                verticalVelocity = -220;
+                createGroundSlam(playerMesh.position.clone(), enemy);
+                enemy.swingType = "slam";
+                enemy.swingTimer = 0.5;
+                enemy.comboCooldown = 3.0;
+                enemy.comboStep = 0;
+              }
+            } else {
+              enemy.mesh.position.addScaledVector(direction, dt * speed);
+            }
+          } else {
+            if (distance > 28) {
+              enemy.mesh.position.addScaledVector(direction, dt * speed);
+            }
+          }
+        }
+      }
+    } else if (enemy.type === "monkey") {
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 170;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        const speed = 24;
         enemy.mesh.position.addScaledVector(direction, dt * speed);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 7 && enemy.hitTimer <= 0) {
+          damagePlayer(Math.round(8 * getAvatarTraits().incomingDamageMultiplier), "Monkey Strike");
+          enemy.hitTimer = 1.0;
+          updateHud();
+        }
       }
-      enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
-      if ((enemy.type === "pirate" || enemy.type === "buggy") && enemy.ai.rush <= 0 && distance < 58) {
-        enemy.mesh.position.addScaledVector(direction, 18);
-        enemy.ai.rush = enemy.type === "buggy" ? 1.6 : 2.8;
-        createSwordSlash({ mesh: playerMesh });
-        damagePlayer(enemy.type === "buggy" ? 18 : 12, "Rapid Rush");
+    } else if (enemy.type === "gorilla") {
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 170;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        const speed = 22;
+        enemy.mesh.position.addScaledVector(direction, dt * speed);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 7 && enemy.hitTimer <= 0) {
+          damagePlayer(Math.round(16 * getAvatarTraits().incomingDamageMultiplier), "Gorilla Strike");
+          enemy.hitTimer = 1.0;
+          updateHud();
+        }
       }
-      if ((enemy.type === "pirate" || enemy.type === "buggy") && enemy.ai.slash <= 0 && distance < 135) {
-        createAirSlash(enemy.mesh.position.clone().setY(enemy.mesh.position.y + 7), direction, enemy);
-        enemy.ai.slash = enemy.type === "buggy" ? 2.1 : 3.3;
+    } else if (enemy.type === "gorilla_king") {
+      enemy.slamCount = enemy.slamCount !== undefined ? enemy.slamCount : 0;
+      enemy.slamTimer = enemy.slamTimer !== undefined ? enemy.slamTimer : 0;
+      enemy.slamCooldown = enemy.slamCooldown !== undefined ? enemy.slamCooldown : 8.0;
+      
+      enemy.slamCooldown = Math.max(0, enemy.slamCooldown - dt);
+      
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 200;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (enemy.slamCount > 0) {
+          enemy.slamTimer += dt;
+          if (enemy.slamTimer >= 0.6) {
+            enemy.slamTimer = 0;
+            createGroundSlam(enemy.mesh.position.clone(), enemy);
+            enemy.slamCount -= 1;
+            if (enemy.slamCount === 0) {
+              enemy.slamCooldown = 8.0;
+            }
+          }
+        } else {
+          const speed = 25;
+          if (distance > 10) {
+            enemy.mesh.position.addScaledVector(direction, dt * speed);
+          }
+
+          if (enemy.slamCooldown <= 0 && distance < 60) {
+            enemy.slamCount = 4;
+            enemy.slamTimer = 0.5;
+          } else if (distance < 10 && enemy.hitTimer <= 0) {
+            damagePlayer(Math.round(24 * getAvatarTraits().incomingDamageMultiplier), "Gorilla King Strike");
+            enemy.hitTimer = 1.0;
+            updateHud();
+          }
+        }
       }
-      if (enemy.type === "brute" && enemy.ai.slam <= 0 && distance < 44) {
-        createGroundSlam(enemy.mesh.position.clone(), enemy);
-        enemy.ai.slam = 4.5;
+    } else if (enemy.type === "desert_officer") {
+      enemy.currentWeapon = enemy.currentWeapon || "gun";
+      enemy.shootCooldown = enemy.shootCooldown !== undefined ? enemy.shootCooldown : 1.0;
+      enemy.shootCooldown = Math.max(0, enemy.shootCooldown - dt);
+
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 170;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 28) {
+          if (enemy.currentWeapon !== "sword") {
+            enemy.currentWeapon = "sword";
+            setEnemyWeaponVisuals(enemy, "sword");
+          }
+        } else {
+          if (enemy.currentWeapon !== "gun") {
+            enemy.currentWeapon = "gun";
+            setEnemyWeaponVisuals(enemy, "gun");
+          }
+        }
+
+        if (enemy.currentWeapon === "sword") {
+          const speed = 30;
+          enemy.mesh.position.addScaledVector(direction, dt * speed);
+
+          if (distance < 7 && enemy.hitTimer <= 0) {
+            damagePlayer(Math.round(15 * getAvatarTraits().incomingDamageMultiplier), "Officer Slash");
+            enemy.hitTimer = 1.0;
+            updateHud();
+          }
+        } else {
+          const speed = 14;
+          enemy.mesh.position.addScaledVector(direction, dt * speed);
+
+          if (enemy.shootCooldown <= 0) {
+            const muzzleOffset = new THREE.Vector3(0, 5, 0).addScaledVector(direction, 3);
+            const shootPos = enemy.mesh.position.clone().add(muzzleOffset);
+            const targetPos = playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0));
+            const shootDir = targetPos.sub(shootPos).normalize();
+
+            createFlintlockTracer(shootPos, shootDir);
+            audio.playShot();
+            enemy.shootCooldown = 1.5;
+          }
+        }
       }
-    }
-    if (distance < 7 && enemy.hitTimer <= 0) {
-      damagePlayer(Math.round((enemy.type === "brute" ? 18 : enemy.type === "buggy" ? 22 : 8) * getAvatarTraits().incomingDamageMultiplier), enemy.type === "brute" ? "mace hit" : "enemy strike");
-      enemy.hitTimer = 1.0;
-      updateHud();
+    } else if (enemy.type === "desert_bandit") {
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 170;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        const speed = 28;
+        enemy.mesh.position.addScaledVector(direction, dt * speed);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 7 && enemy.hitTimer <= 0) {
+          damagePlayer(Math.round(12 * getAvatarTraits().incomingDamageMultiplier), "Bandit Strike");
+          enemy.hitTimer = 1.0;
+          updateHud();
+        }
+      }
+    } else if (enemy.type === "frozen_bandit") {
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 180;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        // Frozen bandits are slower while shell is intact
+        const speed = enemy.shellBroken ? 28 : 16;
+        enemy.mesh.position.addScaledVector(direction, dt * speed);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 8 && enemy.hitTimer <= 0) {
+          const dmg = Math.round(18 * getAvatarTraits().incomingDamageMultiplier);
+          damagePlayer(dmg, "Frozen Sword Strike");
+          enemy.hitTimer = 1.2;
+          updateHud();
+        }
+      }
+    } else if (enemy.type === "snowman") {
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 175;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        const speed = 22;
+        enemy.mesh.position.addScaledVector(direction, dt * speed);
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        if (distance < 8 && enemy.hitTimer <= 0) {
+          const dmg = Math.round(22 * getAvatarTraits().incomingDamageMultiplier);
+          damagePlayer(dmg, "Snowman Pummel");
+          enemy.hitTimer = 1.1;
+          updateHud();
+        }
+      }
+    } else if (enemy.type === "yeti") {
+      // Initialize Yeti state timers
+      enemy.slamCount    = enemy.slamCount    !== undefined ? enemy.slamCount    : 0;
+      enemy.slamTimer    = enemy.slamTimer    !== undefined ? enemy.slamTimer    : 0;
+      enemy.slamCooldown = enemy.slamCooldown !== undefined ? enemy.slamCooldown : 8.0;
+      enemy.falconCooldown   = enemy.falconCooldown   !== undefined ? enemy.falconCooldown   : 12.0;
+      enemy.falconWindup     = enemy.falconWindup     !== undefined ? enemy.falconWindup     : 0;
+      enemy.falconCharging   = enemy.falconCharging   !== undefined ? enemy.falconCharging   : false;
+
+      enemy.slamCooldown   = Math.max(0, enemy.slamCooldown   - dt);
+      enemy.falconCooldown = Math.max(0, enemy.falconCooldown - dt);
+
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = 220;
+
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+
+        // --- Ground Slam sequence (4x) ---
+        if (enemy.slamCount > 0) {
+          enemy.slamTimer += dt;
+          if (enemy.slamTimer >= 0.6) {
+            enemy.slamTimer = 0;
+            createGroundSlam(enemy.mesh.position.clone(), enemy);
+            enemy.slamCount -= 1;
+            if (enemy.slamCount === 0) {
+              enemy.slamCooldown = 8.0;
+            }
+          }
+        } else if (enemy.falconCharging) {
+          // --- Falcon Punch windup ---
+          enemy.falconWindup += dt;
+          // During windup, Yeti trembles in place
+          enemy.mesh.position.x += (Math.random() - 0.5) * 0.4;
+          enemy.mesh.position.z += (Math.random() - 0.5) * 0.4;
+
+          if (enemy.falconWindup >= 0.65) {
+            // LAUNCH — rocket toward player
+            enemy.falconCharging = false;
+            enemy.falconWindup = 0;
+            enemy.falconCooldown = 15.0;
+
+            const rushDist = distance < 90 ? distance : 90;
+            enemy.mesh.position.addScaledVector(direction, rushDist);
+
+            const punchDist = enemy.mesh.position.distanceTo(playerMesh.position);
+            if (punchDist < 22) {
+              const dmg = Math.round(55 * getAvatarTraits().incomingDamageMultiplier);
+              damagePlayer(dmg, "Yeti Falcon Punch");
+              // Knock the player back hard
+              player.knockedDown = true;
+              player.stunTimer = 1.8;
+              verticalVelocity = -160;
+              jumpOffset = 0;
+              cameraShake = Math.max(cameraShake, 3.0);
+              createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "FALCON PUNCH!", "#ff9900");
+              log("💥 FALCON PUNCH! The Yeti launches you with a devastating blow!");
+            }
+          }
+        } else {
+          // --- Normal movement ---
+          const speed = 30;
+          if (distance > 12) {
+            enemy.mesh.position.addScaledVector(direction, dt * speed);
+          }
+
+          // Trigger 4x slam sequence
+          if (enemy.slamCooldown <= 0 && distance < 70) {
+            enemy.slamCount = 4;
+            enemy.slamTimer = 0.5;
+          }
+          // Trigger Falcon Punch windup
+          else if (enemy.falconCooldown <= 0 && distance < 100) {
+            enemy.falconCharging = true;
+            enemy.falconWindup = 0;
+            createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "FALCON PUNCH!!!", "#ff6600");
+            log("⚠️ The Yeti is winding up a Falcon Punch!");
+          }
+          // Basic melee
+          else if (distance < 12 && enemy.hitTimer <= 0) {
+            const dmg = Math.round(30 * getAvatarTraits().incomingDamageMultiplier);
+            damagePlayer(dmg, "Yeti Strike");
+            enemy.hitTimer = 1.0;
+            updateHud();
+          }
+        }
+      }
+    } else {
+
+      // Non-brutes standard logic (Buggy, Pirate, Bandits)
+      enemy.ai = enemy.ai || { cooldown: 0, rush: 1, slash: 1, slam: 1, dodge: 1 };
+      enemy.ai.cooldown = Math.max(0, enemy.ai.cooldown - dt);
+      enemy.ai.rush = Math.max(0, enemy.ai.rush - dt);
+      enemy.ai.slash = Math.max(0, enemy.ai.slash - dt);
+      enemy.ai.slam = Math.max(0, enemy.ai.slam - dt);
+      enemy.ai.dodge = Math.max(0, enemy.ai.dodge - dt);
+      const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+      const aggroRange = enemy.type ? 170 : 90;
+      if (distance < aggroRange) {
+        const direction = playerMesh.position.clone().sub(enemy.mesh.position).setY(0).normalize();
+        const speed = enemy.type === "buggy" ? 42 : enemy.type === "pirate" ? 36 : 26;
+        if (enemy.type === "pirate" && enemy.ai.dodge <= 0 && distance < 38) {
+          const side = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar(Math.random() > 0.5 ? 1 : -1);
+          enemy.mesh.position.addScaledVector(side, dt * 80);
+          enemy.ai.dodge = 1.2;
+        } else {
+          enemy.mesh.position.addScaledVector(direction, dt * speed);
+        }
+        enemy.mesh.rotation.y = Math.atan2(direction.x, direction.z);
+        if (enemy.type === "buggy" && enemy.ai.rush <= 0 && distance < 58) {
+          enemy.mesh.position.addScaledVector(direction, 18);
+          enemy.ai.rush = 1.6;
+          createSwordSlash({ mesh: playerMesh });
+          damagePlayer(18, "Rapid Rush");
+        }
+        if (enemy.type === "buggy" && enemy.ai.slash <= 0 && distance < 135) {
+          createAirSlash(enemy.mesh.position.clone().setY(enemy.mesh.position.y + 7), direction, enemy);
+          enemy.ai.slash = 2.1;
+        }
+      }
+      if (distance < 7 && enemy.hitTimer <= 0) {
+        damagePlayer(Math.round((enemy.type === "buggy" ? 22 : 8) * getAvatarTraits().incomingDamageMultiplier), enemy.type === "buggy" ? "strike" : "enemy strike");
+        enemy.hitTimer = 1.0;
+        updateHud();
+      }
     }
 
     // Update enemy Y coordinate to match sloped terrain
@@ -4636,8 +7491,55 @@ function damageEnemy(enemy, baseAmount, label = "Strike", color = "#ff7a3d", isF
     baseAmount = Math.max(baseAmount, enemy.maxHealth * 10);
   }
 
+  // === Frozen Bandit: Icy Shell Mechanic ===
+  if (enemy.type === "frozen_bandit" && !enemy.shellBroken && enemy.iceShell) {
+    // Sword is weak vs shell; melee is strong
+    const isSwordHit = player.weapon === "sword";
+    const shellMult = isSwordHit ? 0.4 : 1.5;
+    const shellDamage = Math.round(baseAmount * shellMult);
+
+    enemy.iceShellHp = Math.max(0, enemy.iceShellHp - shellDamage);
+    triggerHitFlash(enemy.mesh);
+
+    const pos = enemy.mesh.position.clone().add(new THREE.Vector3(0, 10, 0));
+    if (isSwordHit) {
+      createFloatingText(pos, `Shell: -${shellDamage} (Weak!)`, "#aaddff");
+      log(`Sword barely chips the icy shell! ${shellDamage} damage.`);
+    } else {
+      createFloatingText(pos, `Shell: -${shellDamage}`, "#88ccff");
+      log(`Melee cracks the icy shell! ${shellDamage} damage.`);
+    }
+
+    // Update shell opacity based on remaining HP
+    const shellFrac = enemy.iceShellHp / enemy.iceShellMax;
+    if (enemy.iceShell.material) {
+      enemy.iceShell.material.opacity = 0.15 + 0.35 * shellFrac;
+    }
+
+    if (enemy.iceShellHp <= 0) {
+      // Shell shatters!
+      enemy.shellBroken = true;
+      enemy.iceShell.visible = false;
+      // Flash white to signal shatter
+      triggerHitFlash(enemy.mesh);
+      const shatPos = enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0));
+      createFloatingText(shatPos, "ICE SHELL SHATTERED!", "#ffffff");
+      log("The Frozen Bandit's icy shell has shattered! They are now vulnerable.");
+    }
+    return shellDamage;
+  }
+
   const isHeadshot = isForcedHeadshot !== null ? isForcedHeadshot : (Math.random() < 0.20);
-  const finalDamage = isHeadshot ? Math.round(baseAmount * 1.5) : baseAmount;
+  let adjustedAmount = baseAmount;
+
+  // Damage modifiers after shell is broken (or for non-frozen types)
+  if (enemy.type === "frozen_bandit" && enemy.shellBroken) {
+    // Melee is more effective, sword less effective on frozen flesh
+    if (player.weapon === "melee") adjustedAmount = Math.round(baseAmount * 1.5);
+    else if (player.weapon === "sword") adjustedAmount = Math.round(baseAmount * 0.65);
+  }
+
+  const finalDamage = isHeadshot ? Math.round(adjustedAmount * 1.5) : adjustedAmount;
 
   enemy.health = Math.max(0, enemy.health - finalDamage);
   triggerHitFlash(enemy.mesh);
@@ -4657,6 +7559,7 @@ function damageEnemy(enemy, baseAmount, label = "Strike", color = "#ff7a3d", isF
   }
   return finalDamage;
 }
+
 
 function killPlayer(source) {
   player.health = 0;
@@ -4737,7 +7640,7 @@ function interact() {
   } else if (nearbyInteractable.type === "boat") {
     showBoatMenu();
   } else if (nearbyInteractable.type === "questHub") {
-    showQuestDialogue();
+    showQuestDialogue(nearbyInteractable.hubType);
   } else if (nearbyInteractable.type === "hakiTrainer") {
     purchaseHaki();
   } else if (nearbyInteractable.type === "sword") {
@@ -4758,16 +7661,31 @@ function interact() {
       log(`Starter Blade requires $${cost} and ${ironwoodCost} ironwood. Defeat bandits for materials.`);
     }
   } else if (nearbyInteractable.type === "teleporter") {
+    if (player.level < (nearbyInteractable.requiredLevel || 1)) {
+      log(`You need to be level ${nearbyInteractable.requiredLevel || 1}+ to travel to ${nearbyInteractable.destIslandName || "this island"}.`);
+      return;
+    }
     playerMesh.position.copy(nearbyInteractable.destination);
     jumpOffset = 0;
     verticalVelocity = 0;
     isGrounded = true;
     createWallHitEffect(playerMesh.position.clone(), false);
-    log("Teleported to Jungle Island.");
+    log(`Teleported to ${nearbyInteractable.destIslandName || "the island"}.`);
+  } else if (nearbyInteractable.type === "menuTeleporter") {
+    showTeleporterMenu();
+  } else if (nearbyInteractable.type === "returnTeleporter") {
+    playerMesh.position.copy(nearbyInteractable.destination);
+    jumpOffset = 0;
+    verticalVelocity = 0;
+    isGrounded = true;
+    createWallHitEffect(playerMesh.position.clone(), false);
+    log("Returned to Starter Island.");
+  } else if (nearbyInteractable.type === "junglePulseTrainer") {
+    learnJunglePulse();
   }
 }
 
-function showQuestDialogue() {
+function showQuestDialogue(hubType) {
   if (!dialoguePanel || !questOptions) return;
 
   // Clear new quest alert when viewing quest hub
@@ -4782,10 +7700,33 @@ function showQuestDialogue() {
   }
 
   dialoguePanel.classList.remove("hidden");
-  dialogueTitle.textContent = "Outpost Quest Hub";
-  dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
   questOptions.innerHTML = "";
-  Object.values(questCatalog).forEach((entry) => {
+
+  let filteredQuests = [];
+  if (hubType === "jungle") {
+    dialogueTitle.textContent = "Jungle Quest Hub";
+    dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+    filteredQuests = [questCatalog.monkey10, questCatalog.gorilla15, questCatalog.gorillaKing20];
+  } else if (hubType === "pirateTown") {
+    dialogueTitle.textContent = "Pirate Town Quest Hub";
+    dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+    filteredQuests = [questCatalog.pirates30, questCatalog.brutes40, questCatalog.buggy50];
+  } else if (hubType === "desert") {
+    dialogueTitle.textContent = "Desert Quest Hub";
+    dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+    filteredQuests = [questCatalog.desertBandits60, questCatalog.desertOfficers70];
+  } else if (hubType === "snowy") {
+    dialogueTitle.textContent = "Snowy Village Quest Hub";
+    dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+    filteredQuests = [questCatalog.frozenBandits90, questCatalog.snowmen100, questCatalog.yeti110];
+  } else {
+    dialogueTitle.textContent = "Quest Hub";
+    dialogueDetail.textContent = "Only one major quest can be active. Pick a contract and preview its reward.";
+    filteredQuests = Object.values(questCatalog).filter(q => q.id !== "starter");
+  }
+
+  filteredQuests.forEach((entry) => {
+    if (!entry) return;
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quest-option";
@@ -4793,6 +7734,18 @@ function showQuestDialogue() {
     button.addEventListener("click", () => acceptMajorQuest(entry.id));
     questOptions.append(button);
   });
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "quest-option danger-button";
+  closeBtn.style.background = "rgba(235, 94, 85, 0.15)";
+  closeBtn.style.borderColor = "rgba(235, 94, 85, 0.3)";
+  closeBtn.style.color = "#eb5e55";
+  closeBtn.innerHTML = "<strong>Cancel</strong><span>Close menu</span>";
+  closeBtn.addEventListener("click", () => {
+    dialoguePanel.classList.add("hidden");
+  });
+  questOptions.append(closeBtn);
 }
 
 function hideQuestDialogue() {
@@ -5331,6 +8284,98 @@ function updateProjectiles(dt) {
   }
 }
 
+const activeSurgeRocks = [];
+
+function createGroundSurge(enemy) {
+  if (!enemy || !enemy.mesh) return;
+  const startPos = enemy.mesh.position.clone();
+  const dir = playerMesh.position.clone().sub(startPos).setY(0).normalize();
+  const numRocks = 8;
+  const rockSpacing = 22;
+  
+  audio.playImpact();
+  
+  for (let i = 0; i < numRocks; i += 1) {
+    setTimeout(() => {
+      if (!enemy.alive) return;
+      const rockPos = startPos.clone().addScaledVector(dir, i * rockSpacing);
+      
+      const island = islands.find(isl => {
+        const dx = rockPos.x - isl.position.x;
+        const dz = rockPos.z - isl.position.z;
+        return Math.sqrt(dx * dx + dz * dz) <= isl.radius;
+      });
+      const groundY = island ? getIslandSurfaceHeightAt(rockPos.x, rockPos.z, island) : OCEAN_SURFACE_Y;
+      rockPos.y = groundY;
+      
+      const rockGeo = new THREE.DodecahedronGeometry(6 + Math.random() * 3, 0);
+      rockGeo.scale(1.1, 0.7 + Math.random() * 0.5, 0.9 + Math.random() * 0.3);
+      const rockMat = new THREE.MeshStandardMaterial({
+        color: 0x4d4741,
+        roughness: 0.96,
+        flatShading: true
+      });
+      const rockMesh = new THREE.Mesh(rockGeo, rockMat);
+      rockMesh.position.copy(rockPos).setY(groundY - 14);
+      rockMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      rockMesh.castShadow = true;
+      rockMesh.receiveShadow = true;
+      scene.add(rockMesh);
+      
+      createDustCloud(rockPos);
+      
+      activeSurgeRocks.push({
+        mesh: rockMesh,
+        startY: groundY - 14,
+        peakY: groundY + 2.5 + Math.random() * 2,
+        time: 0,
+        duration: 1.6,
+        hitDetected: false,
+        pos: rockPos
+      });
+    }, i * 180);
+  }
+}
+
+function updateSurgeRocks(dt) {
+  for (let i = activeSurgeRocks.length - 1; i >= 0; i -= 1) {
+    const rock = activeSurgeRocks[i];
+    rock.time += dt;
+    const t = rock.time / rock.duration;
+    
+    if (t < 0.22) {
+      const p = t / 0.22;
+      rock.mesh.position.y = rock.startY + (rock.peakY - rock.startY) * p;
+      rock.mesh.scale.setScalar(p);
+    } else if (t < 0.78) {
+      rock.mesh.position.y = rock.peakY;
+      rock.mesh.scale.setScalar(1);
+    } else if (t < 1.0) {
+      const p = (1.0 - t) / 0.22;
+      rock.mesh.position.y = rock.startY + (rock.peakY - rock.startY) * p;
+      rock.mesh.scale.setScalar(Math.max(0.001, p));
+    } else {
+      scene.remove(rock.mesh);
+      rock.mesh.geometry.dispose();
+      rock.mesh.material.dispose();
+      activeSurgeRocks.splice(i, 1);
+      continue;
+    }
+    
+    if (!rock.hitDetected && rock.time < 1.1) {
+      const dist = rock.mesh.position.distanceTo(playerMesh.position);
+      if (dist < 18) {
+        rock.hitDetected = true;
+        damagePlayer(28, "Ground Surge");
+        player.stunTimer = 0.8;
+        verticalVelocity = 90;
+        isGrounded = false;
+        createDustCloud(playerMesh.position.clone());
+      }
+    }
+  }
+}
+
 function createGroundSlam(position, enemy) {
   cameraShake = Math.max(cameraShake, 1.4);
   createDustCloud(position);
@@ -5380,9 +8425,9 @@ function createGroundSlam(position, enemy) {
     rock.receiveShadow = true;
     scene.add(rock);
 
-    hazards.push({
+     hazards.push({
       mesh: rock,
-      damage: (enemy && enemy.type === "brute") ? 20 : 28,
+      damage: (enemy && enemy.type === "brute") ? 20 : (enemy && enemy.type === "gorilla_king") ? 24 : (enemy && enemy.type === "yeti") ? 32 : 28,
       radius: Math.max(3, rockRadius * 1.4), // collision radius scales with rock size
       age: 0,
       duration: 3.2,
@@ -5510,15 +8555,21 @@ function applyHakiVisuals() {
 }
 
 function updateBossHud() {
-  const boss = enemies.find((enemy) => enemy.type === "buggy" && enemy.alive);
-  if (!boss || boss.mesh.position.distanceTo(playerMesh.position) > 260) {
+  const boss = enemies.find((enemy) => (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") && enemy.alive);
+  const proximityRange = boss?.type === "yeti" ? 350 : 260;
+  if (!boss || boss.mesh.position.distanceTo(playerMesh.position) > proximityRange) {
     bossBar?.classList.add("hidden");
     return;
   }
   bossBar?.classList.remove("hidden");
-  if (bossName) bossName.textContent = "Buggy the Clown Captain";
+  let bossDisplayName = "Boss";
+  if (boss.type === "buggy") bossDisplayName = "Buggy the Clown Captain";
+  else if (boss.type === "gorilla_king") bossDisplayName = "Gorilla King";
+  else if (boss.type === "yeti") bossDisplayName = "The Yeti";
+  if (bossName) bossName.textContent = bossDisplayName;
   if (bossHealthBar) bossHealthBar.style.width = `${Math.max(0, (boss.health / boss.maxHealth) * 100)}%`;
 }
+
 
 function getDamage() {
   const traits = getAvatarTraits();
@@ -5547,9 +8598,57 @@ function defeatBandit(enemy) {
 function defeatEnemy(enemy) {
   enemy.alive = false;
   enemy.mesh.visible = false;
-  enemy.respawnTimer = enemy.type === "buggy" ? 999 : 6;
-  const xpReward = enemy.type === "buggy" ? 9000 : enemy.type === "brute" ? 950 : enemy.type === "pirate" ? 520 : 18;
-  const moneyReward = enemy.type === "buggy" ? 4200 : enemy.type === "brute" ? 95 : enemy.type === "pirate" ? 62 : 12;
+  enemy.respawnTimer = (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") ? 45 : 6;
+  let xpReward = 18;
+  let moneyReward = 12;
+  let baseMastery = 90;
+
+  if (enemy.type === "buggy") {
+    xpReward = 9000;
+    moneyReward = 4200;
+    baseMastery = 1000;
+  } else if (enemy.type === "brute") {
+    xpReward = 950;
+    moneyReward = 95;
+    baseMastery = 250;
+  } else if (enemy.type === "pirate") {
+    xpReward = 520;
+    moneyReward = 62;
+    baseMastery = 150;
+  } else if (enemy.type === "desert_officer") {
+    xpReward = 4800;
+    moneyReward = 280;
+    baseMastery = 750;
+  } else if (enemy.type === "desert_bandit") {
+    xpReward = 3200;
+    moneyReward = 190;
+    baseMastery = 500;
+  } else if (enemy.type === "gorilla_king") {
+    xpReward = 4500;
+    moneyReward = 220;
+    baseMastery = 800;
+  } else if (enemy.type === "gorilla") {
+    xpReward = 650;
+    moneyReward = 75;
+    baseMastery = 200;
+  } else if (enemy.type === "monkey") {
+    xpReward = 380;
+    moneyReward = 45;
+    baseMastery = 120;
+  } else if (enemy.type === "frozen_bandit") {
+    xpReward = 5500;
+    moneyReward = 320;
+    baseMastery = 900;
+  } else if (enemy.type === "snowman") {
+    xpReward = 7200;
+    moneyReward = 420;
+    baseMastery = 1100;
+  } else if (enemy.type === "yeti") {
+    xpReward = 18000;
+    moneyReward = 2800;
+    baseMastery = 2500;
+  }
+
   addXp(xpReward);
   spawnLootCoins(enemy.mesh.position.clone(), moneyReward);
   player.materials.ironwood += enemy.type ? 2 : 1;
@@ -5557,7 +8656,6 @@ function defeatEnemy(enemy) {
 
   // Mastery Reward!
   player.enemiesDefeatedCount = (player.enemiesDefeatedCount || 0) + 1;
-  const baseMastery = enemy.type === "buggy" ? 1000 : enemy.type === "brute" ? 250 : enemy.type === "pirate" ? 150 : 90;
   const decayFactor = 0.10; // 10% harder per defeat
   const masteryGained = Math.max(1, Math.round(baseMastery / (1 + (player.enemiesDefeatedCount - 1) * decayFactor)));
   const currentWeapon = player.weapon;
@@ -5598,10 +8696,18 @@ function defeatEnemy(enemy) {
       log(`Armament Haki reached Level ${player.haki.level}.`);
     }
   }
-  if (enemy.type === "buggy") {
+  if (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") {
     bossBar?.classList.add("hidden");
+  }
+  if (enemy.type === "buggy") {
     player.materials.jungleCore += 2;
     log("Buggy defeated: massive XP, cash, and rare cores acquired.");
+  } else if (enemy.type === "gorilla_king") {
+    player.materials.jungleCore += 1;
+    log("Gorilla King defeated: massive XP, cash, and jungle cores acquired.");
+  } else if (enemy.type === "yeti") {
+    player.materials.icyCore = (player.materials.icyCore || 0) + 2;
+    log("The Yeti has been defeated! Massive XP, cash, and rare icy cores acquired.");
   }
 
   updateHud();
@@ -5705,7 +8811,88 @@ function log(message) {
   messageLog.textContent = message;
 }
 
+function getOutpostIslandProfileRadius(angle, maxRadius) {
+  const ax = -900, az = -300;
+  const bx = 900, bz = 300;
+  const vx = bx - ax, vz = bz - az;
+  const v_len_sq = vx * vx + vz * vz;
+  
+  const r1 = 950;
+  const r2 = 950;
+  const bridgeWidth = 280;
+
+  let low = 0;
+  let high = maxRadius * 1.6;
+  for (let step = 0; step < 16; step++) {
+    const mid = (low + high) / 2;
+    const px = Math.cos(angle) * mid;
+    const pz = Math.sin(angle) * mid;
+    
+    // Check dist1
+    const dx1 = px - ax, dz1 = pz - az;
+    const dist1 = Math.sqrt(dx1 * dx1 + dz1 * dz1) / r1;
+    
+    // Check dist2
+    const dx2 = px - bx, dz2 = pz - bz;
+    const dist2 = Math.sqrt(dx2 * dx2 + dz2 * dz2) / r2;
+    
+    // Check bridge
+    const wx = px - ax, wz = pz - az;
+    let t = (wx * vx + wz * vz) / v_len_sq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * vx;
+    const cz = az + t * vz;
+    const dxB = px - cx, dzB = pz - cz;
+    const distB = Math.sqrt(dxB * dxB + dzB * dzB) / bridgeWidth;
+    
+    const minDist = Math.min(dist1, dist2, distB);
+    if (minDist <= 1) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
 function getLocalSurfaceHeightAt(lx, lz, radius, height, index) {
+  if (index === 2) {
+    const ax = -900, az = -300;
+    const bx = 900, bz = 300;
+    const vx = bx - ax, vz = bz - az;
+    const v_len_sq = vx * vx + vz * vz;
+    
+    const r1 = 950;
+    const r2 = 950;
+    const bridgeWidth = 280;
+
+    const dx1 = lx - ax, dz1 = lz - az;
+    const dist1 = Math.sqrt(dx1 * dx1 + dz1 * dz1) / r1;
+    
+    const dx2 = lx - bx, dz2 = lz - bz;
+    const dist2 = Math.sqrt(dx2 * dx2 + dz2 * dz2) / r2;
+    
+    const wx = lx - ax, wz = lz - az;
+    let t = (wx * vx + wz * vz) / v_len_sq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * vx;
+    const cz = az + t * vz;
+    const dxB = lx - cx, dzB = lz - cz;
+    const distB = Math.sqrt(dxB * dxB + dzB * dzB) / bridgeWidth;
+    
+    const minDist = Math.min(dist1, dist2, distB);
+    const normDist = Math.min(1, minDist);
+    
+    const centerHeight = height + 0.5;
+    const seed = index + 9;
+    const slope = -height;
+    const angle = Math.atan2(lz, lx);
+    const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
+    const edgeHeight = height + 0.16 + slope + uneven;
+    
+    return centerHeight + (edgeHeight - centerHeight) * normDist;
+  }
+
   const r = Math.sqrt(lx * lx + lz * lz);
   const normDist = Math.min(1, r / (radius * 0.96));
   const angle = Math.atan2(lz, lx);
@@ -5725,7 +8912,7 @@ function getIslandSurfaceHeightAt(x, z, island) {
   return getLocalSurfaceHeightAt(x - island.position.x, z - island.position.z, island.radius, height, island.index);
 }
 
-function makeIrregularCylinderGeometry(radius, height, segments, seed) {
+function makeIrregularCylinderGeometry(radius, height, segments, seed, index = -1) {
   const positions = [];
   const indices = [];
   const topCenterIndex = 0;
@@ -5734,8 +8921,8 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
-    const topRadius = islandProfileRadius(angle, radius * 0.9, seed);
-    const bottomRadius = islandProfileRadius(angle + 0.08, radius, seed + 2);
+    const topRadius = islandProfileRadius(angle, radius * 0.9, seed, index);
+    const bottomRadius = islandProfileRadius(angle + 0.08, radius, seed + 2, index);
     
     // Sloped edge height matching the disc
     const slope = -height;
@@ -5765,13 +8952,13 @@ function makeIrregularCylinderGeometry(radius, height, segments, seed) {
   return geometry;
 }
 
-function makeIrregularDiscGeometry(radius, segments, seed, height = 0) {
+function makeIrregularDiscGeometry(radius, segments, seed, height = 0, index = -1) {
   const positions = [0, 0, 0.5]; // Center is slightly raised
   const indices = [];
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
-    const edgeRadius = islandProfileRadius(angle, radius, seed);
+    const edgeRadius = islandProfileRadius(angle, radius, seed, index);
     
     const slope = -height;
     const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
@@ -5792,14 +8979,14 @@ function makeIrregularDiscGeometry(radius, segments, seed, height = 0) {
   return geometry;
 }
 
-function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed, height = 0, index = 0, maxRadius = 1) {
+function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed, height = 0, index = -1, maxRadius = 1) {
   const positions = [];
   const indices = [];
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
-    const inner = islandProfileRadius(angle + 0.12, innerRadius, seed + 1);
-    const outer = islandProfileRadius(angle, outerRadius, seed);
+    const inner = islandProfileRadius(angle + 0.12, innerRadius, seed + 1, index);
+    const outer = islandProfileRadius(angle, outerRadius, seed, index);
     
     let innerRise = Math.sin(angle * 15 + seed) * 0.3;
     let outerRise = -innerRise;
@@ -5839,7 +9026,12 @@ function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed, hei
   return geometry;
 }
 
-function islandProfileRadius(angle, radius, seed) {
+function islandProfileRadius(angle, radius, seed, index = -1) {
+  if (index === 2) {
+    const baseR = getOutpostIslandProfileRadius(angle, 2400);
+    const noise = Math.sin(angle * 13 + seed * 1.4) * 0.025;
+    return baseR * (radius / 2400) * (1 + noise);
+  }
   const longCurve = Math.sin(angle * 3 + seed) * 0.13;
   const cove = Math.cos(angle * 5 - seed * 0.7) * 0.08;
   const chips = Math.sin(angle * 13 + seed * 1.4) * 0.035;
@@ -6994,4 +10186,31 @@ document.querySelector("#admin-tp-jungle")?.addEventListener("click", () => {
     log("Admin Teleport to Jungle Island.");
   }
 });
+
+// Initialization
+createStatButtons();
+renderInventory();
+renderAvatarChoices();
+createWorld();
+createPlayer();
+applyAvatarToPlayer();
+updateDerivedStats();
+updateHud();
+resize();
+requestAnimationFrame(loop);
+
+// Initialize Authentication & Recovery UI bindings
+initAuthSystem();
+
+// Auto-Load Save Game if it exists
+checkAndLoadSave();
+
+// Initialize Marketplace listing state
+initMarketState();
+
+// Initialize Studio UI event bindings
+initAvatarStudioUI();
+
+// Periodic Auto-Save every 5 seconds
+setInterval(saveGame, 5000);
 
