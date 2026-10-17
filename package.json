@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node sync-public.js",
     "dev": "next dev",
+    "prebuild": "node sync-public.js",
     "build": "next build",
     "start": "next start",
     "serve:static": "node server.js",
-    "check": "node --check game.js && node --check server.js"
+    "check": "node --check game.js && node --check server.js && node --check sync-public.js"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.0",

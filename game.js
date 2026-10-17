@@ -202,6 +202,38 @@ const audio = {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.22);
+  },
+  playObservation() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.15);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.45);
+  },
+  playFlashStep() {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(120, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(720, ctx.currentTime + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.22);
   }
 };
 
@@ -210,7 +242,9 @@ let skillCooldowns = {};
 const masterySkills = {
   melee: [
     { key: "Z", id: "falcon-punch", name: "Falcon Punch", req: 5, cd: 4, desc: "Active: A very hard punch going 24 units far in the direction you face." },
-    { key: "X", id: "ground-slam", name: "Ground Slam", req: 20, cd: 8, desc: "Active: Slam the ground dealing massive AOE damage around you." }
+    { key: "X", id: "ground-slam", name: "Ground Slam", req: 20, cd: 8, desc: "Active: Slam the ground dealing massive AOE damage around you." },
+    { key: "C", id: "flambage-shot", name: "Flambage Shot", req: 1, cd: 6, desc: "Black Leg: Leap forward with a blazing fire kick — burn damage + knockback." },
+    { key: "V", id: "diable-jambe", name: "Diable Jambe", req: 1, cd: 18, desc: "Black Leg: Ignite your legs — next 5 attacks deal 2.5x fire damage." }
   ],
   defense: [
     { name: "Perfect Parry", req: 5, desc: "Passive: Blocking within 0.2s of attack reflects 40% damage." },
@@ -524,6 +558,18 @@ const player = {
   isAdmin: false,
   isGodMode: false,
   isInstakill: false,
+  hasFlamingFeet: false,
+  diableJambeTimer: 0,    // seconds remaining on Diable Jambe ignition buff
+  diableJambeHits: 0,    // hits remaining on Diable Jambe buff
+  hasFlashStep: false,
+  flashStepCooldown: 0,
+  observationHaki: {
+    unlocked: false,
+    active: false,
+    dodges: 5,
+    maxDodges: 5,
+    regenTimer: 0,
+  },
 };
 
 const inventoryState = {
@@ -753,6 +799,7 @@ let homeTeleportCountdown = 0;
 let questGiverPosition = new THREE.Vector3();
 let activeBoat = null;
 let isPointerDown = false;
+let isLeftMouseDown = false;
 let escMenuOpen = false;
 const perfState = {
   visible: false,
@@ -766,6 +813,7 @@ const perfState = {
 };
 let lastPointerX = 0;
 let lastPointerY = 0;
+const mouseScreenPos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let attackCooldown = 0;
 let wallHitCooldown = 0;
 let cameraShake = 0;
@@ -778,42 +826,353 @@ let isGrounded = true;
 let gameStarted = false;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8bd8ff);
-scene.fog = new THREE.Fog(0x8bd8ff, 1200, 70000);
+scene.background = new THREE.Color(0x98cded);
+scene.fog = new THREE.FogExp2(0x98cded, 0.00016);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
 
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 80000);
 
-const sun = new THREE.DirectionalLight(0xfff1c7, 2.2);
-sun.position.set(80, 130, 40);
+const sun = new THREE.DirectionalLight(0xfff8ed, 2.4);
+sun.position.set(160, 240, 100);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+const shadowDist = 260;
+sun.shadow.camera.left = -shadowDist;
+sun.shadow.camera.right = shadowDist;
+sun.shadow.camera.top = shadowDist;
+sun.shadow.camera.bottom = -shadowDist;
+sun.shadow.camera.near = 10;
+sun.shadow.camera.far = 1400;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.04;
+sun.shadow.radius = 2.0;
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xbbeeff, 0x38624b, 1.5));
+scene.add(sun.target);
+
+const hemiLight = new THREE.HemisphereLight(0x98d4ff, 0x243e31, 1.25);
+scene.add(hemiLight);
+
+const ambientLight = new THREE.AmbientLight(0xd0e6f7, 0.35);
+scene.add(ambientLight);
+
+// High-fidelity procedural wave normal texture
+function createRealisticWaterNormalTexture() {
+  const size = 512;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  const imgData = ctx.createImageData(size, size);
+  const data = imgData.data;
+
+  const heights = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * Math.PI * 2 * 6;
+      const v = (y / size) * Math.PI * 2 * 6;
+      const h = Math.sin(u) * Math.cos(v) * 0.45 +
+                Math.sin(u * 2.1 + 1.2) * Math.cos(v * 2.3 + 0.8) * 0.28 +
+                Math.sin(u * 4.4 - v * 3.7) * 0.16 +
+                Math.sin(u * 8.5 + v * 7.1) * 0.08 +
+                Math.cos(u * 14.2 - v * 11.5) * 0.03;
+      heights[y * size + x] = h;
+    }
+  }
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+      const xL = heights[y * size + ((x - 1 + size) % size)];
+      const xR = heights[y * size + ((x + 1) % size)];
+      const yU = heights[((y - 1 + size) % size) * size + x];
+      const yD = heights[((y + 1) % size) * size + x];
+
+      const dx = (xR - xL) * 3.2;
+      const dy = (yD - yU) * 3.2;
+      const dz = 1.0;
+      const invLen = 1.0 / Math.hypot(dx, dy, dz);
+
+      data[idx] = Math.floor((-dx * invLen * 0.5 + 0.5) * 255);
+      data[idx + 1] = Math.floor((-dy * invLen * 0.5 + 0.5) * 255);
+      data[idx + 2] = Math.floor((dz * invLen * 0.5 + 0.5) * 255);
+      data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(140, 140);
+  return tex;
+}
+
+const waterNormalTexture = createRealisticWaterNormalTexture();
+
+const oceanUniforms = {
+  uTime: { value: 0 },
+  uSunDir: { value: new THREE.Vector3(0.5, 0.7, 0.3).normalize() },
+  uSunColor: { value: new THREE.Color(0xfff8ed) },
+  uDeepColor: { value: new THREE.Color(0x051a2e) },
+  uShallowColor: { value: new THREE.Color(0x0c7d9a) },
+  uFoamColor: { value: new THREE.Color(0xe0f6fc) },
+};
+
+const oceanMaterial = new THREE.MeshStandardMaterial({
+  color: 0x07354d,
+  roughness: 0.12,
+  metalness: 0.12,
+  normalMap: waterNormalTexture,
+  normalScale: new THREE.Vector2(0.65, 0.65),
+  transparent: true,
+  opacity: 0.88,
+});
+
+oceanMaterial.onBeforeCompile = (shader) => {
+  shader.uniforms.uTime = oceanUniforms.uTime;
+  shader.uniforms.uSunDir = oceanUniforms.uSunDir;
+  shader.uniforms.uSunColor = oceanUniforms.uSunColor;
+  shader.uniforms.uDeepColor = oceanUniforms.uDeepColor;
+  shader.uniforms.uShallowColor = oceanUniforms.uShallowColor;
+  shader.uniforms.uFoamColor = oceanUniforms.uFoamColor;
+
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <common>',
+    `#include <common>
+    uniform float uTime;
+    varying vec3 vWorldPosition;
+    `
+  );
+
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    `#include <begin_vertex>
+    float wave1 = sin(transformed.x * 0.018 + uTime * 1.5) * cos(transformed.y * 0.018 + uTime * 1.2) * 0.55;
+    float wave2 = sin(transformed.x * 0.045 - uTime * 2.0) * cos(transformed.y * 0.04 + uTime * 1.6) * 0.22;
+    transformed.z += wave1 + wave2;
+    vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <common>',
+    `#include <common>
+    uniform float uTime;
+    uniform vec3 uSunDir;
+    uniform vec3 uSunColor;
+    uniform vec3 uDeepColor;
+    uniform vec3 uShallowColor;
+    uniform vec3 uFoamColor;
+    varying vec3 vWorldPosition;
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <normal_fragment_maps>',
+    `#ifdef USE_NORMALMAP
+      vec2 uvA = vUv * 160.0 + vec2(uTime * 0.012, uTime * 0.009);
+      vec2 uvB = vUv * 240.0 + vec2(-uTime * 0.015, uTime * 0.018);
+      vec3 mapN1 = texture2D(normalMap, uvA).xyz * 2.0 - 1.0;
+      vec3 mapN2 = texture2D(normalMap, uvB).xyz * 2.0 - 1.0;
+      vec3 blendedN = normalize(mapN1 + mapN2);
+      normal = normalize(vNormal + blendedN * 0.45);
+    #endif
+    `
+  );
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <dithering_fragment>',
+    `#include <dithering_fragment>
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    float fresnel = pow(clamp(1.0 - dot(normal, viewDir), 0.0, 1.0), 3.5);
+    vec3 halfVec = normalize(uSunDir + viewDir);
+    float spec = pow(max(0.0, dot(normal, halfVec)), 128.0) * 1.8;
+    float crest = clamp((vWorldPosition.y - (-0.08)) * 1.4, 0.0, 1.0);
+    vec3 waterColor = mix(uDeepColor, uShallowColor, fresnel * 0.6 + crest * 0.4);
+    waterColor = mix(waterColor, uFoamColor, pow(crest, 4.0) * 0.35);
+
+    gl_FragColor.rgb = mix(gl_FragColor.rgb * waterColor * 1.4, uSunColor, spec);
+    `
+  );
+};
 
 const ocean = new THREE.Mesh(
-  new THREE.CircleGeometry(50000, 260),
-  new THREE.MeshStandardMaterial({
-    color: 0x0a83a3,
-    roughness: 0.42,
-    metalness: 0.05,
-  }),
+  new THREE.PlaneGeometry(75000, 75000, 160, 160),
+  oceanMaterial,
 );
 ocean.rotation.x = -Math.PI / 2;
 ocean.position.y = -0.08;
+ocean.receiveShadow = true;
 scene.add(ocean);
 
-const ring = new THREE.Mesh(
-  new THREE.RingGeometry(30, 50000, 260),
-  new THREE.MeshBasicMaterial({ color: 0x0d5770, side: THREE.DoubleSide, transparent: true, opacity: 0.16 }),
-);
-ring.rotation.x = -Math.PI / 2;
-ring.position.y = 0.01;
-scene.add(ring);
+// Atmospheric Scattering Sky Dome
+function createSkyDome() {
+  const geo = new THREE.SphereGeometry(44000, 48, 24);
+  const uniforms = {
+    uSunPos: { value: new THREE.Vector3(100, 200, 100).normalize() },
+    uSkyTop: { value: new THREE.Color(0x0c4b8e) },
+    uSkyHorizon: { value: new THREE.Color(0x98cded) },
+    uSunGlow: { value: new THREE.Color(0xffe7b5) },
+    uSunIntensity: { value: 1.0 },
+    uNightMix: { value: 0.0 },
+  };
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms,
+    side: THREE.BackSide,
+    depthWrite: false,
+    vertexShader: `
+      varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPos;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uSunPos;
+      uniform vec3 uSkyTop;
+      uniform vec3 uSkyHorizon;
+      uniform vec3 uSunGlow;
+      uniform float uSunIntensity;
+      uniform float uNightMix;
+      varying vec3 vWorldPosition;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      void main() {
+        vec3 ray = normalize(vWorldPosition);
+        float h = clamp(ray.y * 1.8, 0.0, 1.0);
+        vec3 col = mix(uSkyHorizon, uSkyTop, pow(h, 0.65));
+
+        float sunDot = max(0.0, dot(ray, uSunPos));
+        float sunGlow = pow(sunDot, 12.0) * 0.65 * uSunIntensity;
+        float sunDisk = step(0.9985, sunDot) * 2.2 * uSunIntensity;
+        col += uSunGlow * (sunGlow + sunDisk);
+
+        if (uNightMix > 0.01) {
+          vec2 starCoord = ray.xz / (abs(ray.y) + 0.15) * 280.0;
+          float starVal = hash(floor(starCoord));
+          if (starVal > 0.993 && ray.y > 0.05) {
+            float twinkle = sin(starCoord.x * 2.0 + starCoord.y * 3.0) * 0.3 + 0.7;
+            col += vec3(1.0, 0.98, 0.9) * twinkle * uNightMix * (starVal - 0.993) * 120.0;
+          }
+        }
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.userData = { isEffect: true };
+  scene.add(mesh);
+  return { mesh, uniforms };
+}
+
+const skyDome = createSkyDome();
+
+// 3D Volumetric Cloud Deck
+function createCloudDeck() {
+  const group = new THREE.Group();
+  group.userData = { isEffect: true };
+
+  const cloudMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.95,
+    metalness: 0.0,
+    transparent: true,
+    opacity: 0.82,
+    flatShading: true,
+  });
+
+  const puffGeo = new THREE.DodecahedronGeometry(1, 1);
+  const cloudCount = 20;
+
+  for (let c = 0; c < cloudCount; c++) {
+    const cluster = new THREE.Group();
+    const angle = (c / cloudCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    const dist = 1400 + Math.random() * 5200;
+    const cy = 340 + Math.random() * 90;
+    cluster.position.set(Math.cos(angle) * dist, cy, Math.sin(angle) * dist);
+
+    const puffs = 7 + Math.floor(Math.random() * 6);
+    for (let p = 0; p < puffs; p++) {
+      const puff = new THREE.Mesh(puffGeo, cloudMat);
+      const rad = 55 + Math.random() * 65;
+      puff.scale.set(rad, rad * (0.45 + Math.random() * 0.3), rad * (0.8 + Math.random() * 0.4));
+      puff.position.set(
+        (p - puffs / 2) * 55 + (Math.random() - 0.5) * 35,
+        (Math.random() - 0.5) * 18,
+        (Math.random() - 0.5) * 45
+      );
+      puff.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      cluster.add(puff);
+    }
+    cluster.userData = { speed: 1.2 + Math.random() * 1.5 };
+    group.add(cluster);
+  }
+
+  scene.add(group);
+  return group;
+}
+
+const cloudDeck = createCloudDeck();
+
+// Ambient Sun Motes & Sea Mist Particles
+function createAmbientAtmosphere() {
+  const particleCount = 380;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const phases = new Float32Array(particleCount);
+
+  for (let i = 0; i < particleCount; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * 140;
+    positions[i * 3 + 1] = Math.random() * 45 + 1;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 140;
+    phases[i] = Math.random() * Math.PI * 2;
+  }
+
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 32;
+  const ctx = c.getContext("2d");
+  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, "rgba(255, 255, 240, 1.0)");
+  grad.addColorStop(0.3, "rgba(255, 245, 210, 0.6)");
+  grad.addColorStop(1, "rgba(255, 240, 190, 0.0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 32, 32);
+  const particleTexture = new THREE.CanvasTexture(c);
+
+  const mat = new THREE.PointsMaterial({
+    size: 2.2,
+    map: particleTexture,
+    transparent: true,
+    opacity: 0.55,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const particles = new THREE.Points(geo, mat);
+  particles.userData = { isEffect: true, phases };
+  scene.add(particles);
+  return particles;
+}
+
+const ambientAtmosphere = createAmbientAtmosphere();
+const animatedFoliage = [];
 
 // Initialization moved to the end of the file to prevent TDZ errors.
 
@@ -1000,6 +1359,12 @@ window.addEventListener("keydown", (event) => {
   if (code === "KeyH") {
     toggleHaki();
   }
+  if (code === "KeyK") {
+    toggleObservationHaki();
+  }
+  if (code === "KeyT") {
+    flashStep();
+  }
   if (code === "KeyE") {
     interact();
   }
@@ -1031,10 +1396,18 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("resize", resize);
 
 canvas.addEventListener("pointerdown", (event) => {
+  mouseScreenPos.x = event.clientX;
+  mouseScreenPos.y = event.clientY;
   if (escMenuOpen) return;
   if (player.health <= 0 || player.stunTimer > 0) return;
-  // Left click (0) and Right click (2) are both used for camera/screen rotation
-  if (event.button === 0 || event.button === 2) {
+
+  // Left mouse click (0): Attack
+  if (event.button === 0) {
+    isLeftMouseDown = true;
+    attack(event);
+  }
+  // Right mouse click (2): Camera / screen rotation
+  else if (event.button === 2) {
     isPointerDown = true;
     lastPointerX = event.clientX;
     lastPointerY = event.clientY;
@@ -1043,11 +1416,25 @@ canvas.addEventListener("pointerdown", (event) => {
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
-window.addEventListener("pointerup", () => {
+window.addEventListener("pointerup", (event) => {
+  if (event.button === 0) {
+    isLeftMouseDown = false;
+  } else if (event.button === 2) {
+    isPointerDown = false;
+  } else {
+    isLeftMouseDown = false;
+    isPointerDown = false;
+  }
+});
+
+window.addEventListener("blur", () => {
+  isLeftMouseDown = false;
   isPointerDown = false;
 });
 
 window.addEventListener("pointermove", (event) => {
+  mouseScreenPos.x = event.clientX;
+  mouseScreenPos.y = event.clientY;
   if (escMenuOpen) return;
   if (!isPointerDown) return;
   cameraYaw -= (event.clientX - lastPointerX) * 0.006;
@@ -2512,6 +2899,18 @@ function resetPlayerState() {
   player.isAdmin = false;
   player.isGodMode = false;
   player.isInstakill = false;
+  player.hasFlamingFeet = false;
+  player.diableJambeTimer = 0;
+  player.diableJambeHits = 0;
+  player.hasFlashStep = false;
+  player.flashStepCooldown = 0;
+  player.observationHaki = {
+    unlocked: false,
+    active: false,
+    dodges: 5,
+    maxDodges: 5,
+    regenTimer: 0,
+  };
 
   activeQuest = null;
   if (typeof isHelming !== 'undefined' && isHelming) {
@@ -2578,6 +2977,9 @@ function saveGame() {
     selectedAvatarId: avatarState.selectedId,
     isGodMode: player.isGodMode,
     isInstakill: player.isInstakill,
+    hasFlamingFeet: player.hasFlamingFeet,
+    hasFlashStep: player.hasFlashStep,
+    observationHakiUnlocked: player.observationHaki ? player.observationHaki.unlocked : false,
     avatars: avatarState.avatars,
     marketListings: marketState.listings,
   };
@@ -2651,6 +3053,11 @@ function checkAndLoadSave() {
     if (saveData.selectedAvatarId !== undefined) avatarState.selectedId = saveData.selectedAvatarId;
     if (saveData.isGodMode !== undefined) player.isGodMode = saveData.isGodMode;
     if (saveData.isInstakill !== undefined) player.isInstakill = saveData.isInstakill;
+    if (saveData.hasFlamingFeet !== undefined) player.hasFlamingFeet = saveData.hasFlamingFeet;
+    if (saveData.hasFlashStep !== undefined) player.hasFlashStep = saveData.hasFlashStep;
+    if (saveData.observationHakiUnlocked !== undefined) {
+      player.observationHaki.unlocked = saveData.observationHakiUnlocked;
+    }
     
     applyAvatarToPlayer();
     updateDerivedStats();
@@ -3036,7 +3443,18 @@ function createWorld() {
   buggyPos.y = getIslandSurfaceHeightAt(buggyPos.x, buggyPos.z, islands[2]);
   spawnBuggyBoss(buggyPos);
 
-  // Jungle Island additional spawns
+  // ── Secret Cave: Black Leg Dojo (near Buggy's arena) ──
+  const pirate = islands[2];
+  if (pirate) {
+    // Cave entrance is slightly behind & west of Buggy's spawn
+    const caveEntryPos = new THREE.Vector3(
+      pirate.position.x + 180, 0, pirate.position.z - 300
+    );
+    caveEntryPos.y = getIslandSurfaceHeightAt(caveEntryPos.x, caveEntryPos.z, pirate);
+    createBlackLegDojo(caveEntryPos);
+  }
+
+
   const jungle = islands[1];
   if (jungle) {
     spawnJungleCamps(jungle);
@@ -3072,6 +3490,16 @@ function createWorld() {
     const sQuestPos = new THREE.Vector3(snowy.position.x + 280, getIslandSurfaceHeightAt(snowy.position.x + 280, snowy.position.z + 180, snowy), snowy.position.z + 180);
     createSnowyQuestGiver(sQuestPos);
     createReturnTeleporter(sQuestPos.clone().add(new THREE.Vector3(30, 0, 30)));
+
+    // Observation Haki Master (West Mountain Peak)
+    const obsPos = new THREE.Vector3(snowy.position.x - 240, getIslandSurfaceHeightAt(snowy.position.x - 240, snowy.position.z + 160, snowy), snowy.position.z + 160);
+    createObservationHakiTrainer(obsPos);
+    createReturnTeleporter(obsPos.clone().add(new THREE.Vector3(-25, 0, 25)));
+
+    // Flash Step Master (East Glacier Ridge)
+    const flashPos = new THREE.Vector3(snowy.position.x + 180, getIslandSurfaceHeightAt(snowy.position.x + 180, snowy.position.z - 180, snowy), snowy.position.z - 180);
+    createFlashStepTrainer(flashPos);
+    createReturnTeleporter(flashPos.clone().add(new THREE.Vector3(25, 0, -25)));
   }
 }
 
@@ -3194,49 +3622,60 @@ function addCollisionCircle(center, radius, label, options = {}) {
 function createSnowyTree() {
   const group = new THREE.Group();
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.3, 0.45, 2.5, 8),
-    new THREE.MeshStandardMaterial({ color: 0x5c4033 }),
+    new THREE.CylinderGeometry(0.3, 0.48, 2.8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x483227, roughness: 0.92 }),
   );
-  trunk.position.y = 1.25;
+  trunk.position.y = 1.4;
   trunk.castShadow = true;
   group.add(trunk);
 
-  const leaves = new THREE.Mesh(
-    new THREE.ConeGeometry(1.8, 3.5, 9),
-    new THREE.MeshStandardMaterial({ color: 0xcdebeb, roughness: 0.9, flatShading: true }),
-  );
-  leaves.position.y = 3.5;
-  leaves.castShadow = true;
-  group.add(leaves);
+  const foliageGroup = new THREE.Group();
+  const tierColors = [0x42686b, 0x5a8385, 0x82a9ab];
+  for (let i = 0; i < 3; i++) {
+    const tier = new THREE.Mesh(
+      new THREE.ConeGeometry(2.1 - i * 0.42, 2.0, 8),
+      new THREE.MeshStandardMaterial({ color: tierColors[i], roughness: 0.85 }),
+    );
+    tier.position.y = 2.7 + i * 1.25;
+    tier.castShadow = true;
+    foliageGroup.add(tier);
 
-  const snowCap = new THREE.Mesh(
-    new THREE.ConeGeometry(1.2, 1.5, 9),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }),
-  );
-  snowCap.position.y = 4.8;
-  snowCap.castShadow = true;
-  group.add(snowCap);
-
+    const snow = new THREE.Mesh(
+      new THREE.ConeGeometry((2.1 - i * 0.42) * 0.65, 0.9, 8),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }),
+    );
+    snow.position.y = tier.position.y + 0.65;
+    snow.castShadow = true;
+    foliageGroup.add(snow);
+  }
+  group.add(foliageGroup);
+  animatedFoliage.push({ mesh: foliageGroup, baseRotZ: 0, phase: Math.random() * Math.PI * 2 });
   return group;
 }
 
 function createTree() {
   const group = new THREE.Group();
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.55, 3, 8),
-    new THREE.MeshStandardMaterial({ color: 0x8c5a32 }),
+    new THREE.CylinderGeometry(0.35, 0.55, 3.2, 8),
+    new THREE.MeshStandardMaterial({ color: 0x6e4726, roughness: 0.9 }),
   );
-  trunk.position.y = 1.5;
+  trunk.position.y = 1.6;
   trunk.castShadow = true;
   group.add(trunk);
 
-  const leaves = new THREE.Mesh(
-    new THREE.ConeGeometry(2, 4, 9),
-    new THREE.MeshStandardMaterial({ color: 0x2f8f54 }),
-  );
-  leaves.position.y = 4;
-  leaves.castShadow = true;
-  group.add(leaves);
+  const tierColors = [0x267343, 0x2f8a50, 0x3aa35f];
+  const foliageGroup = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const tier = new THREE.Mesh(
+      new THREE.ConeGeometry(2.3 - i * 0.45, 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: tierColors[i], roughness: 0.82 }),
+    );
+    tier.position.y = 3.1 + i * 1.35;
+    tier.castShadow = true;
+    foliageGroup.add(tier);
+  }
+  group.add(foliageGroup);
+  animatedFoliage.push({ mesh: foliageGroup, baseRotZ: 0, phase: Math.random() * Math.PI * 2 });
   return group;
 }
 
@@ -3609,6 +4048,7 @@ function createPalmTree(height) {
     leaf.rotation.y = i * 0.9;
     leaf.castShadow = true;
     group.add(leaf);
+    animatedFoliage.push({ mesh: leaf, baseRotZ: Math.PI / 2.7, phase: i * 0.9 });
   }
 
   const coconuts = new THREE.Mesh(
@@ -4689,6 +5129,510 @@ function createSnowyQuestGiver(position) {
   });
 }
 
+function createObservationHakiTrainer(position) {
+  const trainer = new THREE.Group();
+  trainer.position.copy(position);
+  trainer.add(createHumanAvatarModel({
+    name: "Observation Master",
+    skin: "#d8c2aa",
+    shirt: "#771d1d",     // Crimson monk robe
+    pants: "#1c1c1c",
+    hair: "#ffffff",      // White hair
+    eyes: "#ff2222",      // Red eyes / awakened perception
+    boots: "#3a2618",
+    hairStyle: "messy",
+    outfit: "coat",
+    height: 110,
+    build: 102,
+  }, { showSword: false, showName: false }));
+
+  // Glowing red Kenbunshoku aura ring
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(5.2, 0.22, 8, 42),
+    new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.8 }),
+  );
+  aura.position.y = 2;
+  aura.rotation.x = Math.PI / 2;
+  trainer.add(aura);
+
+  // Floating Kenbunshoku eye marker above head
+  const eyeMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(1.2, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff4444 })
+  );
+  eyeMarker.position.y = 16.5;
+  eyeMarker.scale.set(1.4, 0.7, 1);
+  trainer.add(eyeMarker);
+
+  const label = makeLabel("Observation Master (Kenbunshoku)", 1.0);
+  label.position.y = 19;
+  trainer.add(label);
+
+  scene.add(trainer);
+  animatedWorldObjects.push({ mesh: aura, type: "teleporter", speed: 0.02, phase: 0.5 });
+  animatedWorldObjects.push({ mesh: eyeMarker, type: "teleporterBeam", baseY: 16.5, speed: 0.003, phase: 0 });
+
+  interactables.push({
+    type: "observationTrainer",
+    mesh: trainer,
+    prompt: "Press E: Train Observation Haki",
+  });
+}
+
+function showObservationHakiDialog() {
+  if (!dialoguePanel || !questOptions) return;
+  dialoguePanel.classList.remove("hidden");
+  dialogueTitle.textContent = "👁️ Observation Master (Kenbunshoku Haki)";
+  questOptions.innerHTML = "";
+
+  if (player.observationHaki && player.observationHaki.unlocked) {
+    dialogueDetail.textContent = `You have already awakened Kenbunshoku (Observation Haki)! Press K to toggle it ON/OFF. While active, you can automatically dodge up to 5 attacks and sense all nearby threats.`;
+  } else {
+    dialogueDetail.textContent = `"In the biting blizzard, eyesight fails... but true masters see with their spirit. I can teach you Kenbunshoku (Observation Haki) for $7,500 Berries. (Requires Level 80+)."`;
+  }
+
+  if (!player.observationHaki || !player.observationHaki.unlocked) {
+    const buyBtn = document.createElement("button");
+    buyBtn.type = "button";
+    buyBtn.className = "quest-option";
+    buyBtn.innerHTML = `<strong>👁️ Learn Observation Haki</strong><span>Awaken Kenbunshoku (K key) to auto-dodge 5 attacks and reveal threats through walls.</span><small>Cost: $7,500 Berries (Requires Lv 80)</small>`;
+    buyBtn.addEventListener("click", () => purchaseObservationHaki());
+    questOptions.append(buyBtn);
+  }
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "quest-option danger-button";
+  closeBtn.style.background = "rgba(235, 94, 85, 0.15)";
+  closeBtn.style.borderColor = "rgba(235, 94, 85, 0.3)";
+  closeBtn.style.color = "#eb5e55";
+  closeBtn.innerHTML = "<strong>Leave</strong><span>Close this menu</span>";
+  closeBtn.addEventListener("click", () => { dialoguePanel.classList.add("hidden"); });
+  questOptions.append(closeBtn);
+}
+
+function purchaseObservationHaki() {
+  if (player.observationHaki && player.observationHaki.unlocked) {
+    log("You have already mastered Observation Haki! Press K to toggle.");
+    return;
+  }
+  if (player.level < 80) {
+    log("Observation Master: \"Your spirit is still unfocused. Come back at Level 80.\"");
+    return;
+  }
+  const cost = 7500;
+  if (player.money < cost) {
+    log(`Observation Master: "You need $${cost} Berries to undergo this training."`);
+    return;
+  }
+
+  player.money -= cost;
+  player.observationHaki.unlocked = true;
+  player.observationHaki.active = true;
+  player.observationHaki.dodges = 5;
+  player.observationHaki.maxDodges = 5;
+  dialoguePanel.classList.add("hidden");
+  updateHud();
+  saveGame();
+
+  audio.playObservation();
+  audio.playQuestComplete();
+
+  // Pulse effect
+  const pulseRing = new THREE.Mesh(
+    new THREE.TorusGeometry(6, 0.2, 8, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.85 })
+  );
+  pulseRing.position.copy(playerMesh.position).add(new THREE.Vector3(0, 2, 0));
+  pulseRing.rotation.x = Math.PI / 2;
+  scene.add(pulseRing);
+  addTimedEffect(pulseRing, 0.6, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 10);
+    mesh.material.opacity = 0.85 * (1 - progress);
+  });
+
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "👁️ OBSERVATION HAKI AWAKENED!", "#ff3333");
+  log("👁️ You have learned Observation Haki! Press K to toggle ON/OFF. Automatically evades up to 5 attacks and detects enemy vitals.");
+}
+
+function createFlashStepTrainer(position) {
+  const trainer = new THREE.Group();
+  trainer.position.copy(position);
+  trainer.add(createHumanAvatarModel({
+    name: "Flash Step Master",
+    skin: "#eed2b8",
+    shirt: "#0d3b66",     // Midnight navy shinobi gi
+    pants: "#14213d",
+    hair: "#48cae4",      // Cyan streak hair
+    eyes: "#00b4d8",
+    boots: "#03045e",
+    hairStyle: "spiky",
+    outfit: "adventurer",
+    height: 106,
+    build: 96,
+  }, { showSword: false, showName: false }));
+
+  // Glowing cyan speed ring
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(5.2, 0.22, 8, 42),
+    new THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.8 }),
+  );
+  aura.position.y = 2;
+  aura.rotation.x = Math.PI / 2;
+  trainer.add(aura);
+
+  const label = makeLabel("Flash Step Master (Soru)", 1.0);
+  label.position.y = 16;
+  trainer.add(label);
+
+  scene.add(trainer);
+  animatedWorldObjects.push({ mesh: aura, type: "teleporter", speed: 0.03, phase: 1.2 });
+
+  interactables.push({
+    type: "flashStepTrainer",
+    mesh: trainer,
+    prompt: "Press E: Train Flash Step",
+  });
+}
+
+function showFlashStepDialog() {
+  if (!dialoguePanel || !questOptions) return;
+  dialoguePanel.classList.remove("hidden");
+  dialogueTitle.textContent = "⚡ Flash Step Master (Soru)";
+  questOptions.innerHTML = "";
+
+  if (player.hasFlashStep) {
+    dialogueDetail.textContent = "You have already mastered Flash Step (Soru)! Press T to instantly vanish and teleport directly to where you are pointing with your cursor.";
+  } else {
+    dialogueDetail.textContent = `"By kicking the snow a dozen times in a fraction of a second, one can vanish before the eye can track. I will teach you the ancient Soru (Flash Step) for $5,000 Berries. (Requires Level 75+)."`;
+  }
+
+  if (!player.hasFlashStep) {
+    const buyBtn = document.createElement("button");
+    buyBtn.type = "button";
+    buyBtn.className = "quest-option";
+    buyBtn.innerHTML = `<strong>⚡ Learn Flash Step (Soru)</strong><span>Unlocks T key to instantly teleport directly to where your cursor points.</span><small>Cost: $5,000 Berries (Requires Lv 75)</small>`;
+    buyBtn.addEventListener("click", () => purchaseFlashStep());
+    questOptions.append(buyBtn);
+  }
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "quest-option danger-button";
+  closeBtn.style.background = "rgba(235, 94, 85, 0.15)";
+  closeBtn.style.borderColor = "rgba(235, 94, 85, 0.3)";
+  closeBtn.style.color = "#eb5e55";
+  closeBtn.innerHTML = "<strong>Leave</strong><span>Close this menu</span>";
+  closeBtn.addEventListener("click", () => { dialoguePanel.classList.add("hidden"); });
+  questOptions.append(closeBtn);
+}
+
+function purchaseFlashStep() {
+  if (player.hasFlashStep) {
+    log("You have already mastered Flash Step! Press T to use it.");
+    return;
+  }
+  if (player.level < 75) {
+    log("Flash Step Master: \"Your legs aren't fast enough yet, rookie. Come back at Level 75.\"");
+    return;
+  }
+  const cost = 5000;
+  if (player.money < cost) {
+    log(`Flash Step Master: "You need $${cost} Berries to master Soru."`);
+    return;
+  }
+
+  player.money -= cost;
+  player.hasFlashStep = true;
+  dialoguePanel.classList.add("hidden");
+  updateHud();
+  saveGame();
+
+  audio.playFlashStep();
+  audio.playFanfare();
+
+  createFlashStepAfterimage(playerMesh.position.clone());
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "⚡ FLASH STEP UNLOCKED!", "#66ddff");
+  log("⚡ You have learned Flash Step! Press T to burst forward with sonic speed.");
+}
+
+function updateObservationVision(dt) {
+  if (!player.observationHaki || !player.observationHaki.active) {
+    enemies.forEach(e => {
+      if (e.obsMarker) e.obsMarker.visible = false;
+    });
+    return;
+  }
+
+  // Periodic subtle radar pulse
+  if (!updateObservationVision.lastPulse || performance.now() - updateObservationVision.lastPulse > 1800) {
+    updateObservationVision.lastPulse = performance.now();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(5, 0.14, 6, 36),
+      new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.45 })
+    );
+    ring.position.copy(playerMesh.position).add(new THREE.Vector3(0, 1.2, 0));
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+    addTimedEffect(ring, 0.85, (mesh, progress) => {
+      mesh.scale.setScalar(1 + progress * 7.5);
+      mesh.material.opacity = 0.45 * (1 - progress);
+    });
+  }
+
+  // Highlight all nearby enemies
+  enemies.forEach(e => {
+    if (!e.alive) {
+      if (e.obsMarker) e.obsMarker.visible = false;
+      return;
+    }
+    const dist = e.mesh.position.distanceTo(playerMesh.position);
+    if (dist <= 260) {
+      if (!e.obsMarker) {
+        const marker = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.3, 0),
+          new THREE.MeshBasicMaterial({ color: 0xff3333, wireframe: true })
+        );
+        marker.position.set(0, 14.5, 0);
+        e.mesh.add(marker);
+        e.obsMarker = marker;
+      }
+      e.obsMarker.visible = true;
+      e.obsMarker.rotation.y += dt * 3.5;
+    } else {
+      if (e.obsMarker) e.obsMarker.visible = false;
+    }
+  });
+}
+
+function createBlackLegDojo(position) {
+  const group = new THREE.Group();
+  group.position.copy(position);
+
+  // === Cave structure ===
+  const rockMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2218,
+    roughness: 0.95,
+    metalness: 0.05,
+    flatShading: true,
+  });
+
+  // Back wall
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(28, 18, 2.5), rockMat);
+  backWall.position.set(0, 9, -12);
+  group.add(backWall);
+
+  // Left wall
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(2.5, 18, 24), rockMat);
+  leftWall.position.set(-12, 9, -2);
+  group.add(leftWall);
+
+  // Right wall
+  const rightWall = new THREE.Mesh(new THREE.BoxGeometry(2.5, 18, 24), rockMat);
+  rightWall.position.set(12, 9, -2);
+  group.add(rightWall);
+
+  // Ceiling
+  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(28, 2.5, 24), rockMat);
+  ceiling.position.set(0, 18, -2);
+  group.add(ceiling);
+
+  // Cave floor (darker stone)
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.98 });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(24, 0.5, 22), floorMat);
+  floor.position.set(0, 0.25, -2);
+  group.add(floor);
+
+  // Entrance arch frame (left & right pillars)
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x3a3020, roughness: 0.9, flatShading: true });
+  const pillarL = new THREE.Mesh(new THREE.BoxGeometry(3, 16, 3), pillarMat);
+  pillarL.position.set(-11, 8, 10);
+  group.add(pillarL);
+  const pillarR = new THREE.Mesh(new THREE.BoxGeometry(3, 16, 3), pillarMat);
+  pillarR.position.set(11, 8, 10);
+  group.add(pillarR);
+
+  // Entrance lintel
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(28, 3, 3), pillarMat);
+  lintel.position.set(0, 15.5, 10);
+  group.add(lintel);
+
+  // === Central fire pit ===
+  const pitMat = new THREE.MeshStandardMaterial({ color: 0x1a0d00, roughness: 0.95 });
+  const pit = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 1, 10), pitMat);
+  pit.position.set(0, 0.5, -4);
+  group.add(pit);
+
+  // Fire glow sphere (emissive orange)
+  const fireGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(2.2, 8, 6),
+    new THREE.MeshStandardMaterial({
+      color: 0xff4400,
+      emissive: 0xff3300,
+      emissiveIntensity: 2.5,
+      transparent: true,
+      opacity: 0.82,
+    })
+  );
+  fireGlow.position.set(0, 2.5, -4);
+  group.add(fireGlow);
+  animatedWorldObjects.push({ mesh: fireGlow, type: "fireGlow", phase: 0 });
+
+  // Fire inner core (brighter yellow)
+  const fireCore = new THREE.Mesh(
+    new THREE.SphereGeometry(1.1, 6, 5),
+    new THREE.MeshBasicMaterial({ color: 0xffcc00 })
+  );
+  fireCore.position.set(0, 2.8, -4);
+  group.add(fireCore);
+  animatedWorldObjects.push({ mesh: fireCore, type: "fireCore", phase: 1.2 });
+
+  // Point light for fire warmth
+  const fireLight = new THREE.PointLight(0xff5500, 1.6, 30);
+  fireLight.position.set(0, 5, -4);
+  group.add(fireLight);
+
+  // === Hanging lanterns ===
+  const lanternMat = new THREE.MeshBasicMaterial({ color: 0xff7700 });
+  const lanternGeo = new THREE.SphereGeometry(0.6, 6, 4);
+  [[-8, 14, -6], [8, 14, -6], [0, 14, -10]].forEach(([x, y, z]) => {
+    const lantern = new THREE.Mesh(lanternGeo, lanternMat);
+    lantern.position.set(x, y, z);
+    group.add(lantern);
+    const wire = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 3, 4),
+      new THREE.MeshStandardMaterial({ color: 0x222222 })
+    );
+    wire.position.set(x, y + 1.5, z);
+    group.add(wire);
+  });
+
+  // === Sanji-style crossed-leg training mannequin (simple shapes) ===
+  // Decorative kick target dummy
+  const dummyMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.85 });
+  const dummyBody = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 6, 8), dummyMat);
+  dummyBody.position.set(-7, 4, -8);
+  group.add(dummyBody);
+  const dummyHead = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 6), dummyMat);
+  dummyHead.position.set(-7, 8, -8);
+  group.add(dummyHead);
+  const dummyPost = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4, 6), new THREE.MeshStandardMaterial({ color: 0x3a2810 }));
+  dummyPost.position.set(-7, 1, -8);
+  group.add(dummyPost);
+
+  // === SECRET entrance sign ===
+  const secretLabel = makeLabel("🔥 SECRET AREA 🔥", 1.1);
+  secretLabel.position.set(0, 18, 10);
+  group.add(secretLabel);
+
+  // === Zeff NPC ===
+  const zeffPos = new THREE.Vector3(0, 1, -8);
+  const zeff = new THREE.Group();
+  zeff.position.copy(zeffPos);
+  zeff.add(createHumanAvatarModel({
+    name: "Zeff",
+    skin: "#c49a6c",
+    shirt: "#cc2200",     // Red chef coat
+    pants: "#1a1a1a",
+    hair: "#e8c870",      // Blonde/gold
+    eyes: "#442200",
+    boots: "#0a0a0a",
+    hairStyle: "messy",
+    outfit: "coat",
+    height: 112,
+    build: 108,
+  }, { showSword: false, showName: false }));
+
+  // Golden star/flame label for Zeff
+  const zeffLabel = makeLabel("Zeff — Black Leg Master", 1.0);
+  zeffLabel.position.y = 17;
+  zeff.add(zeffLabel);
+
+  // Small fire ring around Zeff's feet
+  const zeffRing = new THREE.Mesh(
+    new THREE.TorusGeometry(4, 0.15, 6, 32),
+    new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.7 })
+  );
+  zeffRing.position.y = 1;
+  zeffRing.rotation.x = Math.PI / 2;
+  zeff.add(zeffRing);
+  animatedWorldObjects.push({ mesh: zeffRing, type: "teleporter", speed: 0.025, phase: 0 });
+
+  group.add(zeff);
+
+  scene.add(group);
+
+  // Register interactable (use the world-space position of Zeff)
+  const worldZeffPos = position.clone().add(zeffPos);
+  const zeffWorldGroup = new THREE.Group();
+  zeffWorldGroup.position.copy(worldZeffPos);
+  zeff.getWorldPosition(worldZeffPos);
+
+  interactables.push({
+    type: "flamingFeetShop",
+    mesh: group,            // proximity check against the whole cave group
+    interactCenter: worldZeffPos,
+    prompt: "Press E: Talk to Zeff (Black Leg Master)",
+  });
+}
+
+function showFlamingFeetShop() {
+  if (!dialoguePanel || !questOptions) return;
+  dialoguePanel.classList.remove("hidden");
+  dialogueTitle.textContent = "⚡ Zeff — Black Leg Style";
+  questOptions.innerHTML = "";
+
+  if (player.hasFlamingFeet) {
+    dialogueDetail.textContent = "You already master the Black Leg Style! Use C (Flambage Shot) and V (Diable Jambe) in Melee mode. Set your legs ablaze!";
+  } else {
+    dialogueDetail.textContent = `"You want to learn Black Leg Style? It'll cost ya ${5000} Berries. The style focuses kicks infused with friction-generated flames. C = Flambage Shot, V = Diable Jambe."`;
+  }
+
+  if (!player.hasFlamingFeet) {
+    const buyBtn = document.createElement("button");
+    buyBtn.type = "button";
+    buyBtn.className = "quest-option";
+    buyBtn.innerHTML = `<strong>🔥 Learn Black Leg Style</strong><span>Unlocks Flambage Shot (C) and Diable Jambe (V) in Melee mode.</span><small>Cost: $5,000 Berries</small>`;
+    buyBtn.addEventListener("click", () => buyFlamingFeet());
+    questOptions.append(buyBtn);
+  }
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "quest-option danger-button";
+  closeBtn.style.background = "rgba(235, 94, 85, 0.15)";
+  closeBtn.style.borderColor = "rgba(235, 94, 85, 0.3)";
+  closeBtn.style.color = "#eb5e55";
+  closeBtn.innerHTML = "<strong>Leave</strong><span>Close this menu</span>";
+  closeBtn.addEventListener("click", () => { dialoguePanel.classList.add("hidden"); });
+  questOptions.append(closeBtn);
+}
+
+function buyFlamingFeet() {
+  if (player.hasFlamingFeet) {
+    log("You already know the Black Leg Style!");
+    return;
+  }
+  if (player.level < 30) {
+    log("Zeff: \"You're too green, rookie. Come back at level 30.\"");
+    return;
+  }
+  const cost = 5000;
+  if (player.money < cost) {
+    log(`Zeff: "Not enough Berries! You need ${cost} to learn from me."`);
+    return;
+  }
+  player.money -= cost;
+  player.hasFlamingFeet = true;
+  dialoguePanel.classList.add("hidden");
+  updateHud();
+  saveGame();
+  audio.playQuestComplete();
+
+  // Fire burst celebration effect
+  createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 4, 0)));
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "🔥 BLACK LEG STYLE UNLOCKED!", "#ff5500");
+}
 
 function createReturnTeleporter(position) {
   const starterIslandPos = new THREE.Vector3(0, islands[0].surfaceY + 0.15, 0);
@@ -6070,6 +7014,7 @@ function loop(time) {
 
     updatePlayer(stepDt);
     updateEnemies(stepDt);
+    updateObservationVision(stepDt);
     updateHazards(stepDt);
     updateProjectiles(stepDt);
     updateCombatEffects(stepDt);
@@ -6101,7 +7046,31 @@ function loop(time) {
   updateBlinking(stepDt);
   updateLootDrops(stepDt);
   updateWorldAnimations(time);
-  ocean.material.color.offsetHSL(0, 0, Math.sin(time * 0.001) * 0.0008);
+  // Update realistic graphics elements
+  if (oceanUniforms) {
+    oceanUniforms.uTime.value = time * 0.001;
+    if (sun) {
+      oceanUniforms.uSunDir.value.copy(sun.position).sub(sun.target.position).normalize();
+    }
+  }
+  if (skyDome) {
+    skyDome.mesh.position.copy(camera.position);
+  }
+  if (cloudDeck) {
+    cloudDeck.children.forEach((c) => {
+      c.position.x += stepDt * 2.8 * (c.userData.speed || 1);
+      if (c.position.x > 7500) c.position.x = -7500;
+    });
+  }
+  if (ambientAtmosphere && typeof playerMesh !== "undefined" && playerMesh) {
+    ambientAtmosphere.position.lerp(playerMesh.position, 0.12);
+    const posArr = ambientAtmosphere.geometry.attributes.position.array;
+    const phases = ambientAtmosphere.userData.phases;
+    for (let i = 0; i < phases.length; i++) {
+      posArr[i * 3 + 1] += Math.sin(time * 0.0012 + phases[i]) * 0.02;
+    }
+    ambientAtmosphere.geometry.attributes.position.needsUpdate = true;
+  }
   
   const renderStart = performance.now();
   renderer.render(scene, camera);
@@ -6288,6 +7257,14 @@ function updateWorldAnimations(time) {
       item.mesh.material.opacity = 0.18 + Math.sin(time * 0.0025 + item.phase) * 0.07;
     }
   });
+
+  if (animatedFoliage.length > 0) {
+    const wind = time * 0.0018;
+    for (let i = 0; i < animatedFoliage.length; i++) {
+      const fol = animatedFoliage[i];
+      fol.mesh.rotation.z = fol.baseRotZ + Math.sin(wind + fol.phase) * 0.042;
+    }
+  }
 }
 
 function updatePlayer(dt) {
@@ -6342,9 +7319,11 @@ function updatePlayer(dt) {
     return;
   }
 
-  // Gatling Flurry rapid melee punches
-  if (keys.has("KeyR") && player.weapon === "melee" && player.mastery.melee >= 50 && attackCooldown <= 0) {
-    attack();
+  // Continuous attacks when holding Left Mouse Button or KeyR
+  if ((isLeftMouseDown || keys.has("KeyR")) && attackCooldown <= 0) {
+    if (player.weapon === "melee" || player.weapon === "sword") {
+      attack({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
+    }
   }
 
   // Active parry Iron Bastion heal
@@ -6418,6 +7397,52 @@ function updatePlayer(dt) {
   attackCooldown = Math.max(0, attackCooldown - dt);
   wallHitCooldown = Math.max(0, wallHitCooldown - dt);
   player.dashCooldown = Math.max(0, player.dashCooldown - dt);
+  if (player.flashStepCooldown > 0) {
+    player.flashStepCooldown = Math.max(0, player.flashStepCooldown - dt);
+  }
+
+  // Update Observation Haki dodge regeneration
+  if (player.observationHaki && player.observationHaki.unlocked) {
+    if (player.observationHaki.dodges < player.observationHaki.maxDodges) {
+      player.observationHaki.regenTimer = (player.observationHaki.regenTimer || 0) + dt;
+      if (player.observationHaki.regenTimer >= 4.0) {
+        player.observationHaki.dodges = Math.min(player.observationHaki.maxDodges, player.observationHaki.dodges + 1);
+        player.observationHaki.regenTimer = 0;
+        if (player.observationHaki.active) {
+          createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 11, 0)), `👁️ +1 Dodge (${player.observationHaki.dodges}/${player.observationHaki.maxDodges})`, "#3ce88a");
+        }
+      }
+    }
+  }
+
+  // Update Diable Jambe timer and visual effects
+  if (player.diableJambeTimer > 0) {
+    player.diableJambeTimer = Math.max(0, player.diableJambeTimer - dt);
+    if (player.diableJambeTimer <= 0) {
+      player.diableJambeHits = 0;
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Diable Jambe Extinguished", "#ff7700");
+      log("🔥 Diable Jambe legs extinguished.");
+    } else {
+      if (Math.random() < 0.28) {
+        const firePos = playerMesh.position.clone().add(new THREE.Vector3(
+          (Math.random() - 0.5) * 1.5,
+          1 + Math.random() * 2,
+          (Math.random() - 0.5) * 1.5
+        ));
+        const fireParticle = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3 + Math.random() * 0.4, 6, 4),
+          new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff4400 : 0xffaa00, transparent: true, opacity: 0.8 })
+        );
+        fireParticle.position.copy(firePos);
+        scene.add(fireParticle);
+        addTimedEffect(fireParticle, 0.35, (mesh, progress) => {
+          mesh.position.y += 0.08;
+          mesh.scale.setScalar(1 - progress);
+          mesh.material.opacity = 0.8 * (1 - progress);
+        });
+      }
+    }
+  }
 }
 
 function updateStamina(dt, moving) {
@@ -6836,6 +7861,226 @@ function dash() {
     player.isDashing = false;
   }, 180);
   createDustCloud(playerMesh.position.clone());
+}
+
+function createFlashStepAfterimage(position) {
+  const ghostGeo = new THREE.CylinderGeometry(1.6, 1.6, 7.5, 8);
+  const ghostMat = new THREE.MeshBasicMaterial({
+    color: 0x66ddff,
+    transparent: true,
+    opacity: 0.75,
+    blending: THREE.AdditiveBlending,
+  });
+  const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+  ghost.position.copy(position).add(new THREE.Vector3(0, 3.75, 0));
+  ghost.rotation.y = playerMesh.rotation.y;
+  scene.add(ghost);
+  addTimedEffect(ghost, 0.35, (mesh, progress) => {
+    mesh.material.opacity = 0.75 * (1 - progress);
+    mesh.scale.set(1 + progress * 0.4, 1, 1 + progress * 0.4);
+  });
+
+  // Speed sonic shockwave ring
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(3.5, 0.18, 8, 32),
+    new THREE.MeshBasicMaterial({ color: 0x9defff, transparent: true, opacity: 0.85 })
+  );
+  ring.position.copy(position).add(new THREE.Vector3(0, 2.5, 0));
+  ring.rotation.x = Math.PI / 2;
+  scene.add(ring);
+  addTimedEffect(ring, 0.28, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 2.2);
+    mesh.material.opacity = 0.85 * (1 - progress);
+  });
+}
+
+function createEvasionGhost(position) {
+  const ghostGeo = new THREE.CylinderGeometry(1.4, 1.4, 7, 8);
+  const ghostMat = new THREE.MeshBasicMaterial({
+    color: 0xff3344,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+  });
+  const ghost = new THREE.Mesh(ghostGeo, ghostMat);
+  ghost.position.copy(position).add(new THREE.Vector3(0, 3.5, 0));
+  ghost.rotation.y = playerMesh.rotation.y;
+  scene.add(ghost);
+  addTimedEffect(ghost, 0.35, (mesh, progress) => {
+    mesh.material.opacity = 0.7 * (1 - progress);
+    mesh.scale.set(1 + progress * 0.5, 1, 1 + progress * 0.5);
+  });
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(3, 0.16, 8, 28),
+    new THREE.MeshBasicMaterial({ color: 0xff4455, transparent: true, opacity: 0.8 })
+  );
+  ring.position.copy(position).add(new THREE.Vector3(0, 2, 0));
+  ring.rotation.x = Math.PI / 2;
+  scene.add(ring);
+  addTimedEffect(ring, 0.25, (mesh, progress) => {
+    mesh.scale.setScalar(1 + progress * 1.8);
+    mesh.material.opacity = 0.8 * (1 - progress);
+  });
+}
+
+function flashStep() {
+  if (!gameStarted) return;
+  if (!player.hasFlashStep) {
+    log("⚡ Flash Step is locked! Train with the Flash Step Master in Snowy Village.");
+    return;
+  }
+  if (player.flashStepCooldown > 0) {
+    log(`Flash Step on cooldown (${player.flashStepCooldown.toFixed(1)}s).`);
+    return;
+  }
+  if (player.stamina < 20) {
+    log("Not enough stamina for Flash Step (requires 20 Energy)!");
+    return;
+  }
+
+  player.stamina = Math.max(0, player.stamina - 20);
+  player.flashStepCooldown = 2.8;
+
+  const startPos = playerMesh.position.clone();
+  createFlashStepAfterimage(startPos);
+  audio.playFlashStep();
+
+  // Raycast from camera using mouse screen coordinates
+  const mouse = new THREE.Vector2(
+    (mouseScreenPos.x / window.innerWidth) * 2 - 1,
+    -(mouseScreenPos.y / window.innerHeight) * 2 + 1
+  );
+
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+
+  // Intersect candidate objects in the scene (ignoring player and visual effects)
+  const intersects = raycaster.intersectObjects(scene.children, true);
+  let targetPoint = null;
+
+  for (const hit of intersects) {
+    let curr = hit.object;
+    let ignore = false;
+    while (curr) {
+      if (curr === playerMesh) {
+        ignore = true;
+        break;
+      }
+      if (curr.userData && (curr.userData.isAfterimage || curr.userData.isEffect || curr.userData.isFloatingText || curr.userData.isParticle)) {
+        ignore = true;
+        break;
+      }
+      curr = curr.parent;
+    }
+    if (ignore) continue;
+    if (hit.point) {
+      targetPoint = hit.point.clone();
+      break;
+    }
+  }
+
+  // Fallback to ground plane at current player height if no direct mesh intersection
+  if (!targetPoint) {
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -playerMesh.position.y);
+    const planeIntersection = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, planeIntersection)) {
+      const toHit = planeIntersection.clone().sub(camera.position);
+      if (toHit.dot(raycaster.ray.direction) > 0) {
+        targetPoint = planeIntersection;
+      }
+    }
+  }
+
+  const maxWarpDistance = 85;
+  let finalTarget;
+
+  if (targetPoint) {
+    const delta = targetPoint.clone().sub(startPos);
+    const horizontalDist = Math.hypot(delta.x, delta.z);
+    if (horizontalDist > maxWarpDistance) {
+      const ratio = maxWarpDistance / horizontalDist;
+      finalTarget = new THREE.Vector3(
+        startPos.x + delta.x * ratio,
+        startPos.y + delta.y * ratio,
+        startPos.z + delta.z * ratio
+      );
+    } else {
+      finalTarget = targetPoint;
+    }
+  } else {
+    // Ray pointing into sky without plane intersection: use ray forward horizontal vector
+    const dir = raycaster.ray.direction.clone().setY(0);
+    if (dir.lengthSq() < 0.001) {
+      dir.set(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y));
+    }
+    dir.normalize();
+    finalTarget = startPos.clone().addScaledVector(dir, maxWarpDistance);
+  }
+
+  // Rotate player to face the teleport direction
+  const dx = finalTarget.x - startPos.x;
+  const dz = finalTarget.z - startPos.z;
+  if (dx * dx + dz * dz > 0.01) {
+    playerMesh.rotation.y = Math.atan2(dx, dz);
+  }
+
+  // Set new player position
+  playerMesh.position.x = finalTarget.x;
+  playerMesh.position.z = finalTarget.z;
+
+  // Resolve ground/elevation height
+  const island = getIslandUnderPlayer();
+  if (island) {
+    const surfaceY = getIslandSurfaceHeightAt(playerMesh.position.x, playerMesh.position.z, island) + 0.15;
+    if (finalTarget && finalTarget.y > surfaceY && finalTarget.y < surfaceY + 40) {
+      playerMesh.position.y = finalTarget.y + 0.15;
+    } else {
+      playerMesh.position.y = surfaceY;
+    }
+  } else {
+    playerMesh.position.y = OCEAN_SURFACE_Y + 0.75;
+  }
+
+  verticalVelocity = 0;
+  jumpOffset = 0;
+
+  resolveWallCollision(startPos);
+  createFlashStepAfterimage(playerMesh.position.clone());
+  createDustCloud(playerMesh.position.clone());
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "⚡ FLASH STEP!", "#9defff");
+  log("⚡ Flash Step executed!");
+}
+
+function toggleObservationHaki() {
+  if (!gameStarted) return;
+  if (!player.observationHaki || !player.observationHaki.unlocked) {
+    log("👁️ Observation Haki is locked! Learn it from the Observation Master in Snowy Village (Level 80+).");
+    return;
+  }
+
+  player.observationHaki.active = !player.observationHaki.active;
+  if (player.observationHaki.active) {
+    audio.playObservation();
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "👁️ OBSERVATION HAKI: ON", "#ff4444");
+    log(`👁️ Observation Haki activated! (${player.observationHaki.dodges}/${player.observationHaki.maxDodges} Dodges ready). Threats highlighted.`);
+    
+    // Spreading observation pulse
+    const pulseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(8, 0.2, 8, 48),
+      new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.85 })
+    );
+    pulseRing.position.copy(playerMesh.position).add(new THREE.Vector3(0, 2, 0));
+    pulseRing.rotation.x = Math.PI / 2;
+    scene.add(pulseRing);
+    addTimedEffect(pulseRing, 0.6, (mesh, progress) => {
+      mesh.scale.setScalar(1 + progress * 14);
+      mesh.material.opacity = 0.85 * (1 - progress);
+    });
+  } else {
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "Observation Haki: OFF", "#aaaaaa");
+    log("👁️ Observation Haki deactivated.");
+  }
 }
 
 function updateJump(dt) {
@@ -7419,6 +8664,28 @@ function damagePlayer(amount, source) {
   if (player.isGodMode) return; // Admin Invulnerability!
   if (player.shieldTimer > 0) return; // Invulnerable shield active!
 
+  // Observation Haki Auto-Dodge
+  if (player.observationHaki && player.observationHaki.active && player.observationHaki.dodges > 0) {
+    player.observationHaki.dodges -= 1;
+    audio.playFlashStep();
+
+    // Sideways evasive slide
+    const evadeAngle = playerMesh.rotation.y + (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2);
+    const evadeDir = new THREE.Vector3(Math.sin(evadeAngle), 0, Math.cos(evadeAngle));
+    const startPos = playerMesh.position.clone();
+    playerMesh.position.addScaledVector(evadeDir, 10);
+    resolveWallCollision(startPos);
+
+    createEvasionGhost(startPos);
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 11, 0)), `⚡ DODGE! (${player.observationHaki.dodges}/${player.observationHaki.maxDodges})`, "#ff4444");
+    log(`👁️ Observation Haki dodged an attack from ${source || "an enemy"}! (${player.observationHaki.dodges} dodges left)`);
+
+    if (player.observationHaki.dodges === 0) {
+      log("⚠️ Observation Haki dodges depleted! Regenerating 1 dodge every 4s...");
+    }
+    return 0; // Completely dodge attack!
+  }
+
   const isHeadshot = Math.random() < 0.20;
   if (isHeadshot) {
     amount = Math.round(amount * 1.5);
@@ -7613,7 +8880,8 @@ function updateCamera() {
 function updateInteractionPrompt() {
   nearbyInteractable = null;
   for (const item of interactables) {
-    if (item.mesh.position.distanceTo(playerMesh.position) < 22) {
+    const targetPos = item.interactCenter || item.mesh.position;
+    if (targetPos.distanceTo(playerMesh.position) < 22) {
       nearbyInteractable = item;
       break;
     }
@@ -7682,6 +8950,12 @@ function interact() {
     log("Returned to Starter Island.");
   } else if (nearbyInteractable.type === "junglePulseTrainer") {
     learnJunglePulse();
+  } else if (nearbyInteractable.type === "flamingFeetShop") {
+    showFlamingFeetShop();
+  } else if (nearbyInteractable.type === "observationTrainer") {
+    showObservationHakiDialog();
+  } else if (nearbyInteractable.type === "flashStepTrainer") {
+    showFlashStepDialog();
   }
 }
 
@@ -7847,14 +9121,22 @@ function attack(event = null) {
     damage = Math.round(damage * 2.5);
   }
 
+  // Diable Jambe multiplier
+  const isDiableJambeActive = player.weapon === "melee" && player.diableJambeTimer > 0;
+  if (isDiableJambeActive) {
+    damage = Math.round(damage * 2.5);
+  }
+
   let target = null;
   let isGunHeadshot = false;
 
-  if (player.weapon === "gun" && event) {
-    // Raycast to find if we clicked directly on any enemy
+  if (player.weapon === "gun") {
+    // Raycast to find if we clicked or aimed directly at any enemy
+    const clientX = event?.clientX ?? mouseScreenPos.x;
+    const clientY = event?.clientY ?? mouseScreenPos.y;
     const mouse = new THREE.Vector2();
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
     
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, camera);
@@ -7961,12 +9243,27 @@ function attack(event = null) {
   target.mesh.scale.setScalar(1.08);
   setTimeout(() => target.mesh.scale.setScalar(1), 90);
 
+  if (isDiableJambeActive) {
+    player.diableJambeHits = (player.diableJambeHits || 0) + 1;
+    if (player.diableJambeHits >= 5) {
+      player.diableJambeTimer = 0;
+      player.diableJambeHits = 0;
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Diable Jambe Extinguished", "#ff7700");
+      log("🔥 Diable Jambe legs extinguished after 5 strikes.");
+    }
+    createFireBurst(target.mesh.position.clone());
+  }
+
   if (isFalcon) {
     const pushDir = target.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
     target.mesh.position.addScaledVector(pushDir, 35);
-    damageEnemy(target, damage, "Falcon Punch", "#ff8a3d");
+    const label = isDiableJambeActive ? "🔥 Diable Falcon Punch" : "Falcon Punch";
+    const color = isDiableJambeActive ? "#ff2200" : "#ff8a3d";
+    damageEnemy(target, damage, label, color);
   } else {
-    damageEnemy(target, damage, weaponName(), "#ff7a3d", player.weapon === "gun" ? isGunHeadshot : null);
+    const label = isDiableJambeActive ? "🔥 Diable Strike" : weaponName();
+    const color = isDiableJambeActive ? "#ff4400" : "#ff7a3d";
+    damageEnemy(target, damage, label, color, player.weapon === "gun" ? isGunHeadshot : null);
   }
 }
 
@@ -8072,6 +9369,24 @@ function createMeleeBurst(target) {
       mesh.position.y += dt * (14 - progress * 24);
       mesh.material.opacity = 0.95 * (1 - progress);
       mesh.scale.setScalar(1 + progress * 1.4);
+    });
+  }
+}
+
+function createFireBurst(position) {
+  for (let i = 0; i < 16; i += 1) {
+    const fire = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2 + (i % 3) * 0.6, 8, 6),
+      new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xff3300 : 0xffaa00, transparent: true, opacity: 0.85 }),
+    );
+    const angle = i * 2.3;
+    const dir = new THREE.Vector3(Math.cos(angle), (Math.random() - 0.2) * 0.6, Math.sin(angle)).normalize();
+    fire.position.copy(position);
+    scene.add(fire);
+    addTimedEffect(fire, 0.45, (mesh, progress, dt) => {
+      mesh.position.addScaledVector(dir, dt * 48);
+      mesh.scale.setScalar(1 + progress * 1.5);
+      mesh.material.opacity = 0.85 * (1 - progress);
     });
   }
 }
@@ -9152,49 +10467,73 @@ function triggerHitFlash(group) {
 }
 
 function updateDayNightLighting(dt) {
-  let skyColor, fogColor, sunIntensity, sunColor;
-  
+  let skyTopColor, skyHorizonColor, sunGlowColor, sunIntensity, sunColor, nightMix;
+
   if (timeOfDay >= 6 && timeOfDay < 9) {
     const p = (timeOfDay - 6) / 3;
-    skyColor = new THREE.Color(0xffa07a).lerp(new THREE.Color(0x8bd8ff), p);
-    fogColor = skyColor.clone();
-    sunIntensity = 0.5 + p * 1.7;
-    sunColor = new THREE.Color(0xffd8b5).lerp(new THREE.Color(0xfff1c7), p);
+    skyTopColor = new THREE.Color(0x1a2e54).lerp(new THREE.Color(0x0c4b8e), p);
+    skyHorizonColor = new THREE.Color(0xfd9468).lerp(new THREE.Color(0x98cded), p);
+    sunGlowColor = new THREE.Color(0xffaa55).lerp(new THREE.Color(0xffe7b5), p);
+    sunIntensity = 0.8 + p * 1.6;
+    sunColor = new THREE.Color(0xffd8b5).lerp(new THREE.Color(0xfff5e6), p);
+    nightMix = Math.max(0, 1 - p * 2);
   } else if (timeOfDay >= 9 && timeOfDay < 17) {
-    skyColor = new THREE.Color(0x8bd8ff);
-    fogColor = skyColor.clone();
-    sunIntensity = 2.2;
-    sunColor = new THREE.Color(0xfff1c7);
+    skyTopColor = new THREE.Color(0x0c4b8e);
+    skyHorizonColor = new THREE.Color(0x98cded);
+    sunGlowColor = new THREE.Color(0xfff0cc);
+    sunIntensity = 2.4;
+    sunColor = new THREE.Color(0xfff5e6);
+    nightMix = 0.0;
   } else if (timeOfDay >= 17 && timeOfDay < 20) {
     const p = (timeOfDay - 17) / 3;
-    skyColor = new THREE.Color(0x8bd8ff).lerp(new THREE.Color(0xff5533), p);
-    fogColor = skyColor.clone();
-    sunIntensity = 2.2 - p * 1.8;
-    sunColor = new THREE.Color(0xfff1c7).lerp(new THREE.Color(0xffaa44), p);
+    skyTopColor = new THREE.Color(0x0c4b8e).lerp(new THREE.Color(0x141f3d), p);
+    skyHorizonColor = new THREE.Color(0x98cded).lerp(new THREE.Color(0xf75e38), p);
+    sunGlowColor = new THREE.Color(0xffe7b5).lerp(new THREE.Color(0xff4411), p);
+    sunIntensity = 2.4 - p * 1.7;
+    sunColor = new THREE.Color(0xfff5e6).lerp(new THREE.Color(0xff8833), p);
+    nightMix = Math.min(1, p * 1.5);
   } else {
     let p = 0;
     if (timeOfDay >= 20) p = (timeOfDay - 20) / 4;
     else p = 1 - (timeOfDay / 6);
-    skyColor = new THREE.Color(0xff5533).lerp(new THREE.Color(0x060c12), Math.min(1, p * 1.5));
-    fogColor = skyColor.clone();
-    sunIntensity = 0.4;
-    sunColor = new THREE.Color(0x7a8fa6);
+    skyTopColor = new THREE.Color(0x050e1f);
+    skyHorizonColor = new THREE.Color(0x081729);
+    sunGlowColor = new THREE.Color(0x3a5a78);
+    sunIntensity = 0.35;
+    sunColor = new THREE.Color(0x8faecc);
+    nightMix = 1.0;
   }
 
   if (weatherActive) {
-    skyColor.multiplyScalar(0.35);
-    fogColor.multiplyScalar(0.35);
-    sunIntensity *= 0.25;
+    skyTopColor.multiplyScalar(0.38);
+    skyHorizonColor.multiplyScalar(0.42);
+    sunIntensity *= 0.22;
   }
 
-  scene.background.copy(skyColor);
-  scene.fog.color.copy(fogColor);
-  renderer.setClearColor(skyColor);
+  if (skyDome) {
+    skyDome.uniforms.uSkyTop.value.copy(skyTopColor);
+    skyDome.uniforms.uSkyHorizon.value.copy(skyHorizonColor);
+    skyDome.uniforms.uSunGlow.value.copy(sunGlowColor);
+    skyDome.uniforms.uSunIntensity.value = sunIntensity;
+    skyDome.uniforms.uNightMix.value = nightMix;
+  }
+
+  scene.background.copy(skyHorizonColor);
+  scene.fog.color.copy(skyHorizonColor);
+  renderer.setClearColor(skyHorizonColor);
   sun.color.copy(sunColor);
   sun.intensity = sunIntensity;
 
+  // Dynamic sun positioning around player/camera so shadows follow across all islands
   const angle = (timeOfDay / 24) * Math.PI * 2 - Math.PI / 2;
-  sun.position.set(Math.cos(angle) * 300, Math.sin(angle) * 300, 100);
+  const focus = (typeof playerMesh !== "undefined" && playerMesh) ? playerMesh.position : camera.position;
+  sun.position.set(
+    focus.x + Math.cos(angle) * 360,
+    Math.max(60, focus.y + Math.sin(angle) * 360),
+    focus.z + 130
+  );
+  sun.target.position.copy(focus);
+  sun.target.updateMatrixWorld();
 
   const isNight = timeOfDay >= 19.5 || timeOfDay < 5.5;
   scene.traverse((child) => {
@@ -9429,7 +10768,15 @@ function checkNewQuestUnlocks() {
 function executeSkillByKey(keyChar) {
   if (!gameStarted) return;
   const weapon = player.weapon;
-  const skills = masterySkills[weapon] || [];
+  let skills = masterySkills[weapon] || [];
+  if (weapon === "melee") {
+    skills = skills.filter(skill => {
+      if (skill.id === "flambage-shot" || skill.id === "diable-jambe") {
+        return player.hasFlamingFeet;
+      }
+      return true;
+    });
+  }
   const skill = skills.find(s => s.key === keyChar);
   if (!skill) return;
 
@@ -9515,7 +10862,15 @@ function updateCombatHud() {
   if (ui.combatWeaponIcon) ui.combatWeaponIcon.textContent = weaponEmojis[weapon] || "👊";
   if (ui.combatWeaponName) ui.combatWeaponName.textContent = weaponNames[weapon] || "COMBAT";
 
-  const skills = masterySkills[weapon] || [];
+  let skills = masterySkills[weapon] || [];
+  if (weapon === "melee") {
+    skills = skills.filter(skill => {
+      if (skill.id === "flambage-shot" || skill.id === "diable-jambe") {
+        return player.hasFlamingFeet;
+      }
+      return true;
+    });
+  }
   const masteryInfo = getMasteryInfo(val);
   const currentLevel = masteryInfo.level;
   const currentLevelPoints = masteryInfo.currentLevelPoints;
@@ -9896,6 +11251,42 @@ function triggerActiveSkill(skillId) {
       pillar.material.opacity = Math.max(0, pillar.material.opacity - 0.09);
       f++;
     }, 80);
+
+  } else if (skillId === "flambage-shot") {
+    audio.playSlash();
+    const dashDir = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
+    const dashDist = 25;
+    const startPos = playerMesh.position.clone();
+    let step = 0;
+    const steps = 5;
+    const stepDist = dashDist / steps;
+    const interval = setInterval(() => {
+      if (step >= steps || !gameStarted) {
+        clearInterval(interval);
+        return;
+      }
+      playerMesh.position.addScaledVector(dashDir, stepDist);
+      resolveWallCollision(playerMesh.position.clone().addScaledVector(dashDir, -stepDist));
+      createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 2, 0)));
+      enemies.forEach(e => {
+        if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 18) {
+          const dmg = Math.round(getDamage() * 1.8);
+          const push = e.mesh.position.clone().sub(startPos).setY(0).normalize();
+          e.mesh.position.addScaledVector(push, 20);
+          damageEnemy(e, dmg, "🔥 Flambage Shot", "#ff3300");
+          createFireBurst(e.mesh.position.clone());
+        }
+      });
+      step++;
+    }, 40);
+
+  } else if (skillId === "diable-jambe") {
+    audio.playQuestComplete();
+    player.diableJambeTimer = 18;
+    player.diableJambeHits = 0;
+    createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 3, 0)));
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "🔥 DIABLE JAMBE!", "#ff2200");
+    log("🔥 Diable Jambe activated! Kicks are now infused with friction flames!");
   }
 }
 
