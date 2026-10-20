@@ -28,13 +28,13 @@ The game loads Three.js from a CDN, so the first load needs an internet connecti
 
 ## Public information pages and production configuration
 
-The Next.js deployment includes `/about`, `/game-guide`, `/privacy-policy`, `/terms`, and `/contact`, plus generated `/robots.txt` and `/sitemap.xml`. Set `NEXT_PUBLIC_SITE_URL` to the permanent canonical origin in the deployment environment. Set `NEXT_PUBLIC_CONTACT_EMAIL` to a monitored address before launch; until configured, the Contact page displays an owner setup note.
+The Next.js deployment includes `/about`, `/game-guide`, `/privacy-policy`, `/terms`, and `/contact`, plus generated `/robots.txt` and `/sitemap.xml`. The current canonical origin is `https://dapolice.vercel.app`; set `NEXT_PUBLIC_SITE_URL` to the permanent canonical origin in the deployment environment if it changes. Set `NEXT_PUBLIC_CONTACT_EMAIL` to a monitored address before launch; until configured, the Contact page displays an owner setup note.
 
 Copy `.env.example` to `.env.local` for local configuration. Environment variables prefixed with `NEXT_PUBLIC_` are public and must never contain secrets.
 
 ### AdSense
 
-The supplied publisher ID (`ca-pub-2635367930409387`) is configured and the AdSense publisher script loads once from the root layout for site verification. This does not mean the site is approved, and no ad-unit placements are currently enabled. To disable the script, set `NEXT_PUBLIC_ADSENSE_SCRIPT_ENABLED=false`. After Google approves the site and the owner completes required policy and consent setup, set `NEXT_PUBLIC_ADSENSE_ENABLED=true` and provide a real approved slot ID to the reusable `AdUnit` component on an appropriate informational page. Invalid or missing slot configuration renders no ad. Static builds bake public environment values at build time, so changing them requires a rebuild and redeploy. The standalone `server.js` serves only root static files and does not implement the Next.js informational routes; deploy the Next.js app with a compatible Next.js host/adapter for these routes.
+The supplied publisher ID (`ca-pub-2635367930409387`) is configured and the exact AdSense publisher script is emitted in the document head for site verification. This does not mean the site is approved, and no ad-unit placements are currently enabled. To disable the script, set `NEXT_PUBLIC_ADSENSE_SCRIPT_ENABLED=false`. After Google approves the site and the owner completes required policy and consent setup, set `NEXT_PUBLIC_ADSENSE_ENABLED=true` and provide a real approved slot ID to the reusable `AdUnit` component on an appropriate informational page. Invalid or missing slot configuration renders no ad. Static builds bake public environment values at build time, so changing them requires a rebuild and redeploy. The standalone `server.js` serves only root static files and does not implement the Next.js informational routes; deploy the Next.js app with a compatible Next.js host/adapter for these routes.
 
 ### Account and privacy limitations requiring owner action
 
