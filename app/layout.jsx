@@ -2,7 +2,7 @@ import "./globals.css";
 import "../styles.css";
 import Script from "next/script";
 import SiteFooter from "./site-footer";
-import { adsenseClientId, adsenseEnabled, siteUrl } from "./site-config";
+import { adsenseClientId, adsenseScriptEnabled, siteUrl } from "./site-config";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
@@ -21,7 +21,7 @@ export default function RootLayout({ children }) {
       </head>
       <body suppressHydrationWarning>
         <Script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" strategy="beforeInteractive" />
-        {adsenseEnabled && <Script id="google-adsense" async strategy="afterInteractive" src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`} crossOrigin="anonymous" />}
+        {adsenseScriptEnabled && <Script id="google-adsense" async strategy="afterInteractive" src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`} crossOrigin="anonymous" />}
         {children}
         <SiteFooter />
       </body>
