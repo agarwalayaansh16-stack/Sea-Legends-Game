@@ -46,9 +46,10 @@
       <!-- Beautiful Auth Overlay (Login/Signup/Forgot Password) -->
       <section id="login-screen" class="overlay">
         <div class="panel hero-panel" style="max-width: 460px; margin: 80px auto; padding: 32px 40px;">
-          <p class="eyebrow" style="text-align: center;">Sea Legends Auth</p>
+          <p class="eyebrow" style="text-align: center;">Local Game Profile</p>
           <h1 style="text-align: center; margin-bottom: 8px; font-size: 28px; background: linear-gradient(135deg, #fff 30%, #a5c0cc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Access the Seas</h1>
-          <p class="intro" style="text-align: center; margin-bottom: 24px; font-size: 13px; color: rgba(255, 247, 230, 0.6);">Sign up or log in to resume your adventure.</p>
+          <p class="intro" style="text-align: center; margin-bottom: 24px; font-size: 13px; color: rgba(255, 247, 230, 0.6);">Create or choose a local profile to resume your adventure on this browser.</p>
+          <p style="text-align: center; margin: -12px 0 18px; font-size: 12px; line-height: 1.5; color: #ffe0a0;">This is not an account or sign-in service. Profile names and game progress are stored in this browser only.</p>
           
           <!-- Login Form Container -->
           <div id="login-form-container">
@@ -56,11 +57,6 @@
               <div style="display: flex; flex-direction: column; gap: 6px;">
                 <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Username</label>
                 <input id="login-username" type="text" placeholder="Enter username" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(246,183,60,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-              </div>
-              
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Password</label>
-                <input id="login-password" type="password" placeholder="Enter password (min. 8 chars)" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(246,183,60,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
               </div>
               
               <!-- Verification Math Captcha Container -->
@@ -72,11 +68,11 @@
               
               <div id="login-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
               
-              <button id="login-submit-btn" type="button" style="background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(246,183,60,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Log In</button>
+              <button id="login-submit-btn" type="button" style="background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(246,183,60,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Load Profile</button>
               
               <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-top: 8px;">
-                <a href="#" id="go-to-signup" style="color: #3ce88a; text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Create Account</a>
-                <a href="#" id="go-to-recovery" style="color: rgba(255, 247, 230, 0.5); text-decoration: none; font-weight: 600; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255, 247, 230, 0.5)'">Forgot Password?</a>
+                <a href="#" id="go-to-signup" style="color: #3ce88a; text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Create Profile</a>
+                <a href="#" id="go-to-recovery" style="color: rgba(255, 247, 230, 0.5); text-decoration: none; font-weight: 600; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255, 247, 230, 0.5)'">Profile help</a>
               </div>
             </div>
           </div>
@@ -89,19 +85,9 @@
                 <input id="signup-username" type="text" placeholder="Username (cannot be duplicate)" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
               </div>
               
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Create Password</label>
-                <input id="signup-password" type="password" placeholder="Min. 8 characters" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-              </div>
-              
-              <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Email or Phone Number</label>
-                <input id="signup-recovery" type="text" placeholder="For password recovery verification" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
-              </div>
-              
               <div id="signup-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
               
-              <button id="signup-submit-btn" type="button" style="background: #3ce88a; color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(60,232,138,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Sign Up</button>
+              <button id="signup-submit-btn" type="button" style="background: #3ce88a; color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: transform 0.15s, filter 0.15s; margin-top: 6px; box-shadow: 0 4px 20px rgba(60,232,138,0.25);" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">Create Profile</button>
               
               <div style="text-align: center; font-size: 12px; margin-top: 8px;">
                 <a href="#" id="go-to-login" style="color: var(--gold); text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Back to Login</a>
@@ -109,53 +95,14 @@
             </div>
           </div>
           
-          <!-- Recovery Form Container (Forgot Password) (hidden by default) -->
           <div id="recovery-form-container" class="hidden">
-            <div style="display: flex; flex-direction: column; gap: 14px;">
-              <div id="recovery-step-1">
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Recovery Contact</label>
-                  <input id="recovery-contact" type="text" placeholder="Enter registered Email or Phone" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px;">
-                </div>
-                <button id="recovery-send-btn" type="button" style="width: 100%; background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: all 0.2s; margin-top: 14px;">Send Recovery Code</button>
-              </div>
-              
-              <div id="recovery-step-2" class="hidden">
-                <div style="font-size: 12px; line-height: 1.45; color: rgba(255, 247, 230, 0.7); background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); padding: 10px 14px; border-radius: 10px; margin-bottom: 10px;">
-                  💬 A 6-digit verification code has been simulated for your email/phone. Please enter it below.
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Enter 6-Digit Code</label>
-                  <input id="recovery-code-input" type="text" maxlength="6" placeholder="------" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(3, 16, 26, 0.65); color: #fff; outline: none; letter-spacing: 0.35em; text-align: center; font-size: 20px; font-weight: 900; font-family: monospace;">
-                </div>
-                <button id="recovery-verify-btn" type="button" style="width: 100%; background: #3ce88a; color: var(--ink); border: none; font-weight: 900; border-radius: 12px; cursor: pointer; padding: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; transition: all 0.2s; margin-top: 14px;">Verify Code</button>
-              </div>
-              
-              <div id="recovery-step-3" class="hidden" style="text-align: center; padding: 16px; background: rgba(60, 232, 138, 0.08); border: 1.5px dashed rgba(60, 232, 138, 0.35); border-radius: 12px;">
-                <span style="font-size: 12px; color: rgba(255,247,230,0.7); display: block; margin-bottom: 4px;">Verification successful! Your password is:</span>
-                <h2 id="recovered-password-display" style="color: #3ce88a; font-family: monospace; letter-spacing: 0.06em; margin: 8px 0; font-size: 22px;"></h2>
-                <button id="recovery-login-direct-btn" type="button" style="width: 100%; background: var(--gold); color: var(--ink); border: none; font-weight: 900; border-radius: 10px; cursor: pointer; padding: 10px; font-size: 12px; text-transform: uppercase; margin-top: 10px;">Log In Directly</button>
-              </div>
-              
-              <div id="recovery-error-msg" style="color: #ff6048; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px;"></div>
-              
-              <div style="text-align: center; font-size: 12px; margin-top: 8px;">
-                <a href="#" id="recovery-back-to-login" style="color: var(--gold); text-decoration: none; font-weight: 800; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Back to Login</a>
-              </div>
+            <p style="font-size: 13px; line-height: 1.6; color: rgba(255,247,230,0.8);">Local profiles cannot be recovered or transferred. They are stored only in this browser. No email or SMS verification is available.</p>
+            <div style="text-align: center; font-size: 12px; margin-top: 16px;">
+              <a href="#" id="recovery-back-to-login" style="color: var(--gold); text-decoration: none; font-weight: 800;">Back to profiles</a>
             </div>
           </div>
         </div>
       </section>
-
-      <!-- Beautiful Simulated Notification Overlay for Verification SMS/Email -->
-      <div id="simulated-notification" class="hidden" style="position: fixed; top: 24px; right: 24px; width: 340px; padding: 16px; border-radius: 16px; background: rgba(6, 18, 28, 0.96); border: 1.5px solid rgba(246, 183, 60, 0.45); color: #fff; z-index: 10000; box-shadow: 0 12px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(15px); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform: translateY(-20px); opacity: 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px;">
-          <strong style="color: #f6b73c; font-size: 12px; display: flex; align-items: center; gap: 6px;">✉️ MOCK TELECOM</strong>
-          <span style="font-size: 10px; color: rgba(255,255,255,0.4);">Just Now</span>
-        </div>
-        <p id="notification-message" style="margin: 0; font-size: 12px; line-height: 1.45; color: rgba(255,255,255,0.9);"></p>
-        <div style="font-size: 9px; color: rgba(255,255,255,0.35); text-align: right;">(Simulated recovery transmission)</div>
-      </div>
 
       <section id="faction-screen" class="overlay">
         <div class="panel hero-panel">

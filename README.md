@@ -26,6 +26,20 @@ npm run serve:static
 
 The game loads Three.js from a CDN, so the first load needs an internet connection.
 
+## Public information pages and production configuration
+
+The Next.js deployment includes `/about`, `/game-guide`, `/privacy-policy`, `/terms`, and `/contact`, plus generated `/robots.txt` and `/sitemap.xml`. Set `NEXT_PUBLIC_SITE_URL` to the permanent canonical origin in the deployment environment. Set `NEXT_PUBLIC_CONTACT_EMAIL` to a monitored address before launch; until configured, the Contact page displays an owner setup note.
+
+Copy `.env.example` to `.env.local` for local configuration. Environment variables prefixed with `NEXT_PUBLIC_` are public and must never contain secrets.
+
+### AdSense
+
+AdSense is disabled by default. After Google approves the site and the owner has completed all required policy and consent setup, set `NEXT_PUBLIC_ADSENSE_ENABLED=true`, supply the real `NEXT_PUBLIC_ADSENSE_CLIENT_ID` in `ca-pub-...` format, and provide a real approved slot ID to the reusable `AdUnit` component on an appropriate informational page. The script is loaded once in the root layout only when enabled with a valid publisher ID; invalid or missing slot configuration renders no ad. There are currently no ad placements enabled. Static builds bake public environment values at build time, so changing them requires a rebuild and redeploy. The standalone `server.js` serves only root static files and does not implement the Next.js informational routes; deploy the Next.js app with a compatible Next.js host/adapter for these routes.
+
+### Account and privacy limitations requiring owner action
+
+The in-game profile screens are a client-side prototype, not a sign-in service. They store profile names and saves in browser local storage; there is no password field, server authentication, cross-device sync, or recovery service. On game startup, old profile records are migrated to remove the password and recovery fields stored by an earlier version. The client-side username-based admin shortcut has also been removed. Before presenting accounts as a real service, add server-backed authentication, verified recovery, and a reviewed privacy notice. This project does not currently implement analytics or an AdSense consent-management platform.
+
 ## Controls
 
 - `WASD`: Move

@@ -14,13 +14,15 @@
 
 html,
 body,
-#game-root,
 #game {
   width: 100%;
   height: 100%;
   margin: 0;
-  overflow: hidden;
 }
+
+html, body { min-height: 100%; }
+body { overflow-x: hidden; overflow-y: auto; }
+#game-root { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; position: relative; }
 
 body {
   background: radial-gradient(circle at top, #77d7ff 0, #1a7194 45%, #0d3444 100%);
@@ -38,6 +40,45 @@ button {
 
 .hidden {
   display: none !important;
+}
+
+/* Public project pages and the shared footer */
+.content-page {
+  min-height: calc(100vh - 170px);
+  padding: clamp(28px, 6vw, 76px) 20px;
+  color: #f8f5eb;
+  background: radial-gradient(circle at 80% 0, rgba(22, 127, 149, .38), transparent 38%), linear-gradient(160deg, #071c2a, #0c3949 72%, #092733);
+}
+.content-inner { max-width: 840px; margin: 0 auto; line-height: 1.72; }
+.content-inner h1 { margin: 0 0 18px; font-size: clamp(2.2rem, 6vw, 3.8rem); line-height: 1.08; color: #fff7e6; }
+.content-inner h2 { margin: 34px 0 8px; color: #f6c45f; font-size: clamp(1.25rem, 3vw, 1.6rem); }
+.content-inner p, .content-inner li { color: #e2edf0; }
+.content-inner a { color: #8be6df; text-underline-offset: 3px; }
+.content-inner a:focus-visible, .site-footer a:focus-visible { outline: 3px solid #ffd166; outline-offset: 4px; border-radius: 3px; }
+.content-eyebrow { margin: 0 0 14px; color: #f6c45f !important; font-size: .78rem; font-weight: 800; letter-spacing: .15em; }
+.content-lead { max-width: 720px; font-size: 1.2rem; color: #fff !important; }
+.content-updated { font-size: .9rem; opacity: .78; }
+.content-table-wrap { width: 100%; overflow-x: auto; border: 1px solid rgba(255,255,255,.16); border-radius: 12px; }
+.content-inner table { width: 100%; border-collapse: collapse; min-width: 420px; }
+.content-inner th, .content-inner td { padding: 12px 16px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.12); }
+.content-inner th { color: #f6c45f; background: rgba(255,255,255,.06); }
+.content-button { display: inline-block; padding: 11px 18px; color: #10212d !important; font-weight: 800; text-decoration: none; background: #f6c45f; border-radius: 9px; }
+.owner-note { margin-top: 24px; padding: 20px; border: 1px solid rgba(246,196,95,.45); border-radius: 12px; background: rgba(246,196,95,.08); }
+.owner-note p { margin-bottom: 0; }
+.site-footer { position: relative; z-index: 5; padding: 24px 20px 30px; color: #d6e5e8; background: #061722; border-top: 1px solid rgba(255,255,255,.12); }
+.site-footer-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; gap: 12px 28px; align-items: center; }
+.site-footer-brand { color: #f6c45f; font-weight: 900; font-size: 1.2rem; text-decoration: none; }
+.site-footer-nav { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+.site-footer-nav a { color: #edf5f4; text-underline-offset: 3px; }
+.site-footer p { grid-column: 1 / -1; margin: 0; color: #b6c8cc; font-size: .88rem; }
+.ad-reservation { min-height: 290px; max-width: 970px; margin: 32px auto; padding: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.025); }
+.ad-label { display: block; margin-bottom: 8px; color: #b6c8cc; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; }
+.ad-unit { min-height: 250px; }
+@media (max-width: 640px) {
+  .site-footer-inner { grid-template-columns: 1fr; }
+  .site-footer-nav { gap: 12px 16px; }
+  .site-footer p { grid-column: auto; }
+  .content-page { padding-inline: 18px; }
 }
 
 .overlay {

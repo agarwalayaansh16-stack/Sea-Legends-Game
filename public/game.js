@@ -2799,8 +2799,6 @@ function addMasteryXp(type, amount) {
 let currentUsername = "";
 let failedAttempts = 0;
 let captchaAnswer = "";
-let recoveryCode = "";
-let recoveryUser = null;
 
 const DEFAULT_AVATARS = [
   {
@@ -2922,26 +2920,6 @@ function resetPlayerState() {
   avatarState.avatars = JSON.parse(JSON.stringify(DEFAULT_AVATARS));
 }
 
-function showNotification(message) {
-  const notif = document.querySelector("#simulated-notification");
-  const msgEl = document.querySelector("#notification-message");
-  if (notif && msgEl) {
-    msgEl.innerHTML = message;
-    notif.classList.remove("hidden");
-    // Force reflow
-    notif.offsetWidth;
-    notif.classList.add("show");
-    
-    // Hide after 7 seconds
-    setTimeout(() => {
-      notif.classList.remove("show");
-      setTimeout(() => {
-        notif.classList.add("hidden");
-      }, 300);
-    }, 7000);
-  }
-}
-
 function generateCaptcha() {
   const num1 = Math.floor(Math.random() * 9) + 2;
   const num2 = Math.floor(Math.random() * 9) + 2;
@@ -3005,7 +2983,8 @@ function checkAndLoadSave() {
   }
   
   currentUsername = activeUser;
-  player.isAdmin = (currentUsername.toLowerCase() === "sans");
+  // No client-side username may grant privileged controls.
+  player.isAdmin = false;
   
   // Toggle escape menu admin panel section based on isAdmin
   const adminSec = document.querySelector("#esc-admin-section");
@@ -3051,8 +3030,9 @@ function checkAndLoadSave() {
     if (saveData.avatars) avatarState.avatars = saveData.avatars;
     if (saveData.marketListings) marketState.listings = saveData.marketListings;
     if (saveData.selectedAvatarId !== undefined) avatarState.selectedId = saveData.selectedAvatarId;
-    if (saveData.isGodMode !== undefined) player.isGodMode = saveData.isGodMode;
-    if (saveData.isInstakill !== undefined) player.isInstakill = saveData.isInstakill;
+    // Ignore legacy client-side admin flags from old profile saves.
+    player.isGodMode = false;
+    player.isInstakill = false;
     if (saveData.hasFlamingFeet !== undefined) player.hasFlamingFeet = saveData.hasFlamingFeet;
     if (saveData.hasFlashStep !== undefined) player.hasFlashStep = saveData.hasFlashStep;
     if (saveData.observationHakiUnlocked !== undefined) {
@@ -3109,28 +3089,27 @@ function performLogout() {
 }
 
 function initAuthSystem() {
+  // Preserve locally saved progress while removing credentials collected by
+  // the former demo sign-up form. These local profiles are not authenticated.
+  try {
+    const storedProfiles = JSON.parse(localStorage.getItem("sea_legends_accounts") || "[]");
+    const sanitizedProfiles = storedProfiles.map(({ password, recovery, ...profile }) => profile);
+    localStorage.setItem("sea_legends_accounts", JSON.stringify(sanitizedProfiles));
+  } catch (error) {
+    localStorage.removeItem("sea_legends_accounts");
+  }
+
   const loginForm = document.querySelector("#login-form-container");
   const signupForm = document.querySelector("#signup-form-container");
   const recoveryForm = document.querySelector("#recovery-form-container");
   
   const loginUsernameInput = document.querySelector("#login-username");
-  const loginPasswordInput = document.querySelector("#login-password");
   const loginCaptchaInput = document.querySelector("#login-captcha-input");
   const loginErrorMsg = document.querySelector("#login-error-msg");
   
   const signupUsernameInput = document.querySelector("#signup-username");
-  const signupPasswordInput = document.querySelector("#signup-password");
-  const signupRecoveryInput = document.querySelector("#signup-recovery");
   const signupErrorMsg = document.querySelector("#signup-error-msg");
   
-  const recoveryContactInput = document.querySelector("#recovery-contact");
-  const recoveryCodeInput = document.querySelector("#recovery-code-input");
-  const recoveredPasswordDisplay = document.querySelector("#recovered-password-display");
-  const recoveryErrorMsg = document.querySelector("#recovery-error-msg");
-  
-  const recoveryStep1 = document.querySelector("#recovery-step-1");
-  const recoveryStep2 = document.querySelector("#recovery-step-2");
-  const recoveryStep3 = document.querySelector("#recovery-step-3");
   
   // Transition links
   document.querySelector("#go-to-signup")?.addEventListener("click", (e) => {
@@ -3151,10 +3130,6 @@ function initAuthSystem() {
     e.preventDefault();
     loginForm.classList.add("hidden");
     recoveryForm.classList.remove("hidden");
-    recoveryStep1.classList.remove("hidden");
-    recoveryStep2.classList.add("hidden");
-    recoveryStep3.classList.add("hidden");
-    recoveryErrorMsg.textContent = "";
   });
   
   document.querySelector("#recovery-back-to-login")?.addEventListener("click", (e) => {
@@ -3164,30 +3139,14 @@ function initAuthSystem() {
     loginErrorMsg.textContent = "";
   });
   
-  document.querySelector("#recovery-login-direct-btn")?.addEventListener("click", () => {
-    if (recoveryUser) {
-      currentUsername = recoveryUser.username;
-      localStorage.setItem("sea_legends_current_user", currentUsername);
-      recoveryForm.classList.add("hidden");
-      loginForm.classList.remove("hidden");
-      checkAndLoadSave();
-    }
-  });
-
   // Login Submit
   document.querySelector("#login-submit-btn")?.addEventListener("click", () => {
     const username = loginUsernameInput.value.trim();
-    const password = loginPasswordInput.value;
     
     if (!username) {
       loginErrorMsg.textContent = "Username cannot be empty!";
       return;
     }
-    if (!password) {
-      loginErrorMsg.textContent = "Password cannot be empty!";
-      return;
-    }
-    
     // Captcha validation
     if (failedAttempts >= 10) {
       const captchaAttempt = loginCaptchaInput.value.trim();
@@ -3203,9 +3162,9 @@ function initAuthSystem() {
       const accounts = JSON.parse(accountsStr);
       const account = accounts.find(a => a.username.toLowerCase() === username.toLowerCase());
       
-      if (!account || account.password !== password) {
+      if (!account) {
         failedAttempts++;
-        loginErrorMsg.textContent = "Invalid username or password!";
+        loginErrorMsg.textContent = "Local profile not found. Create a profile first.";
         
         if (failedAttempts >= 10) {
           generateCaptcha();
@@ -3217,7 +3176,6 @@ function initAuthSystem() {
       failedAttempts = 0;
       loginErrorMsg.textContent = "";
       loginUsernameInput.value = "";
-      loginPasswordInput.value = "";
       loginCaptchaInput.value = "";
       document.querySelector("#login-captcha-container")?.classList.add("hidden");
       
@@ -3233,22 +3191,11 @@ function initAuthSystem() {
   // Registration Submit
   document.querySelector("#signup-submit-btn")?.addEventListener("click", () => {
     const username = signupUsernameInput.value.trim();
-    const password = signupPasswordInput.value;
-    const recovery = signupRecoveryInput.value.trim();
     
     if (!username) {
       signupErrorMsg.textContent = "Username is required!";
       return;
     }
-    if (password.length < 8) {
-      signupErrorMsg.textContent = "Password must be at least 8 characters long!";
-      return;
-    }
-    if (!recovery) {
-      signupErrorMsg.textContent = "Recovery Phone or Email is required!";
-      return;
-    }
-    
     const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
     try {
       const accounts = JSON.parse(accountsStr);
@@ -3261,8 +3208,6 @@ function initAuthSystem() {
       // Create new account object
       const newAccount = {
         username,
-        password,
-        recovery,
         saveData: {
           faction: "Neutral",
           level: 1,
@@ -3285,8 +3230,6 @@ function initAuthSystem() {
       localStorage.setItem("sea_legends_accounts", JSON.stringify(accounts));
       
       signupUsernameInput.value = "";
-      signupPasswordInput.value = "";
-      signupRecoveryInput.value = "";
       signupErrorMsg.textContent = "";
       
       // Switch back to login panel and log in
@@ -3302,59 +3245,7 @@ function initAuthSystem() {
     }
   });
   
-  // Recovery Send Code
-  document.querySelector("#recovery-send-btn")?.addEventListener("click", () => {
-    const contact = recoveryContactInput.value.trim();
-    if (!contact) {
-      recoveryErrorMsg.textContent = "Enter your recovery email or phone number!";
-      return;
-    }
-    
-    const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
-    try {
-      const accounts = JSON.parse(accountsStr);
-      const account = accounts.find(a => a.recovery.toLowerCase() === contact.toLowerCase());
-      if (!account) {
-        recoveryErrorMsg.textContent = "No account found with this recovery info.";
-        return;
-      }
-      
-      recoveryUser = account;
-      
-      // Generate code
-      const code = Math.floor(100000 + Math.random() * 900000);
-      recoveryCode = String(code);
-      recoveryErrorMsg.textContent = "";
-      
-      // Transition to code step
-      recoveryStep1.classList.add("hidden");
-      recoveryStep2.classList.remove("hidden");
-      
-      // Show simulated notification toast containing code
-      showNotification(`✉️ <strong>SMS/Email:</strong> Verification code for <strong>${account.username}</strong> is: <span style="font-size:16px; font-weight:900; color:#ffcf5a; letter-spacing:0.04em;">${recoveryCode}</span>`);
-    } catch (e) {
-      console.error(e);
-      recoveryErrorMsg.textContent = "Database error occurred!";
-    }
-  });
-  
-  // Recovery Verify Code
-  document.querySelector("#recovery-verify-btn")?.addEventListener("click", () => {
-    const attempt = recoveryCodeInput.value.trim();
-    if (attempt !== recoveryCode) {
-      recoveryErrorMsg.textContent = "Incorrect verification code!";
-      return;
-    }
-    
-    recoveryErrorMsg.textContent = "";
-    recoveryStep2.classList.add("hidden");
-    recoveryStep3.classList.remove("hidden");
-    
-    if (recoveredPasswordDisplay && recoveryUser) {
-      recoveredPasswordDisplay.textContent = recoveryUser.password;
-    }
-  });
-  
+  // No simulated contact verification or password recovery is implemented.
   // Bind Settings Bar and Escape Menu logouts
   document.querySelector("#hud-logout-btn")?.addEventListener("click", performLogout);
   document.querySelector("#esc-logout-btn")?.addEventListener("click", performLogout);
