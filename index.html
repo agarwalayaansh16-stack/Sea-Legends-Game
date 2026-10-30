@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <meta name="sea-legends-multiplayer-url" content="">
   </head>
   <body>
     <div id="game-root">
@@ -41,7 +42,30 @@
           <canvas id="perf-graph-ping" class="perf-graph" width="40" height="14"></canvas>
         </div>
       </div>
-      <canvas id="game"></canvas>
+      <div id="game-load-status" role="status" aria-live="polite">Loading Sea Legends…</div>
+      <section id="game-init-error" role="alert" aria-labelledby="game-init-error-title" hidden>
+        <h2 id="game-init-error-title">Sea Legends could not start</h2>
+        <p id="game-init-error-message">Check your connection and browser graphics support, then try again.</p>
+        <button id="game-init-retry" type="button">Reload game</button>
+      </section>
+      <canvas id="game" tabindex="0" aria-label="Sea Legends interactive 3D game. Use the keyboard and mouse controls described in the game guide."></canvas>
+      <div id="mobile-controls" class="hidden" aria-label="Touch game controls">
+        <div class="mobile-dpad" aria-label="Movement">
+          <button type="button" data-touch-key="KeyW" aria-label="Move forward">▲</button>
+          <div><button type="button" data-touch-key="KeyA" aria-label="Move left">◀</button><button type="button" data-touch-key="KeyS" aria-label="Move backward">▼</button><button type="button" data-touch-key="KeyD" aria-label="Move right">▶</button></div>
+        </div>
+        <div class="mobile-actions" aria-label="Actions">
+          <button type="button" data-touch-action="attack" aria-label="Attack">Attack</button>
+          <button type="button" data-touch-action="jump" aria-label="Jump">Jump</button>
+          <button type="button" data-touch-action="interact" aria-label="Interact">Interact</button>
+          <div class="mobile-weapons" aria-label="Select weapon">
+            <button type="button" data-touch-weapon="melee" aria-label="Select melee">1</button>
+            <button type="button" data-touch-weapon="sword" aria-label="Select sword">2</button>
+            <button type="button" data-touch-weapon="gun" aria-label="Select gun">3</button>
+            <button type="button" data-touch-weapon="special" aria-label="Select special weapon">4</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Beautiful Auth Overlay (Login/Signup/Forgot Password) -->
       <section id="login-screen" class="overlay">
@@ -50,12 +74,13 @@
           <h1 style="text-align: center; margin-bottom: 8px; font-size: 28px; background: linear-gradient(135deg, #fff 30%, #a5c0cc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Access the Seas</h1>
           <p class="intro" style="text-align: center; margin-bottom: 24px; font-size: 13px; color: rgba(255, 247, 230, 0.6);">Create or choose a local profile to resume your adventure on this browser.</p>
           <p style="text-align: center; margin: -12px 0 18px; font-size: 12px; line-height: 1.5; color: #ffe0a0;">This is not an account or sign-in service. Profile names and game progress are stored in this browser only.</p>
+          <a class="prelogin-guide-link" href="/game-guide">Read the game guide <span aria-hidden="true">·</span> no profile needed</a>
           
           <!-- Login Form Container -->
           <div id="login-form-container">
             <div style="display: flex; flex-direction: column; gap: 14px;">
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Username</label>
+                <label for="login-username" style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Username</label>
                 <input id="login-username" type="text" placeholder="Enter username" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(246,183,60,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
               </div>
               
@@ -81,7 +106,7 @@
           <div id="signup-form-container" class="hidden">
             <div style="display: flex; flex-direction: column; gap: 14px;">
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Choose Username</label>
+                <label for="signup-username" style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.75);">Choose Username</label>
                 <input id="signup-username" type="text" placeholder="Username (cannot be duplicate)" style="padding: 12px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(3, 16, 26, 0.6); color: #fff; outline: none; font-size: 14px; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(60,232,138,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
               </div>
               
@@ -148,7 +173,7 @@
               </div>
               <div class="avatar-editor">
                 <p class="section-label">Customize</p>
-                <input id="avatar-name" maxlength="18" placeholder="Avatar name" value="Rookie">
+                <input id="avatar-name" aria-label="Avatar name" maxlength="18" placeholder="Avatar name" value="Rookie">
                 <div class="editor-grid">
                   <label>Skin <input id="skin-color" type="color" value="#eed2b8"></label>
                   <label>Shirt <input id="shirt-color" type="color" value="#223745"></label>
@@ -257,6 +282,10 @@
           </div>
           <div class="settings-section settings-bar-right">
             <span id="teleport-status">Teleport ready</span>
+            <div class="multiplayer-status-wrap">
+              <span id="multiplayer-status" role="status" aria-live="polite">Multiplayer offline</span>
+              <button id="multiplayer-open" type="button">Servers</button>
+            </div>
             <label class="toggle">
               <input id="controls-toggle" type="checkbox" checked>
               <span>Controls</span>
@@ -272,6 +301,16 @@
             <button id="hud-logout-btn" type="button" style="background: rgba(255, 96, 72, 0.15); border: 1px solid rgba(255, 96, 72, 0.3); color: #ff6048; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; cursor: pointer; outline: none; margin-left: 6px; transition: all 0.2s;">Log Out</button>
           </div>
         </div>
+
+        <section id="multiplayer-browser" class="multiplayer-browser hidden" aria-labelledby="multiplayer-browser-title">
+          <header>
+            <div><h2 id="multiplayer-browser-title">World servers</h2><p>Up to 10 players in each server.</p></div>
+            <button id="multiplayer-close" type="button" aria-label="Close server browser">×</button>
+          </header>
+          <p id="multiplayer-browser-message" class="multiplayer-browser-message">Connect to browse available servers.</p>
+          <button id="multiplayer-quick-join" class="multiplayer-quick-join" type="button">Find an open server</button>
+          <div id="multiplayer-server-list" class="multiplayer-server-list" aria-live="polite"></div>
+        </section>
 
         <div class="quest-card">
           <strong id="quest-title">Find the Quest Giver</strong>
@@ -586,7 +625,7 @@
                 <!-- Basic settings (Name & Preset controls) -->
                 <div style="display: flex; gap: 12px; align-items: center; text-align: left;">
                   <div style="flex: 1;">
-                    <label style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Avatar Name</label>
+                    <label for="studio-avatar-name" style="display: block; font-size: 10px; text-transform: uppercase; color: rgba(255, 247, 230, 0.5); font-weight: 700; margin-bottom: 4px;">Avatar Name</label>
                     <input id="studio-avatar-name" type="text" maxlength="18" placeholder="Enter name..." style="width: 100%; background: rgba(10, 30, 42, 0.7); border: 1px solid rgba(255, 247, 230, 0.15); color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; box-sizing: border-box;">
                   </div>
                 </div>

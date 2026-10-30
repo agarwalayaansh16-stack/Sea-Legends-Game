@@ -12,6 +12,7 @@ export default function AdUnit({ slot, label = "Advertisement" }) {
       adRef.current.dataset.requested = "true";
     } catch (error) {
       // Ad blockers and unavailable inventory may prevent the request; gameplay is independent.
+      console.warn("AdSense slot request failed:", error);
     }
   }, [slot]);
   if (!validAdSlot(slot)) return null;

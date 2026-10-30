@@ -8,8 +8,9 @@
     "prebuild": "node sync-public.js",
     "build": "next build",
     "start": "next start",
+    "multiplayer": "node multiplayer-server.js",
     "serve:static": "node server.js",
-    "check": "node --check game.js && node --check server.js && node --check sync-public.js"
+    "check": "node --check game.js && node --check server.js && node --check multiplayer-server.js && node --check sync-public.js"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.0",

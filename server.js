@@ -33,6 +33,14 @@ const server = http.createServer((request, response) => {
       return;
     }
 
+    if (path.basename(filePath) === "index.html" && process.env.NEXT_PUBLIC_MULTIPLAYER_URL) {
+      const multiplayerUrl = process.env.NEXT_PUBLIC_MULTIPLAYER_URL.replace(/[&"<>]/g, "");
+      data = Buffer.from(data.toString("utf8").replace(
+        /<meta name="sea-legends-multiplayer-url" content="[^"]*">/,
+        `<meta name="sea-legends-multiplayer-url" content="${multiplayerUrl}">`,
+      ));
+    }
+
     response.writeHead(200, {
       "Content-Type": types[path.extname(filePath).toLowerCase()] || "application/octet-stream",
       "Cache-Control": "no-store",

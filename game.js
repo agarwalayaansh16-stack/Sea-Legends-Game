@@ -1,3 +1,24 @@
+// Keep initialization errors visible to players while preserving their details in the console.
+(function bootstrapSeaLegends() {
+try {
+  const showGameError = (message) => {
+    const status = document.querySelector("#game-load-status");
+    const errorPanel = document.querySelector("#game-init-error");
+    const errorMessage = document.querySelector("#game-init-error-message");
+    if (status) status.hidden = true;
+    if (errorMessage) errorMessage.textContent = message;
+    if (errorPanel) errorPanel.hidden = false;
+  };
+  window.addEventListener("error", (event) => {
+    console.error("Sea Legends runtime error:", event.error || event.message);
+    showGameError("A game error stopped part of the experience. Reload the page to try again.");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("Sea Legends async error:", event.reason);
+    showGameError("A game resource or task failed. Check your connection and reload the page.");
+  });
+  document.querySelector("#game-init-retry")?.addEventListener("click", () => window.location.reload());
+
 // Procedural Sound Manager using browser Web Audio API
 const audio = {
   ctx: null,
@@ -285,6 +306,13 @@ const boatButtons = document.querySelectorAll(".boat-option");
 const boatMenuClose = document.querySelector("#boat-menu-close");
 const homeTeleportButton = document.querySelector("#home-teleport-button");
 const teleportStatus = document.querySelector("#teleport-status");
+const multiplayerStatus = document.querySelector("#multiplayer-status");
+const multiplayerOpenButton = document.querySelector("#multiplayer-open");
+const multiplayerBrowser = document.querySelector("#multiplayer-browser");
+const multiplayerCloseButton = document.querySelector("#multiplayer-close");
+const multiplayerBrowserMessage = document.querySelector("#multiplayer-browser-message");
+const multiplayerQuickJoinButton = document.querySelector("#multiplayer-quick-join");
+const multiplayerServerList = document.querySelector("#multiplayer-server-list");
 const shiftlockToggle = document.querySelector("#shiftlock-toggle");
 const controlsToggle = document.querySelector("#controls-toggle");
 const questToggle = document.querySelector("#quest-toggle");
@@ -824,6 +852,18 @@ let verticalVelocity = 0;
 let jumpOffset = 0;
 let isGrounded = true;
 let gameStarted = false;
+const multiplayerState = {
+  socket: null,
+  clientId: null,
+  serverId: null,
+  serverName: "",
+  players: new Map(),
+  targetServerId: null,
+  lastSentAt: 0,
+  reconnectTimer: null,
+  manualDisconnect: false,
+};
+const multiplayerUrl = document.querySelector('meta[name="sea-legends-multiplayer-url"]')?.content.trim() || "";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x98cded);
@@ -1401,6 +1441,13 @@ canvas.addEventListener("pointerdown", (event) => {
   if (escMenuOpen) return;
   if (player.health <= 0 || player.stunTimer > 0) return;
 
+  if (event.pointerType === "touch") {
+    isPointerDown = true;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    return;
+  }
+
   // Left mouse click (0): Attack
   if (event.button === 0) {
     isLeftMouseDown = true;
@@ -1417,7 +1464,10 @@ canvas.addEventListener("pointerdown", (event) => {
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 window.addEventListener("pointerup", (event) => {
-  if (event.button === 0) {
+  if (event.pointerType === "touch") {
+    isLeftMouseDown = false;
+    isPointerDown = false;
+  } else if (event.button === 0) {
     isLeftMouseDown = false;
   } else if (event.button === 2) {
     isPointerDown = false;
@@ -1441,6 +1491,40 @@ window.addEventListener("pointermove", (event) => {
   cameraPitch = clamp(cameraPitch - (event.clientY - lastPointerY) * 0.004, -0.52, 0.95);
   lastPointerX = event.clientX;
   lastPointerY = event.clientY;
+});
+
+document.querySelectorAll("#mobile-controls [data-touch-key]").forEach((button) => {
+  const code = button.dataset.touchKey;
+  const release = (event) => {
+    keys.delete(code);
+    if (button.hasPointerCapture?.(event.pointerId)) button.releasePointerCapture(event.pointerId);
+  };
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    if (!gameStarted || escMenuOpen) return;
+    button.setPointerCapture?.(event.pointerId);
+    keys.add(code);
+  });
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", () => keys.delete(code));
+});
+
+document.querySelectorAll("#mobile-controls [data-touch-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!gameStarted || escMenuOpen || player.health <= 0) return;
+    if (button.dataset.touchAction === "attack") attack();
+    if (button.dataset.touchAction === "jump") jump();
+    if (button.dataset.touchAction === "interact") interact();
+  });
+});
+
+document.querySelectorAll("#mobile-controls [data-touch-weapon]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!gameStarted || escMenuOpen) return;
+    if (button.dataset.touchWeapon === "special" && !player.specialUnlocked) return;
+    setWeapon(button.dataset.touchWeapon);
+  });
 });
 
 homeTeleportButton?.addEventListener("click", () => {
@@ -1507,13 +1591,269 @@ function startGame(faction) {
   saveSelectedAvatar();
   factionScreen.classList.add("hidden");
   hud.classList.remove("hidden");
+  document.querySelector("#mobile-controls")?.classList.remove("hidden");
+  setGameScrollLock(true);
   gameStarted = true;
+  connectMultiplayer();
   checkNewQuestUnlocks();
   setWeapon(player.weapon);
   log(`You joined as ${faction}. Welcome to the First Sea.`);
   updateDerivedStats();
   updateHud();
   saveGame();
+}
+
+function setGameScrollLock(locked) {
+  document.documentElement.classList.toggle("game-active", locked);
+  document.body.classList.toggle("game-active", locked);
+  if (locked) window.scrollTo(0, 0);
+}
+
+function setMultiplayerStatus(message, state = "idle") {
+  if (!multiplayerStatus) return;
+  multiplayerStatus.textContent = message;
+  multiplayerStatus.dataset.state = state;
+}
+
+function multiplayerSend(message) {
+  if (multiplayerState.socket?.readyState === WebSocket.OPEN) {
+    multiplayerState.socket.send(JSON.stringify(message));
+    return true;
+  }
+  return false;
+}
+
+function currentMultiplayerProfile() {
+  const avatar = getSelectedAvatar() || DEFAULT_AVATARS[0];
+  return {
+    name: currentUsername || avatar.name || "Sailor",
+    faction: player.faction,
+    avatar,
+    position: playerMesh ? { x: playerMesh.position.x, y: playerMesh.position.y, z: playerMesh.position.z } : { x: 0, y: STARTER_SURFACE_Y, z: 0 },
+    rotation: playerMesh?.rotation.y || 0,
+    weapon: player.weapon,
+  };
+}
+
+function connectMultiplayer(serverId = multiplayerState.targetServerId) {
+  if (!multiplayerUrl || typeof WebSocket === "undefined") {
+    setMultiplayerStatus("Multiplayer not configured", "error");
+    if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = "Online servers are not configured for this site yet.";
+    return;
+  }
+  if (multiplayerState.socket?.readyState === WebSocket.OPEN) {
+    multiplayerState.targetServerId = serverId || null;
+    multiplayerSend({ type: "join", ...currentMultiplayerProfile(), serverId: serverId || "" });
+    multiplayerSend({ type: "list" });
+    return;
+  }
+  if (multiplayerState.socket?.readyState === WebSocket.CONNECTING) return;
+  clearTimeout(multiplayerState.reconnectTimer);
+  multiplayerState.manualDisconnect = false;
+  multiplayerState.targetServerId = serverId || null;
+  setMultiplayerStatus("Connecting to servers…", "connecting");
+  if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = "Connecting to the multiplayer service…";
+
+  let socket;
+  try { socket = new WebSocket(multiplayerUrl); }
+  catch (error) {
+    console.error("Could not open multiplayer connection:", error);
+    setMultiplayerStatus("Connection failed", "error");
+    return;
+  }
+  multiplayerState.socket = socket;
+  socket.addEventListener("open", () => {
+    if (multiplayerState.socket !== socket) return;
+    multiplayerSend({ type: "join", ...currentMultiplayerProfile(), serverId: multiplayerState.targetServerId || "" });
+  });
+  socket.addEventListener("message", (event) => {
+    if (multiplayerState.socket !== socket) return;
+    let message;
+    try { message = JSON.parse(event.data); } catch (error) {
+      console.warn("Ignored an invalid multiplayer message:", error);
+      return;
+    }
+    handleMultiplayerMessage(message);
+  });
+  socket.addEventListener("error", (error) => {
+    console.error("Multiplayer connection error:", error);
+    setMultiplayerStatus("Connection error", "error");
+  });
+  socket.addEventListener("close", () => {
+    if (multiplayerState.socket !== socket) return;
+    multiplayerState.socket = null;
+    multiplayerState.clientId = null;
+    multiplayerState.serverId = null;
+    clearRemotePlayers();
+    if (multiplayerState.manualDisconnect || !gameStarted) {
+      setMultiplayerStatus("Offline", "idle");
+      return;
+    }
+    setMultiplayerStatus("Disconnected · reconnecting", "error");
+    multiplayerState.reconnectTimer = setTimeout(() => connectMultiplayer(multiplayerState.targetServerId), 2500);
+  });
+}
+
+function handleMultiplayerMessage(message) {
+  if (message.type === "server-list") {
+    renderMultiplayerServers(Array.isArray(message.servers) ? message.servers : []);
+    return;
+  }
+  if (message.type === "joined") {
+    multiplayerState.clientId = message.id;
+    multiplayerState.serverId = message.server?.id || null;
+    multiplayerState.serverName = message.server?.name || "World server";
+    multiplayerState.targetServerId = multiplayerState.serverId;
+    const count = message.server?.players ?? 1;
+    const capacity = message.server?.capacity ?? 10;
+    setMultiplayerStatus(`${multiplayerState.serverName} · ${count}/${capacity}`, "connected");
+    if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = `Connected to ${multiplayerState.serverName}. Players in this server: ${count}/${capacity}.`;
+    (message.players || []).forEach(upsertRemotePlayer);
+    multiplayerSend({ type: "list" });
+    return;
+  }
+  if (message.type === "player-joined") {
+    upsertRemotePlayer(message.player);
+    return;
+  }
+  if (message.type === "player-state") {
+    upsertRemotePlayer(message.player);
+    return;
+  }
+  if (message.type === "player-left") {
+    removeRemotePlayer(message.id);
+    return;
+  }
+  if (message.type === "server-error") {
+    if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = message.message || "The server could not complete that request.";
+    if (!multiplayerState.serverId && multiplayerState.targetServerId) {
+      setMultiplayerStatus("Server unavailable", "error");
+      multiplayerState.targetServerId = null;
+      multiplayerSend({ type: "join", ...currentMultiplayerProfile(), serverId: "" });
+    } else if (multiplayerState.serverId) {
+      multiplayerSend({ type: "list" });
+    } else {
+      setMultiplayerStatus("Server unavailable", "error");
+    }
+  }
+}
+
+function upsertRemotePlayer(data) {
+  if (!data || !data.id || data.id === multiplayerState.clientId || !data.position) return;
+  let remote = multiplayerState.players.get(data.id);
+  if (!remote) {
+    const avatar = { ...DEFAULT_AVATARS[0], ...(data.avatar || {}), name: String(data.name || "Sailor").slice(0, 18) };
+    const mesh = createHumanAvatarModel(avatar, { showName: true, showSword: false });
+    mesh.userData.remotePlayerId = data.id;
+    scene.add(mesh);
+    remote = { mesh, target: new THREE.Vector3(data.position.x, data.position.y, data.position.z), targetYaw: Number(data.rotation) || 0 };
+    multiplayerState.players.set(data.id, remote);
+  } else {
+    remote.target.set(data.position.x, data.position.y, data.position.z);
+    remote.targetYaw = Number(data.rotation) || 0;
+  }
+}
+
+function disposeRemoteMesh(mesh) {
+  mesh.traverse((object) => {
+    object.geometry?.dispose?.();
+    const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
+    materials.forEach((material) => {
+      Object.values(material).forEach((value) => { if (value?.isTexture) value.dispose(); });
+      material.dispose?.();
+    });
+  });
+}
+
+function removeRemotePlayer(id) {
+  const remote = multiplayerState.players.get(id);
+  if (!remote) return;
+  scene.remove(remote.mesh);
+  disposeRemoteMesh(remote.mesh);
+  multiplayerState.players.delete(id);
+}
+
+function clearRemotePlayers() {
+  for (const id of [...multiplayerState.players.keys()]) removeRemotePlayer(id);
+}
+
+function renderMultiplayerServers(servers) {
+  if (!multiplayerServerList) return;
+  const currentServer = servers.find((server) => server.id === multiplayerState.serverId);
+  if (currentServer) {
+    setMultiplayerStatus(`${currentServer.name} · ${currentServer.players}/${currentServer.capacity}`, "connected");
+    if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = `Connected to ${currentServer.name}. Players in this server: ${currentServer.players}/${currentServer.capacity}.`;
+  }
+  multiplayerServerList.replaceChildren();
+  if (servers.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "multiplayer-browser-message";
+    empty.textContent = "No active servers yet. Find an open server to create one.";
+    multiplayerServerList.append(empty);
+    return;
+  }
+  servers.forEach((server) => {
+    const card = document.createElement("div");
+    card.className = "multiplayer-server-card";
+    const label = document.createElement("span");
+    label.textContent = `${server.name} · ${server.players}/${server.capacity}`;
+    const join = document.createElement("button");
+    const isFull = server.players >= server.capacity;
+    join.type = "button";
+    join.textContent = isFull ? "Full" : server.id === multiplayerState.serverId ? "Current" : "Join";
+    join.disabled = isFull || server.id === multiplayerState.serverId;
+    join.addEventListener("click", () => connectMultiplayer(server.id));
+    card.append(label, join);
+    multiplayerServerList.append(card);
+  });
+}
+
+function initMultiplayerBrowser() {
+  multiplayerOpenButton?.addEventListener("click", () => {
+    multiplayerBrowser?.classList.remove("hidden");
+    if (!multiplayerUrl) {
+      setMultiplayerStatus("Multiplayer not configured", "error");
+      if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = "No multiplayer endpoint is configured. The site owner must set NEXT_PUBLIC_MULTIPLAYER_URL to the multiplayer WebSocket address.";
+      return;
+    }
+    multiplayerSend({ type: "list" });
+    if (!multiplayerState.socket || multiplayerState.socket.readyState === WebSocket.CLOSED) connectMultiplayer();
+  });
+  multiplayerCloseButton?.addEventListener("click", () => multiplayerBrowser?.classList.add("hidden"));
+  multiplayerQuickJoinButton?.addEventListener("click", () => connectMultiplayer());
+}
+
+function stopMultiplayer() {
+  multiplayerState.manualDisconnect = true;
+  clearTimeout(multiplayerState.reconnectTimer);
+  if (multiplayerState.socket) {
+    const socket = multiplayerState.socket;
+    multiplayerState.socket = null;
+    socket.close(1000, "Player left the game");
+  }
+  multiplayerState.clientId = null;
+  multiplayerState.serverId = null;
+  clearRemotePlayers();
+  setMultiplayerStatus("Offline", "idle");
+}
+
+function updateMultiplayer(dt, time) {
+  if (multiplayerState.socket?.readyState === WebSocket.OPEN) {
+    if (time - multiplayerState.lastSentAt >= 100 && playerMesh) {
+      multiplayerState.lastSentAt = time;
+      multiplayerSend({
+        type: "state",
+        position: { x: playerMesh.position.x, y: playerMesh.position.y, z: playerMesh.position.z },
+        rotation: playerMesh.rotation.y,
+        weapon: player.weapon,
+      });
+    }
+  }
+  for (const remote of multiplayerState.players.values()) {
+    remote.mesh.position.lerp(remote.target, Math.min(1, dt * 12));
+    const yawDelta = Math.atan2(Math.sin(remote.targetYaw - remote.mesh.rotation.y), Math.cos(remote.targetYaw - remote.mesh.rotation.y));
+    remote.mesh.rotation.y += yawDelta * Math.min(1, dt * 12);
+  }
 }
 
 function setMovementMode(mode) {
@@ -3047,7 +3387,9 @@ function checkAndLoadSave() {
     const fscreen = document.querySelector("#faction-screen");
     if (fscreen) fscreen.classList.add("hidden");
     if (hud) hud.classList.remove("hidden");
+    setGameScrollLock(true);
     gameStarted = true;
+    connectMultiplayer();
     checkNewQuestUnlocks();
     setWeapon(player.weapon);
     updateCombatHud();
@@ -3059,6 +3401,9 @@ function checkAndLoadSave() {
 }
 
 function showLoginScreen() {
+  stopMultiplayer();
+  setGameScrollLock(false);
+  document.querySelector("#mobile-controls")?.classList.add("hidden");
   const loginScreen = document.querySelector("#login-screen");
   if (loginScreen) loginScreen.classList.remove("hidden");
   
@@ -6912,6 +7257,7 @@ function loop(time) {
     updateInteractionPrompt();
     updateTeleport(stepDt);
     updateCamera();
+    updateMultiplayer(stepDt, time);
     updateBossHud();
 
     // Update active skill cooldown timers
@@ -11201,6 +11547,7 @@ function toggleEscMenu(forceState = null) {
   if (nextState === escMenuOpen) return;
   
   escMenuOpen = nextState;
+  document.querySelector("#mobile-controls")?.classList.toggle("hidden", escMenuOpen || !gameStarted);
   if (escMenu) {
     escMenu.classList.toggle("hidden", !escMenuOpen);
   }
@@ -11475,6 +11822,7 @@ renderInventory();
 renderAvatarChoices();
 createWorld();
 createPlayer();
+initMultiplayerBrowser();
 applyAvatarToPlayer();
 updateDerivedStats();
 updateHud();
@@ -11495,4 +11843,21 @@ initAvatarStudioUI();
 
 // Periodic Auto-Save every 5 seconds
 setInterval(saveGame, 5000);
+const gameLoadStatus = document.querySelector("#game-load-status");
+if (gameLoadStatus) gameLoadStatus.hidden = true;
+} catch (error) {
+  console.error("Sea Legends failed to initialize:", error);
+  const status = document.querySelector("#game-load-status");
+  const errorPanel = document.querySelector("#game-init-error");
+  const errorMessage = document.querySelector("#game-init-error-message");
+  if (status) status.hidden = true;
+  if (errorMessage) {
+    errorMessage.textContent = typeof THREE === "undefined"
+      ? "The 3D library could not be loaded. Check your internet connection and allow the Three.js CDN request, then reload."
+      : "The game could not initialize. Check WebGL support and browser storage permissions, then reload the page.";
+  }
+  if (errorPanel) errorPanel.hidden = false;
+  document.querySelector("#game-init-retry")?.addEventListener("click", () => window.location.reload());
+}
+})();
 

@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 export default function ContactPage() {
-  const email = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "";
+  const email = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "Viaanagarwal396@gmail.com";
   const usableEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   return <ContentLayout eyebrow="GET IN TOUCH">
     <h1>Contact</h1><p className="content-lead">For questions about the game, website, privacy notice, or accessibility, contact the Sea Legends project owner.</p>

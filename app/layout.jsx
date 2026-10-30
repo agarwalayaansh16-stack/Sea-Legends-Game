@@ -12,12 +12,15 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const multiplayerUrl = process.env.NEXT_PUBLIC_MULTIPLAYER_URL
+    || (process.env.NODE_ENV === "development" ? "ws://localhost:3010/multiplayer" : "");
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+        <meta name="sea-legends-multiplayer-url" content={multiplayerUrl} />
         {adsenseScriptEnabled && <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClientId}`} crossOrigin="anonymous" />}
       </head>
       <body suppressHydrationWarning>

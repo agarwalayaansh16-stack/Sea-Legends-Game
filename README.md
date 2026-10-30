@@ -34,7 +34,20 @@ Copy `.env.example` to `.env.local` for local configuration. Environment variabl
 
 ### AdSense
 
-The supplied publisher ID (`ca-pub-2635367930409387`) is configured and the exact AdSense publisher script is emitted in the document head for site verification. This does not mean the site is approved, and no ad-unit placements are currently enabled. To disable the script, set `NEXT_PUBLIC_ADSENSE_SCRIPT_ENABLED=false`. After Google approves the site and the owner completes required policy and consent setup, set `NEXT_PUBLIC_ADSENSE_ENABLED=true` and provide a real approved slot ID to the reusable `AdUnit` component on an appropriate informational page. Invalid or missing slot configuration renders no ad. Static builds bake public environment values at build time, so changing them requires a rebuild and redeploy. The standalone `server.js` serves only root static files and does not implement the Next.js informational routes; deploy the Next.js app with a compatible Next.js host/adapter for these routes.
+The supplied publisher ID (`ca-pub-2635367930409387`) is configured and the AdSense publisher script is emitted in the document head for site verification. This does not mean the site is approved, and this project currently renders no ad-unit placements. The repository cannot confirm whether Auto ads are enabled in the publisher account. To disable the script, set `NEXT_PUBLIC_ADSENSE_SCRIPT_ENABLED=false`. After Google approves the site and the owner completes required policy and consent setup, set `NEXT_PUBLIC_ADSENSE_ENABLED=true` and provide a real approved slot ID to the reusable `AdUnit` component on an appropriate informational page. Invalid or missing slot configuration renders no ad. Static builds bake public environment values at build time, so changing them requires a rebuild and redeploy. The standalone `server.js` serves only root static files and does not implement the Next.js informational routes; deploy the Next.js app with a compatible Next.js host/adapter for these routes.
+
+### Multiplayer prototype
+
+The optional WebSocket service creates First Sea world servers and enforces a maximum of 10 connected players in each. Each server process holds its rooms and player presence in memory. Players in the same room see one another's avatar and movement. Enemy combat, quest progress, currency, inventory, and saves are still local to each player's browser; this is not yet authoritative co-op gameplay. Room data is cleared when the multiplayer process restarts.
+
+For local development, run the game and multiplayer service in separate terminals:
+
+```bash
+npm run dev
+npm run multiplayer
+```
+
+The development site connects to `ws://localhost:3010/multiplayer` by default. Set `MULTIPLAYER_PORT` to change the service port. Set `MULTIPLAYER_ALLOWED_ORIGINS` to a comma-separated list of allowed browser origins. In production, deploy `multiplayer-server.js` as a persistent Node.js service, set `NEXT_PUBLIC_MULTIPLAYER_URL` to its public `wss://.../multiplayer` endpoint in the site build environment, and allow the site origin on the multiplayer service. Production multiplayer remains offline if that endpoint is unset. Multiple server rooms are hosted by the same process; running multiple backend processes requires shared room coordination and is not configured here. The service does not authenticate local profile names, so do not treat them as verified identities.
 
 ### Account and privacy limitations requiring owner action
 
@@ -51,6 +64,8 @@ The in-game profile screens are a client-side prototype, not a sign-in service. 
 - `2`: Sword
 - `3`: Gun
 - `4`: Special ability after completing the first quest
+
+Touch-screen devices also show on-screen movement, combat, interaction, and weapon buttons while in-game. Drag the game view to rotate the camera; advanced skills still use a keyboard.
 
 ## Current Features
 

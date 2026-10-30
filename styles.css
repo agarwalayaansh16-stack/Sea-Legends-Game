@@ -22,7 +22,8 @@ body,
 
 html, body { min-height: 100%; }
 body { overflow-x: hidden; overflow-y: auto; }
-#game-root { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; position: relative; }
+html.game-active, body.game-active { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+#game-root { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; position: relative; contain: layout paint; }
 
 body {
   background: radial-gradient(circle at top, #77d7ff 0, #1a7194 45%, #0d3444 100%);
@@ -37,6 +38,25 @@ button {
 #game {
   display: block;
 }
+#game-load-status { position: fixed; z-index: 20000; top: 12px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; color: #fff7e6; background: rgba(4,22,32,.92); font-weight: 700; box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+#game-load-status[hidden] { display: none; }
+#game-init-error[hidden] { display: none; }
+#game-init-error { position: fixed; z-index: 20001; inset: 0; display: grid; place-content: center; padding: 24px; color: #fff7e6; text-align: center; background: rgba(3,12,18,.96); }
+#game-init-error h2 { margin: 0 0 10px; font-size: clamp(1.5rem, 5vw, 2.2rem); }
+#game-init-error p { max-width: 520px; line-height: 1.6; }
+#game-init-retry { justify-self: center; margin-top: 10px; padding: 12px 18px; border: 0; border-radius: 8px; color: #10212d; background: #f6c45f; font: inherit; font-weight: 800; cursor: pointer; }
+#game-init-retry:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+#game { touch-action: none; }
+#mobile-controls { position: absolute; z-index: 20; inset: auto 12px 14px; display: none; justify-content: space-between; align-items: end; gap: 12px; pointer-events: none; }
+#mobile-controls button { min-width: 48px; min-height: 48px; padding: 8px; border: 1px solid rgba(255,255,255,.42); border-radius: 14px; color: #fff7e6; background: rgba(5,21,31,.78); font: inherit; font-size: 1rem; font-weight: 900; touch-action: none; pointer-events: auto; user-select: none; -webkit-user-select: none; }
+#mobile-controls button:active { background: rgba(246,183,60,.9); color: #10212d; }
+#mobile-controls button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+.mobile-dpad { display: grid; justify-items: center; gap: 5px; }
+.mobile-dpad > div, .mobile-weapons { display: flex; gap: 5px; }
+.mobile-actions { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; justify-items: end; }
+.mobile-weapons { grid-column: 1 / -1; }
+@media (max-width: 900px) and (pointer: coarse) { #mobile-controls:not(.hidden) { display: flex; } }
+@media (max-width: 420px) and (pointer: coarse) { #mobile-controls { inset-inline: 7px; bottom: 8px; } #mobile-controls button { min-width: 44px; min-height: 44px; padding: 6px; font-size: .88rem; } .mobile-actions { gap: 4px; } }
 
 .hidden {
   display: none !important;
@@ -74,11 +94,27 @@ button {
 .ad-reservation { min-height: 290px; max-width: 970px; margin: 32px auto; padding: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.025); }
 .ad-label { display: block; margin-bottom: 8px; color: #b6c8cc; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; }
 .ad-unit { min-height: 250px; }
+.home-content { padding: clamp(36px, 7vw, 84px) 20px; color: #e2edf0; background: linear-gradient(160deg, #071c2a, #0c3949 72%, #092733); }
+.home-content-inner { max-width: 1040px; margin: 0 auto; line-height: 1.72; }
+.home-content h1 { max-width: 800px; margin: 0 0 18px; color: #fff7e6; font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.08; text-transform: none; }
+.home-content h2 { margin: 38px 0 12px; color: #f6c45f; font-size: clamp(1.4rem, 3vw, 1.9rem); }
+.home-content h3 { margin: 0 0 8px; color: #fff7e6; font-size: 1.1rem; }
+.home-content p, .home-content li { max-width: 800px; }
+.home-content a:not(.content-button) { color: #8be6df; text-underline-offset: 3px; }
+.home-content a:focus-visible { outline: 3px solid #ffd166; outline-offset: 4px; }
+.home-content kbd { padding: 2px 6px; border: 1px solid rgba(255,255,255,.28); border-radius: 5px; color: #fff7e6; background: rgba(255,255,255,.08); font: inherit; font-size: .9em; }
+.home-feature-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.home-feature-grid article { padding: 20px; border: 1px solid rgba(255,255,255,.13); border-radius: 14px; background: rgba(255,255,255,.04); }
+.home-feature-grid article p { margin: 0; }
+.home-info-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-top: 44px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.16); }
+.home-info-links h2 { flex-basis: 100%; margin: 0 0 4px; }
 @media (max-width: 640px) {
   .site-footer-inner { grid-template-columns: 1fr; }
   .site-footer-nav { gap: 12px 16px; }
   .site-footer p { grid-column: auto; }
   .content-page { padding-inline: 18px; }
+  .home-feature-grid { grid-template-columns: 1fr; }
+  .home-info-links { gap: 12px 18px; }
 }
 
 .overlay {
@@ -593,6 +629,25 @@ h1 {
   align-items: center;
   gap: 12px;
 }
+
+.multiplayer-status-wrap { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+#multiplayer-status { max-width: 190px; overflow: hidden; color: #c6d8dc; font-size: 12px; font-weight: 800; text-overflow: ellipsis; }
+#multiplayer-status[data-state="connected"] { color: #8be6b3; }
+#multiplayer-status[data-state="error"] { color: #ffb5a6; }
+#multiplayer-open, #multiplayer-close { min-height: 36px; padding: 7px 12px; border: 1px solid rgba(246,183,60,.44); border-radius: 10px; color: #fff1ce; background: rgba(246,183,60,.13); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+#multiplayer-open:hover, #multiplayer-close:hover { background: rgba(246,183,60,.25); }
+.multiplayer-browser { position: absolute; z-index: 30; top: 166px; right: 20px; width: min(380px, calc(100% - 40px)); max-height: calc(100% - 190px); overflow: auto; padding: 18px; border: 1px solid rgba(255,247,230,.2); border-radius: 18px; color: #fff7e6; background: rgba(5,22,32,.97); box-shadow: 0 22px 54px rgba(0,0,0,.45); pointer-events: auto; }
+.multiplayer-browser > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.multiplayer-browser h2 { margin: 0; color: #fff7e6; font-size: 19px; }
+.multiplayer-browser header p, .multiplayer-browser-message { margin: 5px 0 12px; color: #bfd0d4; font-size: 12px; line-height: 1.5; }
+#multiplayer-close { min-width: 36px; padding: 2px; font-size: 21px; line-height: 1; }
+.multiplayer-quick-join { width: 100%; min-height: 42px; margin: 2px 0 12px; border: 0; border-radius: 10px; color: #10212d; background: #f6c45f; font: inherit; font-weight: 900; cursor: pointer; }
+.multiplayer-server-list { display: grid; gap: 8px; }
+.multiplayer-server-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.04); }
+.multiplayer-server-card span { color: #e2edf0; font-size: 12px; font-weight: 700; }
+.multiplayer-server-card button { min-height: 34px; padding: 6px 10px; border: 1px solid rgba(139,230,179,.35); border-radius: 8px; color: #baf4d1; background: rgba(139,230,179,.1); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.multiplayer-server-card button:disabled { border-color: rgba(255,255,255,.1); color: #87969a; background: rgba(255,255,255,.03); cursor: not-allowed; }
+.multiplayer-server-card button:focus-visible, #multiplayer-open:focus-visible, #multiplayer-close:focus-visible, .multiplayer-quick-join:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
 
 .settings-collapse-button {
   display: inline-flex;
@@ -2753,6 +2808,10 @@ body:not(.perf-hidden) #hud {
   transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 }
+
+.prelogin-guide-link { display: block; width: fit-content; max-width: 100%; margin: 0 auto 20px; padding: 10px 16px; border: 1px solid rgba(246,183,60,.65); border-radius: 10px; color: #ffe0a0; background: rgba(246,183,60,.1); font-size: 13px; font-weight: 800; text-align: center; text-decoration: none; }
+.prelogin-guide-link:hover { color: #fff7e6; background: rgba(246,183,60,.2); }
+.prelogin-guide-link:focus-visible { outline: 3px solid #ffd166; outline-offset: 3px; }
 
 #login-screen input:focus {
   background: rgba(4, 23, 36, 0.85) !important;
