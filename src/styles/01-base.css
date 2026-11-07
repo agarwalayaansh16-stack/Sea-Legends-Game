@@ -1,0 +1,53 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#game {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+html, body { min-height: 100%; }
+body { overflow-x: hidden; overflow-y: auto; }
+html.game-active, body.game-active { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+#game-root { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; position: relative; contain: layout paint; }
+
+body {
+  background: radial-gradient(circle at top, #77d7ff 0, #1a7194 45%, #0d3444 100%);
+  color: var(--paper);
+  font-family: 'Outfit', 'Inter', "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+#game {
+  display: block;
+}
+#game-load-status { position: fixed; z-index: 20000; top: 12px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; color: var(--paper); background: rgba(4,22,32,.92); font-weight: 700; box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+#game-load-status[hidden] { display: none; }
+#game-init-error[hidden] { display: none; }
+#game-init-error { position: fixed; z-index: 20001; inset: 0; display: grid; place-content: center; padding: 24px; color: var(--paper); text-align: center; background: rgba(3,12,18,.96); }
+#game-init-error h2 { margin: 0 0 10px; font-size: clamp(1.5rem, 5vw, 2.2rem); }
+#game-init-error p { max-width: 520px; line-height: 1.6; }
+#game-init-retry { justify-self: center; margin-top: 10px; padding: 12px 18px; border: 0; border-radius: 8px; color: var(--ink); background: var(--gold); font: inherit; font-weight: 800; cursor: pointer; }
+#game-init-retry:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+#game { touch-action: none; }
+#mobile-controls { position: absolute; z-index: 20; inset: auto 12px 14px; display: none; justify-content: space-between; align-items: end; gap: 12px; pointer-events: none; }
+#mobile-controls button { min-width: 48px; min-height: 48px; padding: 8px; border: 1px solid rgba(255,255,255,.42); border-radius: 14px; color: var(--paper); background: rgba(5,21,31,.78); font: inherit; font-size: 1rem; font-weight: 900; touch-action: none; pointer-events: auto; user-select: none; -webkit-user-select: none; }
+#mobile-controls button:active { background: rgba(var(--gold-rgb), .9); color: var(--ink); }
+#mobile-controls button:focus-visible { outline: 3px solid var(--gold-bright); outline-offset: 2px; }
+.mobile-dpad { display: grid; justify-items: center; gap: 5px; }
+.mobile-dpad > div, .mobile-weapons { display: flex; gap: 5px; }
+.mobile-actions { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; justify-items: end; }
+.mobile-weapons { grid-column: 1 / -1; }
+@media (max-width: 900px) and (pointer: coarse) { #mobile-controls:not(.hidden) { display: flex; } }
+@media (max-width: 420px) and (pointer: coarse) { #mobile-controls { inset-inline: 7px; bottom: 8px; } #mobile-controls button { min-width: 44px; min-height: 44px; padding: 6px; font-size: .88rem; } .mobile-actions { gap: 4px; } }
+
+.hidden {
+  display: none !important;
+}

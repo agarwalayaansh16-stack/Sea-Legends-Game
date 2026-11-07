@@ -7,8 +7,8 @@ import { adsenseClientId, adsenseScriptEnabled, siteUrl } from "./site-config";
 export const metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: "Sea Legends", template: "%s | Sea Legends" },
-  description: "Explore islands, take on quests, and learn about Sea Legends, a browser-based 3D action RPG prototype.",
-  openGraph: { type: "website", siteName: "Sea Legends", title: "Sea Legends", description: "A browser-based 3D action RPG prototype set across a chain of islands.", url: siteUrl },
+  description: "Explore islands, take on quests, and play Sea Legends, a free browser-based 3D action RPG.",
+  openGraph: { type: "website", siteName: "Sea Legends", title: "Sea Legends", description: "A free browser-based 3D action RPG set across a chain of islands.", url: siteUrl },
 };
 
 export default function RootLayout({ children }) {

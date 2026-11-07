@@ -5,13 +5,13 @@ export const metadata = {
   title: "Game Guide and Controls",
   description: "A practical guide to Sea Legends controls, factions, quests, combat, travel, progression, and local saves.",
   alternates: { canonical: `${siteUrl}/game-guide` },
-  openGraph: { title: "Sea Legends Game Guide", description: "Learn the controls, first quest, combat, and progression in the Sea Legends prototype.", url: `${siteUrl}/game-guide` },
+  openGraph: { title: "Sea Legends Game Guide", description: "Learn the controls, first quest, combat, and progression in Sea Legends.", url: `${siteUrl}/game-guide` },
 };
 
 export default function GuidePage() {
   return <ContentLayout eyebrow="PLAYER GUIDE">
     <h1>Sea Legends game guide</h1>
-    <p className="content-lead">This guide covers the currently implemented browser prototype. Content and balance can change as the game develops.</p>
+    <p className="content-lead">Everything you need to get started in Sea Legends: controls, factions, your first quest, combat, travel, and saving. Content and balance are updated as the game develops.</p>
 
     <h2>Getting started</h2>
     <ol>
@@ -41,7 +41,7 @@ export default function GuidePage() {
     <p>On touch screens, use the on-screen pad for movement, attack, jump, interaction, and weapon selection; drag across the scene to rotate the view. Some later skills use Z, X, C, V, or B after unlocking and still require a keyboard.</p>
 
     <h2>Exploration and travel</h2>
-    <p>The First Sea contains a chain of islands with different terrain and enemy groups. Use the quest compass and marker to orient yourself. At a dock, interact with the Boat Dealer, choose a dinghy, sailor boat, or brigade, then approach it and press G to helm it. Use W, A, S, and D to steer; press G again to disembark near the boat. Travel, water, and collision behavior are prototype systems and may be imperfect.</p>
+    <p>The First Sea contains a chain of islands with different terrain and enemy groups. Use the quest compass and marker to orient yourself. At a dock, interact with the Boat Dealer, choose a dinghy, sailor boat, or brigade, then approach it and press G to helm it. Use W, A, S, and D to steer; press G again to disembark near the boat.</p>
 
     <h2>Combat and enemies</h2>
     <p>Select melee, sword, or gun with 1, 2, or 3, then attack with a left click or R. Movement modes, blocking, dashing, and jumping are also available. Enemies can detect and pursue the player, attack at close range, and respawn after defeat. Keep moving and watch the health display. The special weapon becomes available after the starter quest; further skills have their own unlock and cooldown requirements.</p>
@@ -50,7 +50,7 @@ export default function GuidePage() {
     <p>On Starter Island, press E near the quest giver and accept <strong>Bandit Trouble</strong>. Defeat five starter bandits, then return to the quest giver to claim 180 money and 120 XP. Other quest entries unlock at specified levels and ask for enemies or bosses in later areas; the game currently includes a limited set of these encounters. XP raises your level and grants stat points. The stats are melee, defense, sword, gun, and special abilities. Certain abilities and items have additional unlock requirements.</p>
 
     <h2>Inventory and marketplace</h2>
-    <p>Open Inventory from the in-game menu to review weapon categories, items, and mastery. The avatar marketplace interface is local prototype data: its sample NPC listings are generated in the browser and do not represent a shared online market or real transactions.</p>
+    <p>Open Inventory from the in-game menu to review weapon categories, items, and mastery. The avatar marketplace shows outfits listed by in-game characters. Listings are generated in your browser; there is no real-money trading.</p>
 
     <h2>Multiplayer world servers</h2>
     <p>If multiplayer is enabled for the site, entering the game connects you to an available First Sea server. Use <strong>Servers</strong> in the in-game settings bar to see room occupancy or join another server. Each room holds at most ten players. Players in the same room can see each other's avatars and movement. Enemies, combat, quest progress, currency, inventory, and saves are still independent in each browser. If multiplayer is not configured or the service is offline, the game remains playable in local mode.</p>

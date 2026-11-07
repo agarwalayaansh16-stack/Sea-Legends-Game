@@ -26,6 +26,33 @@ npm run serve:static
 
 The game loads Three.js from a CDN, so the first load needs an internet connection.
 
+## Project structure
+
+The game and its styles are edited as small, ordered source files and joined into the files the browser loads:
+
+```
+src/game/      00-bootstrap.js … 99-init.js   -> game.js     (one per system: audio, scene, input, world, enemies, combat, HUD, settings…)
+src/styles/    00-tokens.css … 50-theme.css    -> styles.css
+scripts/build-assets.js                        builds both and copies them with index.html into public/
+```
+
+`npm run dev`, `npm run build` and `npm run serve:static` rebuild the assets automatically; run `npm run build:assets` after editing if you serve the files some other way. **Do not edit the root `game.js`, `styles.css` or anything in `public/` directly** — they are generated and will be overwritten.
+
+The game files share one closure that opens in `00-bootstrap.js` and closes in `99-init.js`, so they are concatenated rather than loaded as separate scripts; keep new code inside that order.
+
+### Colours
+
+- **UI colours** live in `src/styles/00-tokens.css` (deep-sea navy surfaces, parchment text, treasure-gold primary, lagoon-teal secondary, plus green/coral/azure for health, damage and energy). Component files use these variables rather than raw hex values.
+- **3D world colours** live in `WORLD_PALETTE` in `src/game/03-world-palette.js` (sky by time of day, sea, terrain per island, foliage, roofs). Write them as normal on-screen hex colours; `worldHex()` converts them for Three.js r128's linear lighting so they appear as written.
+- **HUD placement** is defined once in `src/styles/40-hud-layout.css`, including the laptop and phone layouts.
+
+### World systems
+
+- **Day cycle** (`DAY_CYCLE` in `src/game/22-effects-weather-boats.js`): day → sunset → night → sunrise, 10 minutes each. Change `phaseSeconds` to speed it up or slow it down. The top bar shows the current phase and time left.
+- **Wind grass** (`src/game/26-wind-grass.js`): grass blades are generated in 64-unit cells around the player and sway in a shared wind field (stronger in storms). Density per island is `WIND_GRASS_DENSITY`; the graphics quality setting thins it.
+- **Terrain**: the grass surface is built from `getLocalSurfaceHeightAt`, the same function the player and objects use, so nothing floats or sinks.
+- **Cottages** (`createHouse` in `src/game/13-world-buildings-npcs.js`) and **windmills / wheat field** (`src/game/27-windmills.js`).
+
 ## Public information pages and production configuration
 
 The Next.js deployment includes `/about`, `/game-guide`, `/privacy-policy`, `/terms`, and `/contact`, plus generated `/robots.txt` and `/sitemap.xml`. The current canonical origin is `https://dapolice.vercel.app`; set `NEXT_PUBLIC_SITE_URL` to the permanent canonical origin in the deployment environment if it changes. Set `NEXT_PUBLIC_CONTACT_EMAIL` to a monitored address before launch; until configured, the Contact page displays an owner setup note.

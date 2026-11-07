@@ -12,7 +12,7 @@ export default function SiteFooter() {
       <nav aria-label="Site information" className="site-footer-nav">
         {links.map(([label, href]) => <Link href={href} key={href}>{label}</Link>)}
       </nav>
-      <p>A browser-based 3D action RPG prototype. Game progress is stored locally in this browser.</p>
+      <p>A free browser-based 3D action RPG. Game progress is saved in your browser.</p>
     </div>
   </footer>;
 }

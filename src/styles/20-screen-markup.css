@@ -1,0 +1,366 @@
+/* ==========================================================================
+   Screen markup styles migrated out of inline style="" attributes in
+   index.html: shared utility/component classes first, then per-element
+   rules keyed by id (escape menu, avatar studio modal, marketplace).
+   ========================================================================== */
+
+/* ---- Shared classes ---- */
+.is-hidden-inline {
+  display: none;
+}
+.text-gold {
+  color: var(--gold);
+}
+.keybind-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  padding-bottom: 4px;
+}
+.key-hint {
+  background: rgba(255,255,255,0.12);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 10px;
+}
+.esc-subsection {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 12px;
+  margin-top: -4px;
+}
+.btn-row-wrap {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.admin-btn {
+  flex: 1;
+  min-width: 100px;
+  font-size: 11px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  outline: none;
+  border-radius: 6px;
+}
+.admin-tp-btn {
+  font-size: 10px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+.flex-1 {
+  flex: 1;
+}
+.text-left {
+  text-align: left;
+}
+.studio-field-label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: rgba(var(--paper-rgb), 0.5);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.stack-8 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.studio-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.02);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.studio-color-label {
+  font-size: 12px;
+  color: rgba(var(--paper-rgb), 0.8);
+  font-weight: 600;
+}
+.studio-color-input {
+  border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+.stack-10 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.studio-select {
+  width: 100%;
+  background: rgba(10, 30, 42, 0.7);
+  border: 1px solid rgba(var(--paper-rgb), 0.15);
+  color: #fff;
+  padding: 8px;
+  border-radius: 8px;
+  outline: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.slider-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: rgba(var(--paper-rgb), 0.5);
+  font-weight: 700;
+}
+.slider-value {
+  font-size: 10px;
+  color: var(--gold);
+  font-weight: bold;
+}
+.studio-slider {
+  width: 100%;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+.market-heading {
+  margin: 0 0 10px;
+  color: var(--gold);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.modal-tab-btn { pointer-events: auto; }
+
+/* ---- Per-element rules ---- */
+#faction-open-studio-btn {
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  font-weight: 900;
+  border-radius: 12px;
+  cursor: pointer;
+  padding: 10px 20px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 20px rgba(var(--gold-rgb), 0.3);
+  transition: all 0.2s;
+}
+#admin-godmode-btn {
+  flex: 1;
+  min-width: 120px;
+  font-size: 11px;
+  padding: 8px;
+  background: rgba(var(--mint-rgb), 0.15);
+  border: 1px solid rgba(var(--mint-rgb), 0.3);
+  color: var(--mint);
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  text-shadow: none;
+}
+#admin-instakill-btn {
+  flex: 1;
+  min-width: 120px;
+  font-size: 11px;
+  padding: 8px;
+  background: rgba(var(--danger-rgb), 0.15);
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  color: var(--danger);
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  text-shadow: none;
+}
+#esc-logout-btn {
+  flex: 1;
+  background: rgba(var(--danger-rgb), 0.15);
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  color: var(--danger);
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
+  font-size: 13px;
+}
+#avatar-studio-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 10, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+#avatar-studio-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 28px;
+  color: rgba(var(--paper-rgb), 0.5);
+  cursor: pointer;
+  transition: color 0.2s;
+  outline: none;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+
+#panel-designer {
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+#avatar-3d-preview-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
+}
+#studio-preview-name {
+  color: #fff;
+  font-size: 16px;
+}
+#studio-preview-traits-label {
+  font-size: 11px;
+  background: rgba(var(--gold-rgb), 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(var(--gold-rgb), 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+#studio-preview-traits {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(var(--paper-rgb), 0.45);
+  line-height: 1.4;
+  min-height: 32px;
+  text-align: left;
+}
+#studio-avatar-list {
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  max-height: none;
+}
+#studio-avatar-name {
+  width: 100%;
+  background: rgba(10, 30, 42, 0.7);
+  border: 1px solid rgba(var(--paper-rgb), 0.15);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+}
+#studio-sell-price {
+  width: 100%;
+  background: rgba(10, 30, 42, 0.7);
+  border: 1px solid rgba(var(--paper-rgb), 0.15);
+  color: #fff;
+  padding: 7px 10px 7px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+}
+#studio-publish-btn {
+  background: var(--mint);
+  color: var(--ink);
+  border: none;
+  font-weight: 800;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px 16px;
+  font-size: 12px;
+  transition: all 0.2s;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+#studio-delete-avatar {
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1.5px solid rgba(235, 94, 85, 0.4);
+  background: rgba(235, 94, 85, 0.1);
+  color: #eb5e55;
+  pointer-events: auto;
+}
+#studio-save-avatar {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1.5px solid rgba(var(--paper-rgb), 0.2);
+  background: rgba(6, 25, 34, 0.56);
+  color: #fff;
+  pointer-events: auto;
+}
+#studio-create-avatar {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  border: none;
+  background: var(--gold);
+  color: var(--ink);
+  pointer-events: auto;
+}
+#panel-marketplace {
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  background: rgba(6, 18, 28, 0.3);
+}
+#market-player-cash {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mint);
+  background: rgba(var(--mint-rgb), 0.1);
+  border: 1px solid rgba(var(--mint-rgb), 0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+}

@@ -1,0 +1,25 @@
+{
+  "name": "sea-legends",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "predev": "node sync-public.js",
+    "dev": "next dev",
+    "prebuild": "node sync-public.js",
+    "build": "next build",
+    "start": "next start",
+    "multiplayer": "node multiplayer-server.js",
+    "serve:static": "node server.js",
+    "check": "node --check game.js && node --check server.js && node --check multiplayer-server.js && node --check sync-public.js"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.176.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.1.0"
+  }
+}

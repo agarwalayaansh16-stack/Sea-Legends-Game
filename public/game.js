@@ -1,3 +1,5 @@
+// GENERATED FILE - do not edit. Edit src/game/ and run "npm run build:assets". 
+// ── 00-bootstrap.js ─ Opens the game closure and shows load/runtime errors to the player.
 // Keep initialization errors visible to players while preserving their details in the console.
 (function bootstrapSeaLegends() {
 try {
@@ -19,6 +21,7 @@ try {
   });
   document.querySelector("#game-init-retry")?.addEventListener("click", () => window.location.reload());
 
+// ── 01-audio.js ─ Procedural Web Audio sound effects and master volume.
 // Procedural Sound Manager using browser Web Audio API
 const audio = {
   ctx: null,
@@ -258,14 +261,15 @@ const audio = {
   }
 };
 
+// ── 02-skills-and-dom.js ─ Mastery skill data, world/boat state flags and cached DOM element references.
 let skillCooldowns = {};
 
 const masterySkills = {
   melee: [
-    { key: "Z", id: "falcon-punch", name: "Falcon Punch", req: 5, cd: 4, desc: "Active: A very hard punch going 24 units far in the direction you face." },
+    { key: "Z", id: "falcon-punch", name: "Meteor Fist", req: 5, cd: 4, desc: "Active: A very hard punch going 24 units far in the direction you face." },
     { key: "X", id: "ground-slam", name: "Ground Slam", req: 20, cd: 8, desc: "Active: Slam the ground dealing massive AOE damage around you." },
-    { key: "C", id: "flambage-shot", name: "Flambage Shot", req: 1, cd: 6, desc: "Black Leg: Leap forward with a blazing fire kick — burn damage + knockback." },
-    { key: "V", id: "diable-jambe", name: "Diable Jambe", req: 1, cd: 18, desc: "Black Leg: Ignite your legs — next 5 attacks deal 2.5x fire damage." }
+    { key: "C", id: "flambage-shot", name: "Ember Shot", req: 1, cd: 6, desc: "Blaze Kick: Leap forward with a blazing fire kick — burn damage + knockback." },
+    { key: "V", id: "diable-jambe", name: "Inferno Kick", req: 1, cd: 18, desc: "Blaze Kick: Ignite your legs — next 5 attacks deal 2.5x fire damage." }
   ],
   defense: [
     { name: "Perfect Parry", req: 5, desc: "Passive: Blocking within 0.2s of attack reflects 40% damage." },
@@ -395,6 +399,7 @@ const studioPreviewName = document.querySelector("#studio-preview-name");
 const studioPreviewTraits = document.querySelector("#studio-preview-traits");
 const studioPreviewTraitsLabel = document.querySelector("#studio-preview-traits-label");
 
+// ── 03-game-state.js ─ Core constants, player, inventory, quest catalog and runtime state.
 const avatarPreview3D = {
   scene: null,
   camera: null,
@@ -586,9 +591,9 @@ const player = {
   isAdmin: false,
   isGodMode: false,
   isInstakill: false,
-  hasFlamingFeet: false,
-  diableJambeTimer: 0,    // seconds remaining on Diable Jambe ignition buff
-  diableJambeHits: 0,    // hits remaining on Diable Jambe buff
+  hasFlamingFeet: true, // Blaze Kick attacks (Ember Shot / Inferno Kick) are part of melee
+  diableJambeTimer: 0,    // seconds remaining on Inferno Kick ignition buff
+  diableJambeHits: 0,    // hits remaining on Inferno Kick buff
   hasFlashStep: false,
   flashStepCooldown: 0,
   observationHaki: {
@@ -740,8 +745,8 @@ const questCatalog = {
   },
   buggy50: {
     id: "buggy50",
-    title: "Buggy the Clown",
-    detail: "Defeat Captain Buggy.",
+    title: "Captain Jester",
+    detail: "Defeat Captain Jester.",
     targetType: "buggy",
     target: 1,
     defeated: 0,
@@ -865,9 +870,88 @@ const multiplayerState = {
 };
 const multiplayerUrl = document.querySelector('meta[name="sea-legends-multiplayer-url"]')?.content.trim() || "";
 
+// ── 03-world-palette.js ─ World colour palette: sky, sea, terrain and village colours in one place.
+//
+// Colours here are written as they should appear on screen (normal sRGB hex).
+// Three.js r128 treats material colours as linear and brightens them on output,
+// so anything used on a lit material goes through worldHex()/worldColor(),
+// which converts sRGB to linear. Sky dome, background and fog colours are drawn
+// without that conversion, so they are used as-is.
+const WORLD_PALETTE = {
+  // r128 multiplies every light by PI, so these are tuned lower than they look.
+  // Raise them for a brighter, softer world; lower them for richer, deeper colour.
+  lighting: {
+    sunScale: 0.62,       // multiplies the day/night sun intensity
+    hemisphere: 0.62,     // sky/ground fill light
+    ambient: 0.12,
+    exposure: 1.0,
+  },
+  sky: {
+    // [top, horizon, sun glow] per time of day — used raw by the sky shader and fog
+    dawn: { top: 0x2b4479, horizon: 0xf3a77e, glow: 0xffb871 },
+    day: { top: 0x3b86cf, horizon: 0xbfe2f1, glow: 0xfff1d2 },
+    dusk: { top: 0x26325f, horizon: 0xee7e58, glow: 0xff6c40 },
+    night: { top: 0x060f22, horizon: 0x0d1e35, glow: 0x3a5a78 },
+  },
+  sea: {
+    base: 0x2c8fae,       // lit water surface
+    deep: 0x2a7f9e,       // deep/shallow/foam tint the lit surface in the ocean shader
+    shallow: 0x55c4cf,
+    foam: 0xe9fbff,
+    lagoon: 0x47c6cf,     // shallow ring around islands
+  },
+  terrain: {
+    // index 0 Starter, 1 Jungle, 4 Snowy Village, others use "default"
+    grass: { 0: 0x63a552, 1: 0x2f7438, 4: 0xf4f7fb, default: 0x74ad5a },
+    cliff: { 0: 0xb0916a, 1: 0x5a5644, 4: 0xb9c3cf, default: 0xab9472 },
+    meadowGlow: 0xc9e79a,  // soft lighter wash in each island centre
+    sand: 0xecd39a,
+    path: 0xd8bd8c,
+    plaza: 0xc29a66,
+    stone: 0x8a857c,
+    rock: 0x7a746c,
+    rockDark: 0x6b625a,
+  },
+  foliage: {
+    palmLeaf: 0x3f9f4d,
+    palmTrunk: 0x92633e,
+    coconut: 0x5d3b22,
+    tuft: 0x4c9a44,
+    bark: 0x6b4a32,
+    canopy: [0x3f8a3c, 0x55a24a, 0x6db557],  // dark, mid, light leaf clusters
+    jungleBark: 0x5b4330,
+    jungleCanopy: [0x24602c, 0x2f7535, 0x3d8a3a, 0x4f9a3f],  // deep rainforest greens
+  },
+  village: {
+    roofs: [0xa9473a, 0x8f5a3c, 0x4d6a80, 0xb0603e, 0x5e7a4c],
+    walls: [0xefe3c8, 0xe8d3b0, 0xf2e8d8, 0xe3cfa8, 0xeadcc2],   // limewashed plaster
+    trims: [0x2f5f6e, 0x6b3a32, 0x35603f, 0x7a5426, 0x48506a],
+    timber: 0x5a3b26,
+    foundation: 0x8a847a,
+    ridge: 0x6d3a2e,
+    wellRoof: 0xa8463a,
+  },
+};
+
+const worldColorCache = new Map();
+// sRGB hex -> linear THREE.Color (for lit materials).
+function worldColor(hex) {
+  return new THREE.Color(hex).convertSRGBToLinear();
+}
+// sRGB hex -> linear hex number, cached (for material `color:` options).
+function worldHex(hex) {
+  if (!worldColorCache.has(hex)) worldColorCache.set(hex, worldColor(hex).getHex());
+  return worldColorCache.get(hex);
+}
+function islandTerrainColor(table, index) {
+  return worldHex(table[index] ?? table.default);
+}
+
+// ── 04-scene-sky-ocean.js ─ Three.js scene, renderer, lighting, ocean shader, sky dome, clouds and atmosphere.
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x98cded);
-scene.fog = new THREE.FogExp2(0x98cded, 0.00016);
+scene.background = new THREE.Color(WORLD_PALETTE.sky.day.horizon);
+scene.fog = new THREE.FogExp2(WORLD_PALETTE.sky.day.horizon, 0.00016);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -875,7 +959,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
+renderer.toneMappingExposure = WORLD_PALETTE.lighting.exposure;
 
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 80000);
 
@@ -896,10 +980,10 @@ sun.shadow.radius = 2.0;
 scene.add(sun);
 scene.add(sun.target);
 
-const hemiLight = new THREE.HemisphereLight(0x98d4ff, 0x243e31, 1.25);
+const hemiLight = new THREE.HemisphereLight(0x9fd2f5, 0x3a4a2c, WORLD_PALETTE.lighting.hemisphere);
 scene.add(hemiLight);
 
-const ambientLight = new THREE.AmbientLight(0xd0e6f7, 0.35);
+const ambientLight = new THREE.AmbientLight(0xd0e6f7, WORLD_PALETTE.lighting.ambient);
 scene.add(ambientLight);
 
 // High-fidelity procedural wave normal texture
@@ -960,13 +1044,13 @@ const oceanUniforms = {
   uTime: { value: 0 },
   uSunDir: { value: new THREE.Vector3(0.5, 0.7, 0.3).normalize() },
   uSunColor: { value: new THREE.Color(0xfff8ed) },
-  uDeepColor: { value: new THREE.Color(0x051a2e) },
-  uShallowColor: { value: new THREE.Color(0x0c7d9a) },
-  uFoamColor: { value: new THREE.Color(0xe0f6fc) },
+  uDeepColor: { value: new THREE.Color(WORLD_PALETTE.sea.deep) }, // tint multipliers: used raw
+  uShallowColor: { value: new THREE.Color(WORLD_PALETTE.sea.shallow) },
+  uFoamColor: { value: new THREE.Color(WORLD_PALETTE.sea.foam) },
 };
 
 const oceanMaterial = new THREE.MeshStandardMaterial({
-  color: 0x07354d,
+  color: worldHex(WORLD_PALETTE.sea.base),
   roughness: 0.12,
   metalness: 0.12,
   normalMap: waterNormalTexture,
@@ -1057,9 +1141,9 @@ function createSkyDome() {
   const geo = new THREE.SphereGeometry(44000, 48, 24);
   const uniforms = {
     uSunPos: { value: new THREE.Vector3(100, 200, 100).normalize() },
-    uSkyTop: { value: new THREE.Color(0x0c4b8e) },
-    uSkyHorizon: { value: new THREE.Color(0x98cded) },
-    uSunGlow: { value: new THREE.Color(0xffe7b5) },
+    uSkyTop: { value: new THREE.Color(WORLD_PALETTE.sky.day.top) },
+    uSkyHorizon: { value: new THREE.Color(WORLD_PALETTE.sky.day.horizon) },
+    uSunGlow: { value: new THREE.Color(WORLD_PALETTE.sky.day.glow) },
     uSunIntensity: { value: 1.0 },
     uNightMix: { value: 0.0 },
   };
@@ -1170,15 +1254,16 @@ const cloudDeck = createCloudDeck();
 
 // Ambient Sun Motes & Sea Mist Particles
 function createAmbientAtmosphere() {
-  const particleCount = 380;
+  // Sparse drifting pollen: enough to feel alive without veiling the view.
+  const particleCount = 150;
   const geo = new THREE.BufferGeometry();
   const positions = new Float32Array(particleCount * 3);
   const phases = new Float32Array(particleCount);
 
   for (let i = 0; i < particleCount; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 140;
-    positions[i * 3 + 1] = Math.random() * 45 + 1;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 140;
+    positions[i * 3] = (Math.random() - 0.5) * 220;
+    positions[i * 3 + 1] = Math.random() * 40 + 4;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 220;
     phases[i] = Math.random() * Math.PI * 2;
   }
 
@@ -1197,10 +1282,10 @@ function createAmbientAtmosphere() {
   const particleTexture = new THREE.CanvasTexture(c);
 
   const mat = new THREE.PointsMaterial({
-    size: 2.2,
+    size: 1.1,
     map: particleTexture,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.32,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -1214,6 +1299,7 @@ function createAmbientAtmosphere() {
 const ambientAtmosphere = createAmbientAtmosphere();
 const animatedFoliage = [];
 
+// ── 05-input-and-ui-events.js ─ Keyboard, pointer, touch and HUD button event bindings.
 // Initialization moved to the end of the file to prevent TDZ errors.
 
 document.querySelectorAll("[data-faction]").forEach((button) => {
@@ -1280,14 +1366,6 @@ inventoryTabs?.addEventListener("click", (event) => {
   inventoryState.tab = tab;
   renderInventory();
 });
-
-boatButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    handleBoatSelection(button.dataset.boat);
-  });
-});
-
-boatMenuClose?.addEventListener("click", hideBoatMenu);
 
 boatButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -1426,6 +1504,9 @@ window.addEventListener("keyup", (event) => {
   if (allowedMovementCodes.has(code) || movementCodeMap[key]) {
     keys.delete(mappedCode);
   }
+  if (code === "Space") {
+    releaseJump();
+  }
   if (code === "ShiftLeft" || code === "ShiftRight") {
     setMovementMode("walk");
   }
@@ -1536,7 +1617,7 @@ homeTeleportButton?.addEventListener("click", () => {
 
 shiftlockToggle?.addEventListener("change", () => {
   shiftLockEnabled = shiftlockToggle.checked;
-  shiftlockToggle.nextElementSibling.textContent = shiftLockEnabled ? "Shiftlock enabled" : "Shiftlock disabled";
+  shiftlockToggle.nextElementSibling.textContent = "Shift lock";
 });
 
 controlsToggle?.addEventListener("change", () => {
@@ -1566,10 +1647,11 @@ dialogueClose?.addEventListener("click", hideQuestDialogue);
 
 ui.respawnButton?.addEventListener("click", () => {
   player.health = player.maxHealth;
-  playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+  playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 12); // just south of the flagpole
   jumpOffset = 0;
   verticalVelocity = 0;
   isGrounded = true;
+  playerMoveState.velocity.set(0, 0, 0);
   if (ui.lowHealthOverlay) {
     ui.lowHealthOverlay.classList.remove("low", "defeated");
   }
@@ -1582,6 +1664,7 @@ window.addEventListener("pointerdown", () => {
   audio.init();
 }, { once: true });
 
+// ── 06-start-and-multiplayer.js ─ Game start and the optional WebSocket multiplayer client.
 function startGame(faction) {
   audio.init();
   player.faction = faction;
@@ -1635,6 +1718,23 @@ function currentMultiplayerProfile() {
   };
 }
 
+// Automatic reconnects back off and then stop, so a missing server doesn't spam errors.
+const MULTIPLAYER_MAX_AUTO_RETRIES = 3;
+const multiplayerRetry = { failures: 0, everConnected: false };
+
+function multiplayerOfflineHint() {
+  const local = /^wss?:\/\/(localhost|127\.0\.0\.1)/.test(multiplayerUrl);
+  return local
+    ? "The multiplayer server isn't running. Start it in a second terminal with \"npm run multiplayer\", then press Servers to connect. Single-player works without it."
+    : "The multiplayer servers can't be reached right now. You can keep playing solo; press Servers to try again.";
+}
+
+// Called from buttons: the player asked to connect, so try again even after giving up.
+function connectMultiplayerManually(serverId) {
+  multiplayerRetry.failures = 0;
+  connectMultiplayer(serverId);
+}
+
 function connectMultiplayer(serverId = multiplayerState.targetServerId) {
   if (!multiplayerUrl || typeof WebSocket === "undefined") {
     setMultiplayerStatus("Multiplayer not configured", "error");
@@ -1657,13 +1757,17 @@ function connectMultiplayer(serverId = multiplayerState.targetServerId) {
   let socket;
   try { socket = new WebSocket(multiplayerUrl); }
   catch (error) {
-    console.error("Could not open multiplayer connection:", error);
-    setMultiplayerStatus("Connection failed", "error");
+    console.warn("Could not open multiplayer connection:", error?.message || error);
+    setMultiplayerStatus("Servers offline", "error");
     return;
   }
+  let opened = false;
   multiplayerState.socket = socket;
   socket.addEventListener("open", () => {
     if (multiplayerState.socket !== socket) return;
+    opened = true;
+    multiplayerRetry.failures = 0;
+    multiplayerRetry.everConnected = true;
     multiplayerSend({ type: "join", ...currentMultiplayerProfile(), serverId: multiplayerState.targetServerId || "" });
   });
   socket.addEventListener("message", (event) => {
@@ -1675,9 +1779,11 @@ function connectMultiplayer(serverId = multiplayerState.targetServerId) {
     }
     handleMultiplayerMessage(message);
   });
-  socket.addEventListener("error", (error) => {
-    console.error("Multiplayer connection error:", error);
-    setMultiplayerStatus("Connection error", "error");
+  // A WebSocket error event carries no details (it logs as "{}"); the close handler
+  // below decides what to do, so this only notes it quietly.
+  socket.addEventListener("error", () => {
+    if (multiplayerState.socket !== socket) return;
+    if (multiplayerRetry.failures === 0) console.warn(`Multiplayer server not reachable at ${multiplayerUrl}. Playing offline.`);
   });
   socket.addEventListener("close", () => {
     if (multiplayerState.socket !== socket) return;
@@ -1689,8 +1795,16 @@ function connectMultiplayer(serverId = multiplayerState.targetServerId) {
       setMultiplayerStatus("Offline", "idle");
       return;
     }
-    setMultiplayerStatus("Disconnected · reconnecting", "error");
-    multiplayerState.reconnectTimer = setTimeout(() => connectMultiplayer(multiplayerState.targetServerId), 2500);
+    if (!opened) multiplayerRetry.failures += 1;
+    if (multiplayerRetry.failures > MULTIPLAYER_MAX_AUTO_RETRIES) {
+      setMultiplayerStatus("Servers offline", "error");
+      if (multiplayerBrowserMessage) multiplayerBrowserMessage.textContent = multiplayerOfflineHint();
+      return;
+    }
+    // 2.5s, 5s, 10s ... capped at 30s.
+    const delay = Math.min(30000, 2500 * Math.pow(2, Math.max(0, multiplayerRetry.failures - 1)));
+    setMultiplayerStatus(opened ? "Disconnected · reconnecting" : "Servers offline · retrying", "error");
+    multiplayerState.reconnectTimer = setTimeout(() => connectMultiplayer(multiplayerState.targetServerId), delay);
   });
 }
 
@@ -1802,7 +1916,7 @@ function renderMultiplayerServers(servers) {
     join.type = "button";
     join.textContent = isFull ? "Full" : server.id === multiplayerState.serverId ? "Current" : "Join";
     join.disabled = isFull || server.id === multiplayerState.serverId;
-    join.addEventListener("click", () => connectMultiplayer(server.id));
+    join.addEventListener("click", () => connectMultiplayerManually(server.id));
     card.append(label, join);
     multiplayerServerList.append(card);
   });
@@ -1817,10 +1931,10 @@ function initMultiplayerBrowser() {
       return;
     }
     multiplayerSend({ type: "list" });
-    if (!multiplayerState.socket || multiplayerState.socket.readyState === WebSocket.CLOSED) connectMultiplayer();
+    if (!multiplayerState.socket || multiplayerState.socket.readyState === WebSocket.CLOSED) connectMultiplayerManually();
   });
   multiplayerCloseButton?.addEventListener("click", () => multiplayerBrowser?.classList.add("hidden"));
-  multiplayerQuickJoinButton?.addEventListener("click", () => connectMultiplayer());
+  multiplayerQuickJoinButton?.addEventListener("click", () => connectMultiplayerManually());
 }
 
 function stopMultiplayer() {
@@ -1856,6 +1970,7 @@ function updateMultiplayer(dt, time) {
   }
 }
 
+// ── 07-inventory-and-avatars.js ─ Movement modes, weapons, inventory UI and the 2D avatar editor.
 function setMovementMode(mode) {
   player.movementMode = mode;
   walkToggle?.classList.toggle("active", mode === "walk");
@@ -1865,14 +1980,14 @@ function setMovementMode(mode) {
 
 function toggleHaki() {
   if (!player.haki.unlocked) {
-    log("Armament Haki is locked. Reach level 60, visit Desert Island, and train with the Haki Trainer.");
+    log("Iron Aura is locked. Reach level 60, visit Desert Island, and train with the Aura Trainer.");
     return;
   }
   player.haki.active = !player.haki.active;
   hakiToggle?.classList.toggle("active", player.haki.active);
   applyHakiVisuals();
   audio.playHaki();
-  log(player.haki.active ? `Armament Haki level ${player.haki.level} activated.` : "Armament Haki released.");
+  log(player.haki.active ? `Iron Aura level ${player.haki.level} activated.` : "Iron Aura released.");
 }
 
 function setWeapon(weapon) {
@@ -2272,7 +2387,93 @@ function getAvatarFromStudioEditor() {
     beltColor: studioBeltColorInput.value,
     capeColor: studioCapeColorInput.value,
     capeStyle: studioCapeStyleInput.value,
+    ...readStudioExtras(),
   };
+}
+
+// Proportion sliders and look options added to the studio (ids -> avatar fields).
+const STUDIO_EXTRA_FIELDS = {
+  armLength: { id: "#studio-arm-length", number: true, fallback: 100 },
+  legLength: { id: "#studio-leg-length", number: true, fallback: 100 },
+  torsoLength: { id: "#studio-torso-length", number: true, fallback: 100 },
+  headSize: { id: "#studio-head-size", number: true, fallback: 100 },
+  bodyType: { id: "#studio-body-type", fallback: "human" },
+  headStyle: { id: "#studio-head-style", fallback: "normal" },
+  accessory: { id: "#studio-accessory", fallback: null },
+};
+
+function readStudioExtras() {
+  const out = {};
+  Object.entries(STUDIO_EXTRA_FIELDS).forEach(([field, cfg]) => {
+    const input = document.querySelector(cfg.id);
+    if (!input) return;
+    out[field] = cfg.number ? Number(input.value) : input.value;
+  });
+  return out;
+}
+
+function loadStudioExtras(avatar) {
+  Object.entries(STUDIO_EXTRA_FIELDS).forEach(([field, cfg]) => {
+    const input = document.querySelector(cfg.id);
+    if (!input) return;
+    let value = avatar[field] ?? cfg.fallback;
+    // Older avatars had a halo unless they wore the adventurer outfit.
+    if (field === "accessory" && value == null) value = avatar.outfit !== "adventurer" ? "halo" : "none";
+    input.value = value;
+  });
+  refreshStudioSliderReadouts();
+}
+
+function refreshStudioSliderReadouts() {
+  document.querySelectorAll(".studio-slider[data-readout]").forEach((slider) => {
+    const readout = document.querySelector(slider.dataset.readout);
+    if (readout) readout.textContent = `${slider.value}%`;
+  });
+}
+
+// Avatar codes: a compact, shareable text version of a design.
+const AVATAR_CODE_PREFIX = "SL1:";
+const AVATAR_CODE_FIELDS = ["name", "skin", "shirt", "pants", "hair", "eyes", "boots", "hairStyle", "outfit", "height", "build",
+  "leftArmColor", "rightArmColor", "leftLegColor", "rightLegColor", "beltColor", "capeColor", "capeStyle",
+  "armLength", "legLength", "torsoLength", "headSize", "bodyType", "headStyle", "accessory"];
+
+function encodeAvatarCode(avatar) {
+  const data = {};
+  AVATAR_CODE_FIELDS.forEach((key) => { if (avatar[key] !== undefined) data[key] = avatar[key]; });
+  return AVATAR_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+}
+
+// Only known fields with sane values are accepted from a pasted code.
+function decodeAvatarCode(code) {
+  const text = String(code || "").trim();
+  if (!text.startsWith(AVATAR_CODE_PREFIX)) throw new Error("That doesn't look like an avatar code.");
+  let data;
+  try {
+    data = JSON.parse(decodeURIComponent(escape(atob(text.slice(AVATAR_CODE_PREFIX.length)))));
+  } catch (error) {
+    throw new Error("That avatar code is damaged or incomplete.");
+  }
+  const clean = {};
+  const isColor = (v) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
+  const choices = {
+    hairStyle: ["short", "spiky", "cap", "messy"],
+    outfit: ["sailor", "coat", "armor", "adventurer"],
+    capeStyle: ["none", "normal", "long", "torn"],
+    bodyType: ["human", "skeleton"],
+    headStyle: ["normal", "headless"],
+    accessory: ["none", "halo", "spectral-hands"],
+  };
+  const ranges = { height: [80, 130], build: [75, 135], armLength: [75, 135], legLength: [75, 135], torsoLength: [80, 125], headSize: [75, 135] };
+  AVATAR_CODE_FIELDS.forEach((key) => {
+    const v = data[key];
+    if (v === undefined) return;
+    if (key === "name" && typeof v === "string") clean.name = v.slice(0, 18);
+    else if (choices[key] && choices[key].includes(v)) clean[key] = v;
+    else if (ranges[key] && Number.isFinite(Number(v))) clean[key] = clamp(Number(v), ranges[key][0], ranges[key][1]);
+    else if (!choices[key] && !ranges[key] && isColor(v)) clean[key] = v;
+  });
+  if (!clean.skin) throw new Error("That avatar code is missing its colours.");
+  return clean;
 }
 
 function loadAvatarIntoEditor(avatar) {
@@ -2316,6 +2517,7 @@ function loadAvatarIntoEditor(avatar) {
   if (studioCapeStyleInput) studioCapeStyleInput.value = avatar.capeStyle || "normal";
   if (studioHeightScaleInput) studioHeightScaleInput.value = avatar.height || 100;
   if (studioBuildScaleInput) studioBuildScaleInput.value = avatar.build || 100;
+  loadStudioExtras(avatar);
   
   // Update slider readouts
   const heightValText = document.querySelector("#studio-val-height");
@@ -2373,6 +2575,11 @@ function getAvatarTraits(avatar = getSelectedAvatar()) {
     incomingDamageMultiplier: 1,
     label: "Balanced bulk",
   };
+  // Proportions: longer arms reach a little further, longer legs run a little faster.
+  const armLength = clamp((avatar.armLength || 100) / 100, 0.75, 1.35);
+  const legLength = clamp((avatar.legLength || 100) / 100, 0.75, 1.35);
+  traits.rangeMultiplier *= 1 + (armLength - 1) * 0.25;
+  traits.speedMultiplier *= 1 + (legLength - 1) * 0.15;
 
   if (outfit === "coat") {
     traits.rangeMultiplier += 0.06;
@@ -2423,6 +2630,7 @@ function formatMultiplier(value) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
+// ── 08-avatar-studio-3d.js ─ 3D avatar studio preview and in-game alert toasts.
 // ==========================================
 // 3D Avatar Customizer & Studio Renderer
 // ==========================================
@@ -2647,23 +2855,24 @@ function showMarketplaceAlert(title, message) {
   }, 3500);
 }
 
+// ── 09-marketplace.js ─ Simulated avatar marketplace.
 // ==========================================
 // Simulated Trading Marketplace Mechanics
 // ==========================================
 
 const npcCreators = [
   "Captain Redbeard",
-  "Sea Rogue Luffy",
-  "Dread Pirate Roberts",
-  "Admiral Koby",
-  "Nami the Stylist",
-  "Sogeking",
-  "Zoro Solo",
-  "Black Leg Sanji",
-  "Chop Chop Buggy",
-  "Whitebeard Jr",
-  "Jewelry Bonney",
-  "Portgas D. Ace"
+  "Sea Rogue Marlo",
+  "Dread Captain Rourke",
+  "Admiral Corin",
+  "Tessa the Stylist",
+  "Longshot Pell",
+  "Solo Blade Kaito",
+  "Ember Kick Rhys",
+  "Patchwork Pip",
+  "Greybeard Jr",
+  "Gem Queen Ivy",
+  "Flint the Firestarter"
 ];
 
 function getRandomColor() {
@@ -2956,6 +3165,7 @@ function runMarketplaceNPCListingSimulation() {
 setInterval(runMarketplaceNPCSimulation, 25000);
 setInterval(runMarketplaceNPCListingSimulation, 45000);
 
+// ── 10-studio-ui.js ─ Avatar studio modal bindings.
 function initAvatarStudioUI() {
   const dropdown = document.querySelector("#faction-avatar-dropdown");
   if (dropdown) {
@@ -3069,10 +3279,46 @@ function initAvatarStudioUI() {
     studioCapeStyleInput,
     studioHeightScaleInput,
     studioBuildScaleInput,
+    ...Object.values(STUDIO_EXTRA_FIELDS).map((cfg) => document.querySelector(cfg.id)),
   ].forEach((input) => {
     if (input) {
       input.addEventListener("input", previewStudioAvatarFromForm);
       input.addEventListener("change", previewStudioAvatarFromForm);
+    }
+  });
+
+  document.querySelectorAll(".studio-slider[data-readout]").forEach((slider) => {
+    slider.addEventListener("input", refreshStudioSliderReadouts);
+  });
+
+  // Avatar code: copy the current design, or load one someone shared.
+  const codeBox = document.querySelector("#studio-avatar-code");
+  const codeStatus = document.querySelector("#studio-code-status");
+  const setCodeStatus = (text, isError = false) => {
+    if (!codeStatus) return;
+    codeStatus.textContent = text;
+    codeStatus.classList.toggle("error", isError);
+  };
+  document.querySelector("#studio-export-code")?.addEventListener("click", async () => {
+    const code = encodeAvatarCode(getAvatarFromStudioEditor());
+    if (codeBox) codeBox.value = code;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCodeStatus("Code copied. Share it, or paste it here later to bring this design back.");
+    } catch (error) {
+      codeBox?.select();
+      setCodeStatus("Code ready below. Press Ctrl+C to copy it.");
+    }
+  });
+  document.querySelector("#studio-import-code")?.addEventListener("click", () => {
+    try {
+      const imported = decodeAvatarCode(codeBox?.value);
+      const current = getAvatarFromStudioEditor();
+      loadAvatarIntoEditor({ ...current, ...imported, id: current.id });
+      previewStudioAvatarFromForm();
+      setCodeStatus("Design imported. Press Save Changes or Create New to keep it.");
+    } catch (error) {
+      setCodeStatus(error.message, true);
     }
   });
 
@@ -3088,6 +3334,7 @@ function initAvatarStudioUI() {
   }
 }
 
+// ── 11-progression-and-saves.js ─ Mastery, default avatars, local profiles, saving and loading.
 function getMasteryInfo(totalPoints) {
   let level = 1;
   let pointsLeft = Math.max(0, totalPoints);
@@ -3137,8 +3384,6 @@ function addMasteryXp(type, amount) {
 }
 
 let currentUsername = "";
-let failedAttempts = 0;
-let captchaAnswer = "";
 
 const DEFAULT_AVATARS = [
   {
@@ -3237,7 +3482,7 @@ function resetPlayerState() {
   player.isAdmin = false;
   player.isGodMode = false;
   player.isInstakill = false;
-  player.hasFlamingFeet = false;
+  player.hasFlamingFeet = true;
   player.diableJambeTimer = 0;
   player.diableJambeHits = 0;
   player.hasFlashStep = false;
@@ -3258,22 +3503,6 @@ function resetPlayerState() {
   // Restore default avatars
   avatarState.selectedId = "tavern-hero";
   avatarState.avatars = JSON.parse(JSON.stringify(DEFAULT_AVATARS));
-}
-
-function generateCaptcha() {
-  const num1 = Math.floor(Math.random() * 9) + 2;
-  const num2 = Math.floor(Math.random() * 9) + 2;
-  const answer = num1 + num2;
-  captchaAnswer = String(answer);
-  
-  const promptEl = document.querySelector("#login-captcha-prompt");
-  if (promptEl) {
-    promptEl.textContent = `Solve: ${num1} + ${num2} = ?`;
-  }
-  const captchaContainer = document.querySelector("#login-captcha-container");
-  if (captchaContainer) {
-    captchaContainer.classList.remove("hidden");
-  }
 }
 
 function saveGame() {
@@ -3373,7 +3602,8 @@ function checkAndLoadSave() {
     // Ignore legacy client-side admin flags from old profile saves.
     player.isGodMode = false;
     player.isInstakill = false;
-    if (saveData.hasFlamingFeet !== undefined) player.hasFlamingFeet = saveData.hasFlamingFeet;
+    // Older saves stored false here; Blaze Kick attacks are now part of melee for everyone.
+    player.hasFlamingFeet = true;
     if (saveData.hasFlashStep !== undefined) player.hasFlashStep = saveData.hasFlashStep;
     if (saveData.observationHakiUnlocked !== undefined) {
       player.observationHaki.unlocked = saveData.observationHakiUnlocked;
@@ -3400,7 +3630,55 @@ function checkAndLoadSave() {
   }
 }
 
+function readLocalProfiles() {
+  try {
+    const profiles = JSON.parse(localStorage.getItem("sea_legends_accounts") || "[]");
+    return Array.isArray(profiles) ? profiles.filter((p) => p && typeof p.username === "string") : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+// Shows saved profiles as one-click chips. With no profiles yet, new players go straight to "create".
+function renderProfileList({ showSignupWhenEmpty = false } = {}) {
+  const wrap = document.querySelector("#profile-list-wrap");
+  const list = document.querySelector("#profile-list");
+  if (!wrap || !list) return;
+  const profiles = readLocalProfiles();
+  list.replaceChildren();
+  profiles.forEach((profile) => {
+    const level = profile.saveData?.level || 1;
+    const faction = profile.saveData?.faction || "Neutral";
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "profile-chip";
+    const initial = document.createElement("span");
+    initial.className = "profile-chip-avatar";
+    initial.textContent = profile.username.charAt(0).toUpperCase();
+    const text = document.createElement("span");
+    text.className = "profile-chip-text";
+    const name = document.createElement("strong");
+    name.textContent = profile.username;
+    const meta = document.createElement("small");
+    meta.textContent = `Level ${level} · ${faction}`;
+    text.append(name, meta);
+    chip.append(initial, text);
+    chip.addEventListener("click", () => {
+      const input = document.querySelector("#login-username");
+      if (input) input.value = profile.username;
+      document.querySelector("#login-submit-btn")?.click();
+    });
+    list.append(chip);
+  });
+  wrap.classList.toggle("hidden", profiles.length === 0);
+  if (showSignupWhenEmpty && profiles.length === 0) {
+    document.querySelector("#login-form-container")?.classList.add("hidden");
+    document.querySelector("#signup-form-container")?.classList.remove("hidden");
+  }
+}
+
 function showLoginScreen() {
+  renderProfileList();
   stopMultiplayer();
   setGameScrollLock(false);
   document.querySelector("#mobile-controls")?.classList.add("hidden");
@@ -3449,12 +3727,18 @@ function initAuthSystem() {
   const recoveryForm = document.querySelector("#recovery-form-container");
   
   const loginUsernameInput = document.querySelector("#login-username");
-  const loginCaptchaInput = document.querySelector("#login-captcha-input");
   const loginErrorMsg = document.querySelector("#login-error-msg");
   
   const signupUsernameInput = document.querySelector("#signup-username");
   const signupErrorMsg = document.querySelector("#signup-error-msg");
-  
+
+  // Both panels are <form>s so Enter submits; the button click handlers below do the work.
+  [loginForm, signupForm].forEach((form) => form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    // Enter key and button clicks already ran the click handler; route other submits to it.
+    if (!e.submitter) form.querySelector('[type="submit"]')?.click();
+  }));
+  renderProfileList({ showSignupWhenEmpty: true });
   
   // Transition links
   document.querySelector("#go-to-signup")?.addEventListener("click", (e) => {
@@ -3489,47 +3773,29 @@ function initAuthSystem() {
     const username = loginUsernameInput.value.trim();
     
     if (!username) {
-      loginErrorMsg.textContent = "Username cannot be empty!";
+      loginErrorMsg.textContent = "Enter a profile name.";
       return;
     }
-    // Captcha validation
-    if (failedAttempts >= 10) {
-      const captchaAttempt = loginCaptchaInput.value.trim();
-      if (captchaAttempt !== captchaAnswer) {
-        loginErrorMsg.textContent = "Verification failed! Correct answer required.";
-        generateCaptcha(); // Refresh captcha
-        return;
-      }
-    }
-    
     const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
     try {
       const accounts = JSON.parse(accountsStr);
       const account = accounts.find(a => a.username.toLowerCase() === username.toLowerCase());
       
       if (!account) {
-        failedAttempts++;
-        loginErrorMsg.textContent = "Local profile not found. Create a profile first.";
-        
-        if (failedAttempts >= 10) {
-          generateCaptcha();
-        }
+        loginErrorMsg.textContent = "No profile with that name in this browser. Create one first.";
         return;
       }
       
       // Success
-      failedAttempts = 0;
       loginErrorMsg.textContent = "";
       loginUsernameInput.value = "";
-      loginCaptchaInput.value = "";
-      document.querySelector("#login-captcha-container")?.classList.add("hidden");
       
       currentUsername = account.username;
       localStorage.setItem("sea_legends_current_user", currentUsername);
       checkAndLoadSave();
     } catch (e) {
       console.error(e);
-      loginErrorMsg.textContent = "Database error occurred!";
+      loginErrorMsg.textContent = "Could not read saved profiles in this browser. Try clearing site data.";
     }
   });
   
@@ -3538,7 +3804,7 @@ function initAuthSystem() {
     const username = signupUsernameInput.value.trim();
     
     if (!username) {
-      signupErrorMsg.textContent = "Username is required!";
+      signupErrorMsg.textContent = "Enter a profile name.";
       return;
     }
     const accountsStr = localStorage.getItem("sea_legends_accounts") || "[]";
@@ -3546,7 +3812,7 @@ function initAuthSystem() {
       const accounts = JSON.parse(accountsStr);
       const exists = accounts.some(a => a.username.toLowerCase() === username.toLowerCase());
       if (exists) {
-        signupErrorMsg.textContent = "Username already exists! Choose another.";
+        signupErrorMsg.textContent = "That profile name is already used in this browser.";
         return;
       }
       
@@ -3586,11 +3852,10 @@ function initAuthSystem() {
       checkAndLoadSave();
     } catch (e) {
       console.error(e);
-      signupErrorMsg.textContent = "Database error occurred!";
+      signupErrorMsg.textContent = "Could not read saved profiles in this browser. Try clearing site data.";
     }
   });
   
-  // No simulated contact verification or password recovery is implemented.
   // Bind Settings Bar and Escape Menu logouts
   document.querySelector("#hud-logout-btn")?.addEventListener("click", performLogout);
   document.querySelector("#esc-logout-btn")?.addEventListener("click", performLogout);
@@ -3617,6 +3882,7 @@ function applyTemporaryAvatarToPlayer(avatar) {
   applyHakiVisuals();
 }
 
+// ── 12-world-islands.js ─ World creation, islands, terrain and island decorations.
 function createWorld() {
   for (let i = 0; i < 10; i += 1) {
     const angle = i * 0.62;
@@ -3674,15 +3940,15 @@ function createWorld() {
   spawnPirateCamp(islands[2]);
   spawnBruteCamp(islands[2]);
   
-  // Spawn Buggy Boss at Pirate Town
+  // Spawn Jester Boss at Pirate Town
   const buggyPos = islands[2].position.clone().add(new THREE.Vector3(260, 0, -220));
   buggyPos.y = getIslandSurfaceHeightAt(buggyPos.x, buggyPos.z, islands[2]);
   spawnBuggyBoss(buggyPos);
 
-  // ── Secret Cave: Black Leg Dojo (near Buggy's arena) ──
+  // ── Secret Cave: Blaze Kick Dojo (near Jester's arena) ──
   const pirate = islands[2];
   if (pirate) {
-    // Cave entrance is slightly behind & west of Buggy's spawn
+    // Cave entrance is slightly behind & west of Jester's spawn
     const caveEntryPos = new THREE.Vector3(
       pirate.position.x + 180, 0, pirate.position.z - 300
     );
@@ -3713,7 +3979,7 @@ function createWorld() {
     createDesertQuestGiver(dQuestPos);
     createReturnTeleporter(dQuestPos.clone().add(new THREE.Vector3(25, 0, 25)));
     
-    // Teleporter near Haki Trainer
+    // Teleporter near Aura Trainer
     const dHakiTelPos = htPos.clone().add(new THREE.Vector3(-25, 0, -25));
     createReturnTeleporter(dHakiTelPos);
   }
@@ -3727,7 +3993,7 @@ function createWorld() {
     createSnowyQuestGiver(sQuestPos);
     createReturnTeleporter(sQuestPos.clone().add(new THREE.Vector3(30, 0, 30)));
 
-    // Observation Haki Master (West Mountain Peak)
+    // Foresight Master (West Mountain Peak)
     const obsPos = new THREE.Vector3(snowy.position.x - 240, getIslandSurfaceHeightAt(snowy.position.x - 240, snowy.position.z + 160, snowy), snowy.position.z + 160);
     createObservationHakiTrainer(obsPos);
     createReturnTeleporter(obsPos.clone().add(new THREE.Vector3(-25, 0, 25)));
@@ -3737,6 +4003,9 @@ function createWorld() {
     createFlashStepTrainer(flashPos);
     createReturnTeleporter(flashPos.clone().add(new THREE.Vector3(25, 0, -25)));
   }
+
+  // Last: make sure everything that stands on an island actually touches it.
+  islands.forEach((island) => settleIslandObjects(island));
 }
 
 function createIsland(position, radius, index) {
@@ -3744,11 +4013,11 @@ function createIsland(position, radius, index) {
   group.position.copy(position);
   const height = getIslandHeight(index);
 
-  const baseGeometry = makeIrregularCylinderGeometry(radius, height, index <= 1 ? 128 : index === 4 ? 64 : 40, index + 3);
+  const baseGeometry = makeIrregularCylinderGeometry(radius, height, index === 2 ? 160 : index <= 1 ? 128 : index <= 4 ? 96 : 40, index + 3, -1, { radius, height, index, rings: index === 2 ? 60 : index <= 4 ? 24 : 14 });
   const base = new THREE.Mesh(
     baseGeometry,
     new THREE.MeshStandardMaterial({
-      color: index === 0 ? 0x78654b : index === 1 ? 0x394235 : index === 4 ? 0xb5c0cb : 0x8f8066,
+      color: islandTerrainColor(WORLD_PALETTE.terrain.cliff, index),
       roughness: 0.86,
       metalness: 0.08,
       emissive: index === 0 ? 0x332711 : index === 4 ? 0x1a2430 : 0x1f1a16,
@@ -3757,22 +4026,25 @@ function createIsland(position, radius, index) {
     }),
   );
   base.position.y = height / 2;
+  base.userData.surface = index === 4 ? "rock" : "cliff";
   base.receiveShadow = true;
   base.castShadow = true;
+  base.userData.isTerrain = true;
   group.add(base);
 
   const grass = new THREE.Mesh(
-    makeIrregularDiscGeometry(radius * 0.88, index <= 1 ? 128 : 40, index + 9, height),
+    // Fine enough to follow the plateau's roll-off (and the outpost's two lobes).
+    makeTerrainSurfaceGeometry(radius, height, index, index === 2 ? 160 : index <= 1 ? 128 : index <= 4 ? 96 : 48, index === 2 ? 70 : index === 1 ? 64 : index === 0 ? 40 : index <= 4 ? 32 : 18),
     new THREE.MeshStandardMaterial({ 
-      color: index === 0 ? 0x3fb05b : index === 1 ? 0x1f6f3a : index === 4 ? 0xffffff : 0x4aa65e, 
+      color: islandTerrainColor(WORLD_PALETTE.terrain.grass, index),
       roughness: 0.82, 
       metalness: 0.02 
     }),
   );
-  grass.rotation.x = -Math.PI / 2;
-  grass.position.y = height + 0.16;
+  grass.userData.surface = index === 4 ? "snow" : "grass";
   grass.receiveShadow = true;
   grass.castShadow = true;
+  grass.userData.isTerrain = true;
   group.add(grass);
 
   if (index === 0) {
@@ -3790,13 +4062,56 @@ function createIsland(position, radius, index) {
   if (index !== 1) {
     addIslandRocks(group, radius, height);
   }
+  if (index === 0) {
+    addStarterWindmills(group, radius, height);
+  }
+  // Grass goes last so it can avoid everything placed above.
+  addWindGrass(group, radius, height, index);
 
-  if (index !== 1) {
+  if (index === 0) {
+    // Village flagpole marks the starter island from afar.
+    const poleMat = new THREE.MeshStandardMaterial({ color: worldHex(0xe9e2cf), roughness: 0.5, metalness: 0.3 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, 46, 10), poleMat);
+    pole.position.set(0, height + 23, 0);
+    pole.castShadow = true;
+    pole.userData.surface = "metal";
+    group.add(pole);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(1.2, 14, 10), new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0x3a2300, metalness: 0.6, roughness: 0.3 }));
+    finial.position.set(0, height + 46.6, 0);
+    group.add(finial);
+    const pennantShape = new THREE.Shape();
+    pennantShape.moveTo(0, 0);
+    pennantShape.lineTo(15, -3.5);
+    pennantShape.lineTo(0, -7);
+    pennantShape.lineTo(0, 0);
+    const pennant = new THREE.Mesh(
+      new THREE.ShapeGeometry(pennantShape),
+      new THREE.MeshStandardMaterial({ color: worldHex(0xd8483a), side: THREE.DoubleSide, roughness: 0.7 }),
+    );
+    pennant.position.set(0.5, height + 45.4, 0);
+    pennant.castShadow = true;
+    pennant.userData.surface = "plaster";
+    group.add(pennant);
+    animatedFoliage.push({ mesh: pennant, baseRotZ: 0, phase: 0.4 });
+    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.8, 1.6, 12), new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.stone), roughness: 0.9 }));
+    plinth.position.set(0, height + 0.8, 0);
+    plinth.userData.surface = "stone";
+    group.add(plinth);
+    addCollisionCircle(new THREE.Vector3(0, height, 0), 3.4, "Flagpole", { material: "metal", height: 1.6 });
+    addCollisionCircle(new THREE.Vector3(0, height, 0), 1.0, "Flagpole", { material: "metal" });
+
+    const label = makeLabel("Island 1", 2);
+    label.position.set(0, height + 55, 0);
+    group.add(label);
+  }
+
+  if (index !== 1 && index !== 0) {
     const marker = new THREE.Mesh(
       new THREE.CylinderGeometry(index === 0 ? 2.5 : 0.4, index === 0 ? 2.5 : 0.4, index === 0 ? 48 : 9 + index * 0.8, 8),
       new THREE.MeshStandardMaterial({ color: index === 4 ? 0x88ccff : 0xffd25a, emissive: index === 4 ? 0x1a3a5c : 0x3a2300 }),
     );
-    marker.position.set(0, height + (index === 0 ? 26 : 8 + index * 0.45), 0);
+    // Stand the pole on the ground (its height is 9 + 0.8 * index).
+    marker.position.set(0, getLocalSurfaceHeightAt(0, 0, radius, height, index) + (9 + index * 0.8) / 2 - 0.2, 0);
     group.add(marker);
 
     const islandLabel = index === 4 ? "Snowy Village" : `Island ${index + 1}`;
@@ -3811,20 +4126,15 @@ function createIsland(position, radius, index) {
       const tree = index === 4 ? createSnowyTree() : createTree();
       const a = Math.random() * Math.PI * 2;
       const d = radius * (0.15 + Math.random() * 0.55);
-      tree.position.set(Math.cos(a) * d, 3.2 + index * 0.1, Math.sin(a) * d);
+      const tx = Math.cos(a) * d;
+      const tz = Math.sin(a) * d;
+      tree.position.set(tx, getLocalSurfaceHeightAt(tx, tz, radius, height, index) - 0.1, tz);
       group.add(tree);
     }
   }
 
-  if (index !== 1) {
-    const shine = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.44, radius * 0.47, 0.4, 80),
-      new THREE.MeshStandardMaterial({ color: 0x8de9b5, roughness: 0.92, transparent: true, opacity: 0.18 }),
-    );
-    shine.rotation.x = -Math.PI / 2;
-    shine.position.y = height + 0.33;
-    group.add(shine);
-  }
+  // (The old translucent "meadow glow" disc was removed: the wind grass gives the
+  //  ground its colour variation, and the disc hung off the plateau on cove islands.)
 
   scene.add(group);
   return group;
@@ -3844,15 +4154,53 @@ function getIslandSurfaceY(index) {
   return getIslandHeight(index) + 0.16;
 }
 
-function addCollisionCircle(center, radius, label, options = {}) {
-  collisionVolumes.push({
+// Collision volumes are flat shapes on the ground (x/z) with an optional height.
+// Players can jump over anything whose `height` is below their feet.
+//   circle  — rocks, posts, trees, wells
+//   segment — capsules along a line (fences)
+//   box     — rotated rectangles (houses, stalls)
+function addCollisionVolume(shape, center, label, options = {}) {
+  const volume = {
+    shape,
     center: center.clone(),
-    radius,
+    radius: options.radius ?? 0,
     label,
+    height: options.height ?? Infinity,
     damage: options.damage ?? 10,
     material: options.material || "stone",
     toughness: options.toughness ?? 1,
-  });
+  };
+  if (shape === "segment") {
+    volume.end = options.end.clone();
+  }
+  if (shape === "box") {
+    volume.halfX = options.halfX;
+    volume.halfZ = options.halfZ;
+    volume.rotation = options.rotation || 0;
+    volume.cos = Math.cos(volume.rotation);
+    volume.sin = Math.sin(volume.rotation);
+  }
+  // Bounding radius for a cheap rejection test before the exact shape test.
+  volume.bound = shape === "box"
+    ? Math.hypot(volume.halfX, volume.halfZ)
+    : shape === "segment"
+      ? Math.hypot(volume.end.x - center.x, volume.end.z - center.z) + volume.radius
+      : volume.radius;
+  collisionVolumes.push(volume);
+  return volume;
+}
+
+function addCollisionCircle(center, radius, label, options = {}) {
+  return addCollisionVolume("circle", center, label, { ...options, radius });
+}
+
+function addCollisionSegment(start, end, radius, label, options = {}) {
+  return addCollisionVolume("segment", start, label, { ...options, radius, end });
+}
+
+// rotation matches the mesh's rotation.y, so halfX/halfZ are the mesh's own half sizes.
+function addCollisionBox(center, halfX, halfZ, rotation, label, options = {}) {
+  return addCollisionVolume("box", center, label, { ...options, halfX, halfZ, rotation });
 }
 
 function createSnowyTree() {
@@ -3932,17 +4280,8 @@ function addJungleIslandDetails(group, radius, height) {
   treehouse.rotation.y = 0.45;
   group.add(treehouse);
 
-  for (let i = 0; i < 180; i += 1) {
-    const angle = i * 2.399;
-    const distance = radius * (0.08 + ((i * 37) % 76) / 100);
-    const trx = Math.cos(angle) * distance;
-    const trz = Math.sin(angle) * distance;
-    const trY = getLocalSurfaceHeightAt(trx, trz, radius, height, 1);
-    const tree = createJungleTree(120 + (i % 7) * 18, 10 + (i % 5) * 2.2);
-    tree.position.set(trx, trY + 0.1, trz);
-    tree.rotation.y = angle;
-    group.add(tree);
-  }
+  // Curved rainforest trees, drawn as instanced batches (29-jungle-trees.js).
+  addJungleForest(group, radius, height, 180);
 
   for (let i = 0; i < 260; i += 1) {
     const angle = i * 1.618;
@@ -4126,7 +4465,7 @@ function createJungleTree(height, trunkRadius) {
 
 function createBigJungleBush(size) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({ color: 0x1f7d3e, roughness: 0.9, flatShading: true });
+  const material = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.jungleCanopy[2]), roughness: 0.88, flatShading: true });
 
   for (let i = 0; i < 4; i += 1) {
     const bush = new THREE.Mesh(new THREE.SphereGeometry(size * (0.75 + i * 0.08), 12, 8), material);
@@ -4242,11 +4581,13 @@ function addOutpostIslandDetails(group, radius, height, index) {
 
 function addDesertIslandDetails(group, radius, height, index) {
   const sand = new THREE.Mesh(
-    makeIrregularDiscGeometry(radius * 0.82, 96, 177, height),
+    // Built on the same terrain as the grass, just above it, so the desert is sand all over.
+    makeTerrainSurfaceGeometry(radius, height, index, 96, 26).translate(0, 0.1, 0),
     new THREE.MeshStandardMaterial({ color: 0xd6aa64, roughness: 0.96 }),
   );
-  sand.rotation.x = -Math.PI / 2;
-  sand.position.y = height + 0.44;
+  sand.userData.surface = "sand";
+  sand.userData.noSettle = true;
+  sand.receiveShadow = true;
   group.add(sand);
 
   for (let i = 0; i < 28; i += 1) {
@@ -4268,8 +4609,8 @@ function addDesertIslandDetails(group, radius, height, index) {
 
 function createPalmTree(height) {
   const group = new THREE.Group();
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8a5a37, roughness: 0.9 });
-  const leafMaterial = new THREE.MeshStandardMaterial({ color: 0x2f9b55, roughness: 0.86, side: THREE.DoubleSide });
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.palmTrunk), roughness: 0.9 });
+  const leafMaterial = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.palmLeaf), roughness: 0.86, side: THREE.DoubleSide });
 
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.6, height, 9), trunkMaterial);
   trunk.position.y = height / 2;
@@ -4289,7 +4630,7 @@ function createPalmTree(height) {
 
   const coconuts = new THREE.Mesh(
     new THREE.SphereGeometry(2.7, 12, 8),
-    new THREE.MeshStandardMaterial({ color: 0x5d3b22, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.coconut), roughness: 0.9 }),
   );
   coconuts.position.y = height;
   coconuts.castShadow = true;
@@ -4345,7 +4686,8 @@ function addStarterIslandDetails(group, radius, height, index) {
     house.position.set(x, hY + 0.2, z);
     house.rotation.y = rotation;
     group.add(house);
-    addCollisionCircle(new THREE.Vector3(x, hY, z), 28, "House wall");
+    // Foundation footprint is 39 x 33.
+    addCollisionBox(new THREE.Vector3(x, hY, z), 19.5, 16.5, rotation, "House wall", { material: "wood" });
   });
 
   for (let i = 0; i < 28; i += 1) {
@@ -4358,6 +4700,7 @@ function addStarterIslandDetails(group, radius, height, index) {
     palm.position.set(px, pY + 0.1, pz);
     palm.rotation.y = angle + Math.PI / 2;
     group.add(palm);
+    addCollisionCircle(new THREE.Vector3(px, pY, pz), 2.6, "Palm tree", { material: "wood", damage: 6 });
   }
 
   for (let i = 0; i < 34; i += 1) {
@@ -4371,20 +4714,11 @@ function addStarterIslandDetails(group, radius, height, index) {
     rock.position.set(rx, rY + 0.2, rz);
     rock.rotation.y = angle;
     group.add(rock);
-    addCollisionCircle(new THREE.Vector3(rx, rY, rz), rockSize * 0.85, "Rock obstacle");
+    addCollisionCircle(new THREE.Vector3(rx, rY, rz), rockSize * 1.05, "Rock obstacle", { height: rockSize * (0.55 + rockSize * 0.03) * 0.9 });
   }
 
-  for (let i = 0; i < 46; i += 1) {
-    const angle = i * 1.97;
-    const distance = radius * (0.14 + ((i * 37) % 68) / 100);
-    const tuft = createGrassTuft(3 + (i % 4));
-    const tx = Math.cos(angle) * distance;
-    const tz = Math.sin(angle) * distance;
-    const tY = getLocalSurfaceHeightAt(tx, tz, radius, height, 0);
-    tuft.position.set(tx, tY + 0.3, tz);
-    tuft.rotation.y = angle;
-    group.add(tuft);
-  }
+  // Ground cover is now the wind-blown grass field (26-wind-grass.js).
+
 
   for (let i = 0; i < 70; i += 1) {
     const angle = i * 2.31;
@@ -4442,7 +4776,7 @@ function addMarketStalls(group, height) {
     stall.position.set(x, hY + 0.3, z);
     stall.rotation.y = rotation;
     group.add(stall);
-    addCollisionCircle(new THREE.Vector3(x, height, z), 20, "Market stall");
+    addCollisionBox(new THREE.Vector3(x, hY, z), 12, 6.5, rotation, "Market stall", { material: "wood", height: 7 });
   });
 }
 
@@ -4529,7 +4863,9 @@ function addFenceLines(group, height) {
     fence.position.set(x, hY + 0.5, z);
     fence.rotation.y = rotation;
     group.add(fence);
-    addCollisionCircle(new THREE.Vector3(x + Math.cos(rotation) * count * 6, hY, z - Math.sin(rotation) * count * 6), count * 8, "Fence");
+    // Capsule along the posts (the fence runs along its local +x axis); low enough to hop over.
+    const fenceEnd = new THREE.Vector3(x + Math.cos(rotation) * (count - 1) * 13, hY, z - Math.sin(rotation) * (count - 1) * 13);
+    addCollisionSegment(new THREE.Vector3(x, hY, z), fenceEnd, 1.6, "Fence", { material: "wood", height: 9 });
   });
 }
 
@@ -4558,7 +4894,7 @@ function addSignposts(group, height) {
     sign.position.set(x, hY + 0.4, z);
     sign.rotation.y = rotation;
     group.add(sign);
-    addCollisionCircle(new THREE.Vector3(x, hY, z), 8, "Signpost");
+    addCollisionCircle(new THREE.Vector3(x, hY, z), 2.2, "Signpost", { material: "wood" });
   });
 }
 
@@ -4579,6 +4915,16 @@ function addTrainingYard(group, height) {
     arm.castShadow = true;
     dummy.add(arm);
 
+    // Post and footing: the straw body sits 3 units up, so it needs something to stand on.
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 5, 8), wood);
+    post.position.y = 2;
+    post.castShadow = true;
+    dummy.add(post);
+    const footing = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.4, 0.8, 12), wood);
+    footing.position.y = 0.1;
+    footing.receiveShadow = true;
+    dummy.add(footing);
+
     dummy.position.set((i % 2) * 32, 0, Math.floor(i / 2) * 32);
     yard.add(dummy);
   }
@@ -4587,7 +4933,14 @@ function addTrainingYard(group, height) {
   yard.position.set(208, hY + 0.3, 122);
   yard.rotation.y = -0.35;
   group.add(yard);
-  addCollisionCircle(new THREE.Vector3(224, hY, 138), 36, "Training yard");
+  // One collision per dummy (the yard is rotated by -0.35).
+  const c = Math.cos(-0.35);
+  const sn = Math.sin(-0.35);
+  for (let i = 0; i < 4; i += 1) {
+    const dx = (i % 2) * 32;
+    const dz = Math.floor(i / 2) * 32;
+    addCollisionCircle(new THREE.Vector3(208 + dx * c + dz * sn, hY, 122 - dx * sn + dz * c), 5.2, "Training dummy", { material: "wood", damage: 3 });
+  }
 }
 
 function addLookoutArch(group, height) {
@@ -4621,40 +4974,99 @@ function addLookoutArch(group, height) {
   group.add(flag);
 }
 
+// Shade trees around the village (these spots used to hold lantern posts).
 function addLanternsAndBanners(group, height) {
-  const postMaterial = new THREE.MeshStandardMaterial({ color: 0x4b2f1f, roughness: 0.86 });
-  const glowMaterial = new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0x8a4f00, roughness: 0.45 });
-  const bannerColors = [0xd94b37, 0x1b85aa, 0xf6b73c, 0x2f9b55];
   const spots = [
-    [-72, 38],
-    [-18, 92],
-    [54, 88],
-    [112, 22],
-    [54, -46],
-    [-44, -28],
-    [18, 150],
-    [156, 96],
+    [-72, 38, 1.0],
+    [-18, 92, 1.15],
+    [54, 88, 0.95],
+    [112, 22, 1.1],
+    [54, -46, 1.05],
+    [-44, -28, 0.9],
+    [18, 150, 1.2],
+    [156, 96, 1.0],
   ];
 
-  spots.forEach(([x, z], index) => {
+  spots.forEach(([x, z, scale], index) => {
     const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 22, 8), postMaterial);
-    post.position.set(x, hY + 11, z);
-    post.castShadow = true;
-    group.add(post);
-
-    const lantern = new THREE.Mesh(new THREE.SphereGeometry(3.2, 12, 8), glowMaterial);
-    lantern.position.set(x, hY + 23, z);
-    group.add(lantern);
-
-    const banner = new THREE.Mesh(
-      new THREE.PlaneGeometry(9, 15),
-      new THREE.MeshStandardMaterial({ color: bannerColors[index % bannerColors.length], side: THREE.DoubleSide, roughness: 0.72 }),
-    );
-    banner.position.set(x + 4, hY + 15, z);
-    banner.rotation.y = index * 0.7;
-    group.add(banner);
+    const tree = createVillageTree(scale, index);
+    tree.position.set(x, hY + 0.1, z);
+    tree.rotation.y = index * 1.37;
+    group.add(tree);
+    addCollisionCircle(new THREE.Vector3(x, hY, z), 2.6 * scale, "Tree", { material: "wood", damage: 6 });
   });
+}
+
+// Rounded broadleaf tree: tapered trunk with two limbs and a clustered canopy
+// in three greens so it reads well from any angle.
+const villageTreeMaterials = {
+  bark: null,
+  leaves: null,
+};
+function createVillageTree(scale = 1, seed = 0) {
+  if (!villageTreeMaterials.bark) {
+    villageTreeMaterials.bark = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.bark), roughness: 0.92 });
+    villageTreeMaterials.leaves = WORLD_PALETTE.foliage.canopy.map((hex) =>
+      new THREE.MeshStandardMaterial({ color: worldHex(hex), roughness: 0.85, flatShading: true }),
+    );
+  }
+  const rand = (n) => {
+    const v = Math.sin(seed * 127.1 + n * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const tree = new THREE.Group();
+  const trunkHeight = 15 * scale;
+
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1.2 * scale, 2.1 * scale, trunkHeight, 9), villageTreeMaterials.bark);
+  trunk.position.y = trunkHeight / 2;
+  trunk.rotation.z = (rand(1) - 0.5) * 0.08;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  trunk.userData.surface = "bark";
+  tree.add(trunk);
+
+  // Root flare
+  const roots = new THREE.Mesh(new THREE.CylinderGeometry(2.1 * scale, 3.2 * scale, 1.6 * scale, 9), villageTreeMaterials.bark);
+  roots.position.y = 0.8 * scale;
+  roots.userData.surface = "bark";
+  tree.add(roots);
+
+  for (let i = 0; i < 2; i += 1) {
+    const limb = new THREE.Mesh(new THREE.CylinderGeometry(0.45 * scale, 0.8 * scale, 7 * scale, 6), villageTreeMaterials.bark);
+    const side = i === 0 ? 1 : -1;
+    limb.position.set(side * 2.2 * scale, trunkHeight * 0.78, (rand(2 + i) - 0.5) * 2 * scale);
+    limb.rotation.z = -side * 0.75;
+    limb.castShadow = true;
+    limb.userData.surface = "bark";
+    tree.add(limb);
+  }
+
+  const canopy = new THREE.Group();
+  const clusters = [
+    [0, 0, 0, 7.4],
+    [4.6, -1.2, 1.4, 5.4],
+    [-4.4, -0.8, -1.2, 5.6],
+    [1.2, 2.8, -3.4, 5.0],
+    [-1.4, 3.4, 3.0, 4.8],
+    [0.4, 5.6, 0.2, 4.2],
+  ];
+  clusters.forEach(([cx, cy, cz, r], i) => {
+    const leaf = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(r * scale * (0.9 + rand(10 + i) * 0.2), 1),
+      villageTreeMaterials.leaves[i % villageTreeMaterials.leaves.length],
+    );
+    leaf.position.set(cx * scale, cy * scale, cz * scale);
+    leaf.rotation.set(rand(20 + i) * 3, rand(30 + i) * 3, 0);
+    leaf.scale.y = 0.85;
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    leaf.userData.surface = "foliage";
+    canopy.add(leaf);
+  });
+  canopy.position.y = trunkHeight + 3.5 * scale;
+  tree.add(canopy);
+  animatedFoliage.push({ mesh: canopy, baseRotZ: 0, phase: seed * 0.9 });
+  return tree;
 }
 
 function addShoreCrystals(group, radius, height) {
@@ -4686,8 +5098,11 @@ function addShoreCrystals(group, radius, height) {
 function addBeachRing(group, radius, height, index = 0) {
   const beach = new THREE.Mesh(
     makeIrregularRingGeometry(radius * 0.76, radius * 0.98, 128, 21, height, index, radius),
-    new THREE.MeshStandardMaterial({ color: 0xe7c980, roughness: 0.92, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.sand), roughness: 0.92, side: THREE.DoubleSide }),
   );
+  beach.userData.surface = "sand";
+  beach.userData.noSettle = true; // already follows the terrain
+  beach.userData.groundCover = true; // no grass on the sand
   beach.rotation.x = -Math.PI / 2;
   beach.position.y = height;
   beach.receiveShadow = true;
@@ -4696,7 +5111,7 @@ function addBeachRing(group, radius, height, index = 0) {
   const shallowWater = new THREE.Mesh(
     makeIrregularRingGeometry(radius * 0.98, radius * 1.12, 128, 34),
     new THREE.MeshStandardMaterial({
-      color: 0x5ccad1,
+      color: worldHex(WORLD_PALETTE.sea.lagoon),
       transparent: true,
       opacity: 0.34,
       roughness: 0.25,
@@ -4726,7 +5141,7 @@ function addBeachRing(group, radius, height, index = 0) {
 }
 
 function addVillagePaths(group, height) {
-  const material = new THREE.MeshStandardMaterial({ color: 0xcaa96a, roughness: 0.96 });
+  const material = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.path), roughness: 0.96 });
   const paths = [
     [0, 0, 310, 14, 0.25],
     [30, 48, 230, 12, 1.18],
@@ -4737,6 +5152,7 @@ function addVillagePaths(group, height) {
   paths.forEach(([x, z, length, width, rotation]) => {
     const path = new THREE.Mesh(new THREE.BoxGeometry(width, 0.35, length), material);
     const hY = getLocalSurfaceHeightAt(x, z, STARTER_RADIUS, height, 0);
+    path.userData.surface = "dirt";
     path.position.set(x, hY + 0.44, z);
     path.rotation.y = rotation;
     path.receiveShadow = true;
@@ -4747,8 +5163,9 @@ function addVillagePaths(group, height) {
 function addVillagePlaza(group, height) {
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(54, 48),
-    new THREE.MeshStandardMaterial({ color: 0xb88950, roughness: 0.9 }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.plaza), roughness: 0.9 }),
   );
+  plaza.userData.surface = "stone";
   plaza.rotation.x = -Math.PI / 2;
   plaza.position.set(18, height + 0.5, 42);
   plaza.receiveShadow = true;
@@ -4756,8 +5173,9 @@ function addVillagePlaza(group, height) {
 
   const well = new THREE.Mesh(
     new THREE.CylinderGeometry(8, 9, 7, 18),
-    new THREE.MeshStandardMaterial({ color: 0x6a6258, roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.stone), roughness: 0.95 }),
   );
+  well.userData.surface = "stone";
   well.position.set(18, height + 3.8, 42);
   well.castShadow = true;
   group.add(well);
@@ -4765,7 +5183,7 @@ function addVillagePlaza(group, height) {
 
   const roof = new THREE.Mesh(
     new THREE.ConeGeometry(13, 9, 4),
-    new THREE.MeshStandardMaterial({ color: 0x8b3528, roughness: 0.8 }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.village.wellRoof), roughness: 0.8 }),
   );
   roof.position.set(18, height + 12.2, 42);
   roof.rotation.y = Math.PI / 4;
@@ -4858,109 +5276,264 @@ function addPondAndWaterfall(group, radius, height) {
   }
 }
 
+// ── 13-world-buildings-npcs.js ─ Houses, quest givers, trainers, teleporters and boats.
+// ---- House geometry helpers (shapes are drawn flat, then stood up) ----
+function roundedRectShape(width, depth, radius) {
+  const w = width / 2;
+  const d = depth / 2;
+  const r = Math.min(radius, w, d);
+  const shape = new THREE.Shape();
+  shape.moveTo(-w + r, -d);
+  shape.lineTo(w - r, -d);
+  shape.absarc(w - r, -d + r, r, -Math.PI / 2, 0, false);
+  shape.lineTo(w, d - r);
+  shape.absarc(w - r, d - r, r, 0, Math.PI / 2, false);
+  shape.lineTo(-w + r, d);
+  shape.absarc(-w + r, d - r, r, Math.PI / 2, Math.PI, false);
+  shape.lineTo(-w, -d + r);
+  shape.absarc(-w + r, -d + r, r, Math.PI, Math.PI * 1.5, false);
+  return shape;
+}
+
+// Extrudes a floor-plan shape upward by `height` (shape x/y -> world x/-z).
+function extrudeUp(shape, height, curveSegments = 8) {
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments });
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+// Door/window outline: a rectangle with a round arch on top, base at y = 0.
+function archShape(width, height, x = 0, y = 0) {
+  const r = width / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(x - r, y);
+  shape.lineTo(x + r, y);
+  shape.lineTo(x + r, y + height - r);
+  shape.absarc(x, y + height - r, r, 0, Math.PI, false);
+  shape.lineTo(x - r, y);
+  return shape;
+}
+
+// A frame around an arch: outer arch with the inner arch cut out.
+function archFrameShape(width, height, border) {
+  const shape = archShape(width + border * 2, height + border);
+  shape.holes.push(archShape(width, height, 0, 0));
+  return shape;
+}
+
+function flatPanel(shape, thickness) {
+  return new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 12 });
+}
+
+// Shared so every window can glow together at night (see updateDayNightLighting).
+const houseWindowGlass = new THREE.MeshStandardMaterial({
+  color: 0xffe2b0,
+  emissive: 0xffa040,
+  emissiveIntensity: 0.05,
+  roughness: 0.25,
+  metalness: 0.1,
+});
+
 function createHouse(index) {
   const group = new THREE.Group();
-  const wallColors = [0xd3a464, 0xc28f5b, 0xa97755, 0xdfb174, 0xb9956a];
-  const trimColors = [0x23646f, 0x6b2f35, 0x275d3b, 0x8b5a22, 0x4b5169];
-  const trim = new THREE.MeshStandardMaterial({ color: trimColors[index % trimColors.length], roughness: 0.72 });
-  const wood = new THREE.MeshStandardMaterial({ color: 0x5d3924, roughness: 0.9 });
-  const glass = new THREE.MeshStandardMaterial({
-    color: 0x92e6ff,
-    emissive: 0x174f5d,
-    emissiveIntensity: 0.16,
-    roughness: 0.3,
+  const palette = WORLD_PALETTE.village;
+  const plasterHex = palette.walls[index % palette.walls.length];
+  const roofHex = palette.roofs[index % palette.roofs.length];
+  const trimHex = palette.trims[index % palette.trims.length];
+
+  const mat = (hex, roughness, surface, extra = {}) => {
+    const m = new THREE.MeshStandardMaterial({ color: worldHex(hex), roughness, ...extra });
+    m.userData.surface = surface;
+    return m;
+  };
+  const plaster = mat(plasterHex, 0.9, "plaster");
+  const timber = mat(palette.timber, 0.85, "wood");
+  const stone = mat(palette.foundation, 0.94, "stone");
+  const roofMat = mat(roofHex, 0.78, "tiles", { side: THREE.DoubleSide });
+  const trim = mat(trimHex, 0.7, "wood");
+
+  const add = (mesh, surface, castShadow = true) => {
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = true;
+    if (surface) mesh.userData.surface = surface;
+    group.add(mesh);
+    return mesh;
+  };
+
+  const FOUND_H = 4;
+  const WALL_W = 34;
+  const WALL_D = 28;
+  const WALL_H = 20;
+  const WALL_TOP = FOUND_H + WALL_H;
+  const FRONT = WALL_D / 2;
+
+  // Stone plinth and plastered walls, both with rounded corners.
+  add(new THREE.Mesh(extrudeUp(roundedRectShape(38, 32, 3.2), FOUND_H), stone), "stone");
+  const walls = add(new THREE.Mesh(extrudeUp(roundedRectShape(WALL_W, WALL_D, 2.6), WALL_H, 10), plaster), "plaster");
+  walls.position.y = FOUND_H;
+
+  // Timber corner posts wrap the rounded corners; a beam belts the walls.
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+    const post = add(new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.4, WALL_H, 10), timber), "wood");
+    post.position.set(sx * (WALL_W / 2 - 1.6), FOUND_H + WALL_H / 2, sz * (WALL_D / 2 - 1.6));
+  });
+  [FRONT + 0.25, -FRONT - 0.25].forEach((z) => {
+    const beam = add(new THREE.Mesh(new THREE.BoxGeometry(WALL_W - 4, 1.2, 0.8), timber), "wood");
+    beam.position.set(0, FOUND_H + 12.5, z);
+    const sill = add(new THREE.Mesh(new THREE.BoxGeometry(WALL_W - 4, 1.0, 0.8), timber), "wood");
+    sill.position.set(0, WALL_TOP - 0.5, z);
+  });
+  [WALL_W / 2 + 0.25, -WALL_W / 2 - 0.25].forEach((x) => {
+    const beam = add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, WALL_D - 4), timber), "wood");
+    beam.position.set(x, FOUND_H + 12.5, 0);
   });
 
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(39, 4, 33),
-    new THREE.MeshStandardMaterial({ color: 0x776f63, roughness: 0.96 }),
-  );
-  foundation.position.y = 2;
-  foundation.castShadow = true;
-  foundation.receiveShadow = true;
-  group.add(foundation);
+  // Curved gable roof: slopes sweep outward at the eaves.
+  const SPAN = WALL_W / 2 + 3.5;
+  const RIDGE = 15 + (index % 2) * 2;
+  const T = 1.4;
+  const roofShape = new THREE.Shape();
+  roofShape.moveTo(-SPAN, -0.6);
+  roofShape.quadraticCurveTo(-SPAN * 0.42, RIDGE * 0.32, 0, RIDGE);
+  roofShape.quadraticCurveTo(SPAN * 0.42, RIDGE * 0.32, SPAN, -0.6);
+  roofShape.lineTo(SPAN - 0.4, -0.6 - T);
+  roofShape.quadraticCurveTo(SPAN * 0.42, RIDGE * 0.32 - T * 1.5, 0, RIDGE - T * 1.6);
+  roofShape.quadraticCurveTo(-SPAN * 0.42, RIDGE * 0.32 - T * 1.5, -SPAN + 0.4, -0.6 - T);
+  roofShape.lineTo(-SPAN, -0.6);
+  const ROOF_D = WALL_D + 7;
+  const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: ROOF_D, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.4, bevelSegments: 2, curveSegments: 18 });
+  roofGeo.translate(0, 0, -ROOF_D / 2);
+  const roof = add(new THREE.Mesh(roofGeo, roofMat), "tiles");
+  roof.position.y = WALL_TOP + 0.4;
 
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(34, 23, 28),
-    new THREE.MeshStandardMaterial({ color: wallColors[index % wallColors.length], roughness: 0.88 }),
-  );
-  body.position.y = 15;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
+  // Ridge cap
+  const ridge = add(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, ROOF_D + 1, 10), mat(palette.ridge, 0.7, "tiles")), "tiles");
+  ridge.rotation.x = Math.PI / 2;
+  ridge.position.set(0, WALL_TOP + RIDGE - 0.4, 0);
 
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(29, 18, 4),
-    new THREE.MeshStandardMaterial({ color: index % 2 ? 0x7f2f2a : 0x8e3d28, roughness: 0.76 }),
-  );
-  roof.position.y = 35.5;
-  roof.rotation.y = Math.PI / 4;
-  roof.castShadow = true;
-  group.add(roof);
-
-  const roofTrim = new THREE.Mesh(new THREE.BoxGeometry(42, 2.2, 32), trim);
-  roofTrim.position.y = 27;
-  roofTrim.castShadow = true;
-  group.add(roofTrim);
-
-  const door = new THREE.Mesh(
-    new THREE.BoxGeometry(8, 13, 1),
-    wood,
-  );
-  door.position.set(0, 9.8, 14.55);
-  group.add(door);
-
-  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), trim);
-  handle.position.set(2.4, 10, 15.18);
-  group.add(handle);
-
-  [-10.5, 10.5].forEach((x) => {
-    const windowFrame = new THREE.Mesh(new THREE.BoxGeometry(7.8, 7.8, 1.1), trim);
-    windowFrame.position.set(x, 17.5, 14.65);
-    windowFrame.castShadow = true;
-    group.add(windowFrame);
-
-    const pane = new THREE.Mesh(new THREE.BoxGeometry(5.2, 5.2, 1.2), glass);
-    pane.position.set(x, 17.5, 15.24);
-    group.add(pane);
-
-    const crossA = new THREE.Mesh(new THREE.BoxGeometry(0.55, 6.1, 1.35), wood);
-    crossA.position.set(x, 17.5, 15.35);
-    group.add(crossA);
-
-    const crossB = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.55, 1.35), wood);
-    crossB.position.set(x, 17.5, 15.36);
-    group.add(crossB);
+  // Gable walls fill the space under the curved roof at each end.
+  const gableShape = new THREE.Shape();
+  const GW = WALL_W / 2 - 0.6;
+  gableShape.moveTo(-GW, 0);
+  gableShape.quadraticCurveTo(-GW * 0.42, RIDGE * 0.3 - 1.6, 0, RIDGE - 2.2);
+  gableShape.quadraticCurveTo(GW * 0.42, RIDGE * 0.3 - 1.6, GW, 0);
+  gableShape.lineTo(-GW, 0);
+  [FRONT - 0.6, -FRONT - 0.2].forEach((z) => {
+    const gable = add(new THREE.Mesh(flatPanel(gableShape, 0.8), plaster), "plaster");
+    gable.position.set(0, WALL_TOP, z);
   });
 
-  const balcony = new THREE.Mesh(new THREE.BoxGeometry(26, 2.2, 7), wood);
-  balcony.position.set(0, 20.5, -16.4);
-  balcony.castShadow = true;
-  group.add(balcony);
+  // Round attic window in the front gable.
+  const oculusFrame = new THREE.Shape();
+  oculusFrame.absarc(0, 0, 2.6, 0, Math.PI * 2, false);
+  const oculusHole = new THREE.Path();
+  oculusHole.absarc(0, 0, 1.8, 0, Math.PI * 2, true);
+  oculusFrame.holes.push(oculusHole);
+  const oculus = add(new THREE.Mesh(flatPanel(oculusFrame, 0.7), trim), "wood");
+  oculus.position.set(0, WALL_TOP + RIDGE * 0.42, FRONT + 0.1);
+  const oculusGlass = new THREE.Mesh(new THREE.CircleGeometry(1.85, 20), houseWindowGlass);
+  oculusGlass.position.set(0, WALL_TOP + RIDGE * 0.42, FRONT + 0.35);
+  oculusGlass.userData.noSurface = true;
+  group.add(oculusGlass);
 
-  for (let i = -2; i <= 2; i += 1) {
-    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 8, 7), trim);
-    rail.position.set(i * 5, 24, -19.4);
-    rail.castShadow = true;
-    group.add(rail);
+  // Arched door with a stone surround and rounded steps.
+  const door = add(new THREE.Mesh(flatPanel(archShape(8, 13.5), 0.8), timber), "wood");
+  door.position.set(0, FOUND_H, FRONT - 0.2);
+  const doorFrame = add(new THREE.Mesh(flatPanel(archFrameShape(8, 13.5, 1.3), 1.2), stone), "stone");
+  doorFrame.position.set(0, FOUND_H, FRONT - 0.1);
+  const knob = add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), mat(0xc9a24a, 0.35, "metal", { metalness: 0.7 })), null, false);
+  knob.position.set(2.6, FOUND_H + 6.2, FRONT + 0.85);
+  [[7.2, 1.9, 1.0], [5.6, 1.9, 2.9]].forEach(([radius, h, y]) => {
+    const step = add(new THREE.Mesh(new THREE.CylinderGeometry(radius, radius + 0.3, h, 24, 1, false, -Math.PI / 2, Math.PI), stone), "stone");
+    step.position.set(0, y, FRONT + 2.4);
+  });
+
+  // Porch lantern beside the door (glows at night).
+  const lamp = add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 2, 1.4), new THREE.MeshStandardMaterial({ color: 0xffd25a, emissive: 0xffa832, emissiveIntensity: 0.1 })), null, false);
+  lamp.position.set(6.4, FOUND_H + 11.5, FRONT + 1.2);
+  lamp.userData.noSurface = true;
+  const lampArm = add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 1.6), timber), "wood", false);
+  lampArm.position.set(6.4, FOUND_H + 12.7, FRONT + 0.6);
+
+  // Arched windows with flower boxes.
+  const flowerHexes = [0xe2566b, 0xf4b740, 0xf3f0e6, 0xb07ad6];
+  const addWindow = (x, z, rotY, withFlowers) => {
+    const win = new THREE.Group();
+    const frame = new THREE.Mesh(flatPanel(archFrameShape(5.6, 8, 0.9), 0.9), trim);
+    frame.castShadow = true;
+    frame.userData.surface = "wood";
+    win.add(frame);
+    const glass = new THREE.Mesh(flatPanel(archShape(5.6, 8), 0.3), houseWindowGlass);
+    glass.userData.noSurface = true;
+    win.add(glass);
+    const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.45, 8, 0.9), trim);
+    mullion.position.set(0, 4, 0.3);
+    win.add(mullion);
+    const transom = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.45, 0.9), trim);
+    transom.position.set(0, 4.2, 0.3);
+    win.add(transom);
+    if (withFlowers) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(7.4, 1.6, 2), timber);
+      box.position.set(0, -0.9, 1.1);
+      box.castShadow = true;
+      box.userData.surface = "wood";
+      win.add(box);
+      for (let i = 0; i < 6; i += 1) {
+        const bloom = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(0.75, 0),
+          new THREE.MeshStandardMaterial({ color: worldHex(i % 2 ? WORLD_PALETTE.foliage.tuft : flowerHexes[(index + i) % flowerHexes.length]), roughness: 0.8, flatShading: true }),
+        );
+        bloom.position.set(-3 + i * 1.2, 0.3, 1.2 + (i % 2) * 0.3);
+        win.add(bloom);
+      }
+    }
+    win.position.set(x, FOUND_H + 6.5, z);
+    win.rotation.y = rotY;
+    group.add(win);
+  };
+  addWindow(-10.5, FRONT - 0.15, 0, true);
+  addWindow(10.5, FRONT - 0.15, 0, true);
+  addWindow(-8, -FRONT + 0.15, Math.PI, false);
+  addWindow(8, -FRONT + 0.15, Math.PI, false);
+  addWindow(WALL_W / 2 - 0.15, 0, Math.PI / 2, true);
+  addWindow(-WALL_W / 2 + 0.15, 4, -Math.PI / 2, false);
+
+  // Stone chimney with a cap.
+  const chimney = add(new THREE.Mesh(new THREE.BoxGeometry(4.4, 15, 4.4), stone), "stone");
+  chimney.position.set(9.5, WALL_TOP + 7.5, -5);
+  const cap = add(new THREE.Mesh(new THREE.BoxGeometry(5.6, 1, 5.6), stone), "stone");
+  cap.position.set(9.5, WALL_TOP + 15.2, -5);
+
+  // Every other cottage gets a round corner turret with a bell-curved roof.
+  if (index % 2 === 0) {
+    const TX = -WALL_W / 2 + 2.6;
+    const TZ = -WALL_D / 2 + 2.6;
+    const TR = 5.6;
+    const TH = WALL_H + 7;
+    const tower = add(new THREE.Mesh(new THREE.CylinderGeometry(TR, TR + 0.3, TH, 24), plaster), "plaster");
+    tower.position.set(TX, FOUND_H + TH / 2, TZ);
+    const band = add(new THREE.Mesh(new THREE.CylinderGeometry(TR + 0.35, TR + 0.35, 1.2, 24), timber), "wood");
+    band.position.set(TX, FOUND_H + 12.5, TZ);
+    const profile = [];
+    for (let i = 0; i <= 14; i += 1) {
+      const t = i / 14;
+      profile.push(new THREE.Vector2((TR + 1.8) * Math.pow(1 - t, 1.7) + 0.05, t * 13));
+    }
+    const spire = add(new THREE.Mesh(new THREE.LatheGeometry(profile, 24), roofMat), "tiles");
+    spire.position.set(TX, FOUND_H + TH - 0.2, TZ);
+    const finial = add(new THREE.Mesh(new THREE.SphereGeometry(0.7, 12, 8), mat(0xc9a24a, 0.35, "metal", { metalness: 0.7 })), null, false);
+    finial.position.set(TX, FOUND_H + TH + 13.2, TZ);
+    // Turret window faces outward from the corner.
+    const turretWin = new THREE.Group();
+    const tFrame = new THREE.Mesh(flatPanel(archFrameShape(3.2, 5.4, 0.7), 0.7), trim);
+    const tGlass = new THREE.Mesh(flatPanel(archShape(3.2, 5.4), 0.3), houseWindowGlass);
+    tGlass.userData.noSurface = true;
+    turretWin.add(tFrame, tGlass);
+    const outward = Math.atan2(TX, TZ);
+    turretWin.position.set(TX + Math.sin(outward) * (TR - 0.1), FOUND_H + 17, TZ + Math.cos(outward) * (TR - 0.1));
+    turretWin.rotation.y = outward;
+    group.add(turretWin);
   }
-
-  const chimney = new THREE.Mesh(
-    new THREE.BoxGeometry(5.2, 12, 5.2),
-    new THREE.MeshStandardMaterial({ color: 0x5f4a3d, roughness: 0.9 }),
-  );
-  chimney.position.set(8, 37, -4);
-  chimney.rotation.y = 0.18;
-  chimney.castShadow = true;
-  group.add(chimney);
-
-  const banner = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 12),
-    new THREE.MeshStandardMaterial({ color: trimColors[(index + 2) % trimColors.length], side: THREE.DoubleSide, roughness: 0.65 }),
-  );
-  banner.position.set(-16.4, 17, 6);
-  banner.rotation.y = Math.PI / 2;
-  group.add(banner);
 
   group.scale.setScalar(0.94 + (index % 3) * 0.05);
   return group;
@@ -4969,7 +5542,7 @@ function createHouse(index) {
 function createRock(size) {
   const rock = new THREE.Mesh(
     new THREE.DodecahedronGeometry(size, 1),
-    new THREE.MeshStandardMaterial({ color: 0x5d5954, roughness: 0.98, flatShading: true }),
+    new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.rock), roughness: 0.98, flatShading: true }),
   );
   rock.scale.set(1.25, 0.55 + size * 0.03, 0.9);
   rock.castShadow = true;
@@ -4979,7 +5552,7 @@ function createRock(size) {
 
 function createGrassTuft(size) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({ color: 0x2f7f3e, roughness: 0.95, side: THREE.DoubleSide });
+  const material = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.tuft), roughness: 0.95, side: THREE.DoubleSide });
   for (let i = 0; i < 5; i += 1) {
     const blade = new THREE.Mesh(new THREE.ConeGeometry(0.9, size * 2.8, 5), material);
     blade.position.y = size * 1.3;
@@ -5099,6 +5672,7 @@ function createTeleporter(position, destination, isDirect = false) {
   label.position.y = 39;
   teleporter.add(label);
 
+  teleporter.userData.settleOn = true; // grounded by settleIslandObjects
   scene.add(teleporter);
   animatedWorldObjects.push({ mesh: ring, type: "teleporter", speed: 0.022, phase: position.x * 0.01 });
   animatedWorldObjects.push({ mesh: beam, type: "teleporterBeam", baseY: beam.position.y, speed: 0.003, phase: position.z * 0.01 });
@@ -5369,7 +5943,7 @@ function createObservationHakiTrainer(position) {
   const trainer = new THREE.Group();
   trainer.position.copy(position);
   trainer.add(createHumanAvatarModel({
-    name: "Observation Master",
+    name: "Foresight Master",
     skin: "#d8c2aa",
     shirt: "#771d1d",     // Crimson monk robe
     pants: "#1c1c1c",
@@ -5382,7 +5956,7 @@ function createObservationHakiTrainer(position) {
     build: 102,
   }, { showSword: false, showName: false }));
 
-  // Glowing red Kenbunshoku aura ring
+  // Glowing red Foresight aura ring
   const aura = new THREE.Mesh(
     new THREE.TorusGeometry(5.2, 0.22, 8, 42),
     new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.8 }),
@@ -5391,7 +5965,7 @@ function createObservationHakiTrainer(position) {
   aura.rotation.x = Math.PI / 2;
   trainer.add(aura);
 
-  // Floating Kenbunshoku eye marker above head
+  // Floating Foresight eye marker above head
   const eyeMarker = new THREE.Mesh(
     new THREE.SphereGeometry(1.2, 8, 6),
     new THREE.MeshBasicMaterial({ color: 0xff4444 })
@@ -5400,7 +5974,7 @@ function createObservationHakiTrainer(position) {
   eyeMarker.scale.set(1.4, 0.7, 1);
   trainer.add(eyeMarker);
 
-  const label = makeLabel("Observation Master (Kenbunshoku)", 1.0);
+  const label = makeLabel("Foresight Master", 1.0);
   label.position.y = 19;
   trainer.add(label);
 
@@ -5411,27 +5985,27 @@ function createObservationHakiTrainer(position) {
   interactables.push({
     type: "observationTrainer",
     mesh: trainer,
-    prompt: "Press E: Train Observation Haki",
+    prompt: "Press E: Train Foresight",
   });
 }
 
 function showObservationHakiDialog() {
   if (!dialoguePanel || !questOptions) return;
   dialoguePanel.classList.remove("hidden");
-  dialogueTitle.textContent = "👁️ Observation Master (Kenbunshoku Haki)";
+  dialogueTitle.textContent = "👁️ Foresight Master";
   questOptions.innerHTML = "";
 
   if (player.observationHaki && player.observationHaki.unlocked) {
-    dialogueDetail.textContent = `You have already awakened Kenbunshoku (Observation Haki)! Press K to toggle it ON/OFF. While active, you can automatically dodge up to 5 attacks and sense all nearby threats.`;
+    dialogueDetail.textContent = `You have already awakened Foresight! Press K to toggle it ON/OFF. While active, you can automatically dodge up to 5 attacks and sense all nearby threats.`;
   } else {
-    dialogueDetail.textContent = `"In the biting blizzard, eyesight fails... but true masters see with their spirit. I can teach you Kenbunshoku (Observation Haki) for $7,500 Berries. (Requires Level 80+)."`;
+    dialogueDetail.textContent = `"In the biting blizzard, eyesight fails... but true masters see with their spirit. I can teach you Foresight for $7,500 Doubloons. (Requires Level 80+)."`;
   }
 
   if (!player.observationHaki || !player.observationHaki.unlocked) {
     const buyBtn = document.createElement("button");
     buyBtn.type = "button";
     buyBtn.className = "quest-option";
-    buyBtn.innerHTML = `<strong>👁️ Learn Observation Haki</strong><span>Awaken Kenbunshoku (K key) to auto-dodge 5 attacks and reveal threats through walls.</span><small>Cost: $7,500 Berries (Requires Lv 80)</small>`;
+    buyBtn.innerHTML = `<strong>👁️ Learn Foresight</strong><span>Awaken Foresight (K key) to auto-dodge 5 attacks and reveal threats through walls.</span><small>Cost: $7,500 Doubloons (Requires Lv 80)</small>`;
     buyBtn.addEventListener("click", () => purchaseObservationHaki());
     questOptions.append(buyBtn);
   }
@@ -5449,16 +6023,16 @@ function showObservationHakiDialog() {
 
 function purchaseObservationHaki() {
   if (player.observationHaki && player.observationHaki.unlocked) {
-    log("You have already mastered Observation Haki! Press K to toggle.");
+    log("You have already mastered Foresight! Press K to toggle.");
     return;
   }
   if (player.level < 80) {
-    log("Observation Master: \"Your spirit is still unfocused. Come back at Level 80.\"");
+    log("Foresight Master: \"Your spirit is still unfocused. Come back at Level 80.\"");
     return;
   }
   const cost = 7500;
   if (player.money < cost) {
-    log(`Observation Master: "You need $${cost} Berries to undergo this training."`);
+    log(`Foresight Master: "You need $${cost} Doubloons to undergo this training."`);
     return;
   }
 
@@ -5487,8 +6061,8 @@ function purchaseObservationHaki() {
     mesh.material.opacity = 0.85 * (1 - progress);
   });
 
-  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "👁️ OBSERVATION HAKI AWAKENED!", "#ff3333");
-  log("👁️ You have learned Observation Haki! Press K to toggle ON/OFF. Automatically evades up to 5 attacks and detects enemy vitals.");
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "👁️ FORESIGHT AWAKENED!", "#ff3333");
+  log("👁️ You have learned Foresight! Press K to toggle ON/OFF. Automatically evades up to 5 attacks and detects enemy vitals.");
 }
 
 function createFlashStepTrainer(position) {
@@ -5517,7 +6091,7 @@ function createFlashStepTrainer(position) {
   aura.rotation.x = Math.PI / 2;
   trainer.add(aura);
 
-  const label = makeLabel("Flash Step Master (Soru)", 1.0);
+  const label = makeLabel("Flash Step Master", 1.0);
   label.position.y = 16;
   trainer.add(label);
 
@@ -5534,20 +6108,20 @@ function createFlashStepTrainer(position) {
 function showFlashStepDialog() {
   if (!dialoguePanel || !questOptions) return;
   dialoguePanel.classList.remove("hidden");
-  dialogueTitle.textContent = "⚡ Flash Step Master (Soru)";
+  dialogueTitle.textContent = "⚡ Flash Step Master";
   questOptions.innerHTML = "";
 
   if (player.hasFlashStep) {
-    dialogueDetail.textContent = "You have already mastered Flash Step (Soru)! Press T to instantly vanish and teleport directly to where you are pointing with your cursor.";
+    dialogueDetail.textContent = "You have already mastered Flash Step! Press T to instantly vanish and teleport directly to where you are pointing with your cursor.";
   } else {
-    dialogueDetail.textContent = `"By kicking the snow a dozen times in a fraction of a second, one can vanish before the eye can track. I will teach you the ancient Soru (Flash Step) for $5,000 Berries. (Requires Level 75+)."`;
+    dialogueDetail.textContent = `"By kicking the snow a dozen times in a fraction of a second, one can vanish before the eye can track. I will teach you the ancient Flash Step for $5,000 Doubloons. (Requires Level 75+)."`;
   }
 
   if (!player.hasFlashStep) {
     const buyBtn = document.createElement("button");
     buyBtn.type = "button";
     buyBtn.className = "quest-option";
-    buyBtn.innerHTML = `<strong>⚡ Learn Flash Step (Soru)</strong><span>Unlocks T key to instantly teleport directly to where your cursor points.</span><small>Cost: $5,000 Berries (Requires Lv 75)</small>`;
+    buyBtn.innerHTML = `<strong>⚡ Learn Flash Step</strong><span>Unlocks T key to instantly teleport directly to where your cursor points.</span><small>Cost: $5,000 Doubloons (Requires Lv 75)</small>`;
     buyBtn.addEventListener("click", () => purchaseFlashStep());
     questOptions.append(buyBtn);
   }
@@ -5574,7 +6148,7 @@ function purchaseFlashStep() {
   }
   const cost = 5000;
   if (player.money < cost) {
-    log(`Flash Step Master: "You need $${cost} Berries to master Soru."`);
+    log(`Flash Step Master: "You need $${cost} Doubloons to master Flash Step."`);
     return;
   }
 
@@ -5743,7 +6317,7 @@ function createBlackLegDojo(position) {
     group.add(wire);
   });
 
-  // === Sanji-style crossed-leg training mannequin (simple shapes) ===
+  // === Kick-style crossed-leg training mannequin (simple shapes) ===
   // Decorative kick target dummy
   const dummyMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.85 });
   const dummyBody = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 6, 8), dummyMat);
@@ -5761,12 +6335,12 @@ function createBlackLegDojo(position) {
   secretLabel.position.set(0, 18, 10);
   group.add(secretLabel);
 
-  // === Zeff NPC ===
+  // === Old Cinder NPC ===
   const zeffPos = new THREE.Vector3(0, 1, -8);
   const zeff = new THREE.Group();
   zeff.position.copy(zeffPos);
   zeff.add(createHumanAvatarModel({
-    name: "Zeff",
+    name: "Old Cinder",
     skin: "#c49a6c",
     shirt: "#cc2200",     // Red chef coat
     pants: "#1a1a1a",
@@ -5779,12 +6353,12 @@ function createBlackLegDojo(position) {
     build: 108,
   }, { showSword: false, showName: false }));
 
-  // Golden star/flame label for Zeff
-  const zeffLabel = makeLabel("Zeff — Black Leg Master", 1.0);
+  // Golden star/flame label for Old Cinder
+  const zeffLabel = makeLabel("Old Cinder — Blaze Kick Master", 1.0);
   zeffLabel.position.y = 17;
   zeff.add(zeffLabel);
 
-  // Small fire ring around Zeff's feet
+  // Small fire ring around Old Cinder's feet
   const zeffRing = new THREE.Mesh(
     new THREE.TorusGeometry(4, 0.15, 6, 32),
     new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.7 })
@@ -5798,7 +6372,7 @@ function createBlackLegDojo(position) {
 
   scene.add(group);
 
-  // Register interactable (use the world-space position of Zeff)
+  // Register interactable (use the world-space position of Old Cinder)
   const worldZeffPos = position.clone().add(zeffPos);
   const zeffWorldGroup = new THREE.Group();
   zeffWorldGroup.position.copy(worldZeffPos);
@@ -5808,27 +6382,27 @@ function createBlackLegDojo(position) {
     type: "flamingFeetShop",
     mesh: group,            // proximity check against the whole cave group
     interactCenter: worldZeffPos,
-    prompt: "Press E: Talk to Zeff (Black Leg Master)",
+    prompt: "Press E: Talk to Old Cinder (Blaze Kick Master)",
   });
 }
 
 function showFlamingFeetShop() {
   if (!dialoguePanel || !questOptions) return;
   dialoguePanel.classList.remove("hidden");
-  dialogueTitle.textContent = "⚡ Zeff — Black Leg Style";
+  dialogueTitle.textContent = "⚡ Old Cinder — Blaze Kick Style";
   questOptions.innerHTML = "";
 
   if (player.hasFlamingFeet) {
-    dialogueDetail.textContent = "You already master the Black Leg Style! Use C (Flambage Shot) and V (Diable Jambe) in Melee mode. Set your legs ablaze!";
+    dialogueDetail.textContent = "You already master the Blaze Kick Style! Use C (Ember Shot) and V (Inferno Kick) in Melee mode. Set your legs ablaze!";
   } else {
-    dialogueDetail.textContent = `"You want to learn Black Leg Style? It'll cost ya ${5000} Berries. The style focuses kicks infused with friction-generated flames. C = Flambage Shot, V = Diable Jambe."`;
+    dialogueDetail.textContent = `"You want to learn Blaze Kick Style? It'll cost ya ${5000} Doubloons. The style focuses kicks infused with friction-generated flames. C = Ember Shot, V = Inferno Kick."`;
   }
 
   if (!player.hasFlamingFeet) {
     const buyBtn = document.createElement("button");
     buyBtn.type = "button";
     buyBtn.className = "quest-option";
-    buyBtn.innerHTML = `<strong>🔥 Learn Black Leg Style</strong><span>Unlocks Flambage Shot (C) and Diable Jambe (V) in Melee mode.</span><small>Cost: $5,000 Berries</small>`;
+    buyBtn.innerHTML = `<strong>🔥 Learn Blaze Kick Style</strong><span>Unlocks Ember Shot (C) and Inferno Kick (V) in Melee mode.</span><small>Cost: $5,000 Doubloons</small>`;
     buyBtn.addEventListener("click", () => buyFlamingFeet());
     questOptions.append(buyBtn);
   }
@@ -5846,16 +6420,16 @@ function showFlamingFeetShop() {
 
 function buyFlamingFeet() {
   if (player.hasFlamingFeet) {
-    log("You already know the Black Leg Style!");
+    log("You already know the Blaze Kick Style!");
     return;
   }
   if (player.level < 30) {
-    log("Zeff: \"You're too green, rookie. Come back at level 30.\"");
+    log("Old Cinder: \"You're too green, rookie. Come back at level 30.\"");
     return;
   }
   const cost = 5000;
   if (player.money < cost) {
-    log(`Zeff: "Not enough Berries! You need ${cost} to learn from me."`);
+    log(`Old Cinder: "Not enough Doubloons! You need ${cost} to learn from me."`);
     return;
   }
   player.money -= cost;
@@ -5903,6 +6477,7 @@ function createReturnTeleporter(position) {
   label.position.y = 15;
   teleporter.add(label);
 
+  teleporter.userData.settleOn = true; // grounded by settleIslandObjects
   scene.add(teleporter);
   animatedWorldObjects.push({ mesh: ring, type: "teleporter", speed: 0.022, phase: position.x * 0.01 });
   animatedWorldObjects.push({ mesh: beam, type: "teleporterBeam", baseY: beam.position.y, speed: 0.003, phase: position.z * 0.01 });
@@ -6017,7 +6592,7 @@ function showTeleporterSubMenu(island) {
     const specialBtn = document.createElement("button");
     specialBtn.type = "button";
     specialBtn.className = "quest-option";
-    const abilityName = island === "Jungle" ? "Jungle Pulse Trainer" : "Armament Haki Trainer";
+    const abilityName = island === "Jungle" ? "Jungle Pulse Trainer" : "Iron Aura Trainer";
     specialBtn.innerHTML = `<strong>${abilityName}</strong><span>Teleport to the special ability trainer.</span>`;
     specialBtn.addEventListener("click", () => {
       dialoguePanel.classList.add("hidden");
@@ -6078,7 +6653,7 @@ function createHakiTrainer(position) {
   const trainer = new THREE.Group();
   trainer.position.copy(position);
   trainer.add(createHumanAvatarModel({
-    name: "Haki Trainer",
+    name: "Aura Trainer",
     skin: "#b68158",
     shirt: "#111111",
     pants: "#292929",
@@ -6097,7 +6672,7 @@ function createHakiTrainer(position) {
   aura.position.y = 2;
   aura.rotation.x = Math.PI / 2;
   trainer.add(aura);
-  const label = makeLabel("Haki Trainer", 1);
+  const label = makeLabel("Aura Trainer", 1);
   label.position.y = 15;
   trainer.add(label);
   scene.add(trainer);
@@ -6105,7 +6680,7 @@ function createHakiTrainer(position) {
   interactables.push({
     type: "hakiTrainer",
     mesh: trainer,
-    prompt: "Press E: Learn Armament Haki",
+    prompt: "Press E: Learn Iron Aura",
   });
 }
 
@@ -6162,7 +6737,7 @@ function createBoat(type) {
 }
 
 function addIslandRocks(group, radius, height) {
-  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x60534a, roughness: 0.97, flatShading: true });
+  const rockMaterial = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.rockDark), roughness: 0.97, flatShading: true });
   const rockCount = 18;
   for (let i = 0; i < rockCount; i += 1) {
     const rockRadius = 3 + Math.random() * 4;
@@ -6189,12 +6764,14 @@ function handleBoatSelection(type) {
     scene.remove(activeBoat);
   }
   const boat = createBoat(type);
+  enhanceWorldSurfaces(boat);
   const offset = new THREE.Vector3(0, 0, -28).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerMesh.rotation.y);
   boat.position.copy(playerMesh.position).add(offset);
   boat.position.y = OCEAN_SURFACE_Y + 0.28;
   boat.rotation.y = playerMesh.rotation.y;
   scene.add(boat);
   activeBoat = boat;
+  hideBoatMenu();
   log(`Spawned ${type} boat near the water.`);
 }
 
@@ -6206,6 +6783,7 @@ function hideBoatMenu() {
   document.querySelector("#boat-menu").classList.add("hidden");
 }
 
+// ── 14-enemies.js ─ Enemy camps, bosses and enemy weapons.
 function createBanditCamp() {
   const spots = [
     [-155, STARTER_SURFACE_Y, -78],
@@ -6346,7 +6924,7 @@ function spawnAdvancedEnemy(position, index, type) {
   const isYeti = type === "yeti";
 
   let name = `Pirate ${index + 1}`;
-  if (isBoss) name = "Buggy";
+  if (isBoss) name = "Jester";
   else if (isBrute) name = `Brute ${index + 1}`;
   else if (isOfficer) name = `Desert Officer ${index + 1}`;
   else if (isDesertBandit) name = `Desert Bandit ${index + 1}`;
@@ -6674,365 +7252,447 @@ function spawnBandit(position, index) {
   });
 }
 
+// ── 15-player-model.js ─ Player creation, human avatar model and stat points.
 function createPlayer() {
   playerMesh = new THREE.Group();
-  playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+  playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 12); // just south of the flagpole
   playerMesh.userData.animation = { walkPhase: 0, attackTimer: 0, attackDuration: 0.22, attackImpact: 0 };
   scene.add(playerMesh);
   applyAvatarToPlayer();
 }
 
+// Body proportions from the studio sliders (percent values, 100 = default).
+function getAvatarProportions(avatar) {
+  const pct = (value, min, max) => THREE.MathUtils.clamp((value || 100) / 100, min, max);
+  return {
+    height: pct(avatar.height, 0.8, 1.3),
+    width: pct(avatar.build, 0.75, 1.35),
+    arm: pct(avatar.armLength, 0.75, 1.35),
+    leg: pct(avatar.legLength, 0.75, 1.35),
+    torso: pct(avatar.torsoLength, 0.8, 1.25),
+    head: pct(avatar.headSize, 0.75, 1.35),
+  };
+}
+
+// Builds a character: rounded torso, jointed limbs and a proper face.
+// Part names and default joint positions (torso 5.7, head 8.65, shoulders 5.9,
+// hips 2.45) are kept so every animation, NPC and enemy still lines up.
 function createHumanAvatarModel(avatar, options = {}) {
   const showSword = options.showSword !== false;
   const showName = options.showName !== false;
   const group = new THREE.Group();
+  group.userData.noSurface = true;
   const avatarParts = {};
-  const heightScale = (avatar.height || 100) / 100;
-  const buildScale = (avatar.build || 100) / 100;
-  const skin = new THREE.MeshStandardMaterial({ color: avatar.skin, roughness: 0.72 });
-  const shirt = new THREE.MeshStandardMaterial({ color: avatar.shirt || "#1b85aa", roughness: 0.84 });
-  const pants = new THREE.MeshStandardMaterial({ color: avatar.pants || "#26364f", roughness: 0.86 });
-  const hair = new THREE.MeshStandardMaterial({ color: avatar.hair, roughness: 0.9 });
-  const eyes = new THREE.MeshStandardMaterial({ color: avatar.eyes || "#101820", roughness: 0.4 });
-  const boots = new THREE.MeshStandardMaterial({ color: avatar.boots || "#23170f", roughness: 0.9 });
-  
-  // Custom Granular Materials for Advanced Customization
-  const torsoMat = new THREE.MeshStandardMaterial({ color: avatar.torsoColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
-  const leftArmMat = new THREE.MeshStandardMaterial({ color: avatar.leftArmColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
-  const rightArmMat = new THREE.MeshStandardMaterial({ color: avatar.rightArmColor || avatar.shirt || "#1b85aa", roughness: 0.84 });
-  const leftLegMat = new THREE.MeshStandardMaterial({ color: avatar.leftLegColor || avatar.pants || "#26364f", roughness: 0.86 });
-  const rightLegMat = new THREE.MeshStandardMaterial({ color: avatar.rightLegColor || avatar.pants || "#26364f", roughness: 0.86 });
-  const beltMat = new THREE.MeshStandardMaterial({ color: avatar.beltColor || avatar.boots || "#23170f", roughness: 0.9 });
-  const bootsMat = new THREE.MeshStandardMaterial({ color: avatar.boots || "#23170f", roughness: 0.9 });
+  const prop = getAvatarProportions(avatar);
+  const bodyType = avatar.bodyType || "human";
+  const headStyle = avatar.headStyle || "normal";
+  const accessory = avatar.accessory || (avatar.outfit !== "adventurer" ? "halo" : "none");
+  const skeleton = bodyType === "skeleton";
 
-  const metal = new THREE.MeshStandardMaterial({ color: 0xc8d7df, metalness: 0.7, roughness: 0.25 });
-  const trim = new THREE.MeshStandardMaterial({ color: avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", roughness: 0.65 });
-  const leather = new THREE.MeshStandardMaterial({ color: "#5c3d21", roughness: 0.82 });
-  const darkLeather = new THREE.MeshStandardMaterial({ color: "#362a22", roughness: 0.88 });
+  const std = (color, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+  const bone = std("#ece4cf", 0.65);
+  const skin = skeleton ? bone : std(avatar.skin, 0.62);
+  const hair = std(avatar.hair, 0.9);
+  const torsoMat = std(avatar.torsoColor || avatar.shirt || "#1b85aa", 0.84);
+  const shirt = torsoMat;
+  const leftArmMat = std(avatar.leftArmColor || avatar.shirt || "#1b85aa", 0.84);
+  const rightArmMat = std(avatar.rightArmColor || avatar.shirt || "#1b85aa", 0.84);
+  const leftLegMat = std(avatar.leftLegColor || avatar.pants || "#26364f", 0.86);
+  const rightLegMat = std(avatar.rightLegColor || avatar.pants || "#26364f", 0.86);
+  const beltMat = std(avatar.beltColor || avatar.boots || "#23170f", 0.9);
+  const bootsMat = std(avatar.boots || "#23170f", 0.75);
+  const metal = std(0xc8d7df, 0.25, { metalness: 0.7 });
+  const trim = std(avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", 0.65);
+  const leather = std("#5c3d21", 0.82);
+  const darkLeather = std("#362a22", 0.88);
+  const shade = (mesh) => { mesh.castShadow = true; return mesh; };
 
-  const torsoWidth = 3.2 * buildScale;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth, 4.1, 1.6), torsoMat);
-  torso.position.y = 5.7;
-  torso.castShadow = true;
+  // ---- Layout (all heights in model units; defaults reproduce the classic rig) ----
+  const FOOT_Y = -1.56;
+  const legLen = 3.8 * prop.leg;
+  const hipY = FOOT_Y + legLen + 0.21;               // 2.45 at default
+  const torsoH = 4.1 * prop.torso;
+  const torsoY = hipY + 3.25 + (torsoH - 4.1) / 2;   // 5.7 at default
+  const torsoTop = torsoY + torsoH / 2;              // 7.75 at default
+  const shoulderY = torsoTop - 1.85;                 // 5.9 at default
+  const headR = 1.25 * prop.head;
+  const headY = torsoTop + 0.9 + (headR - 1.25) * 0.85; // 8.65 at default
+  const armLen = 2.5 * prop.arm;
+  // Torso-relative heights for things strapped to the body.
+  const onTorso = (absoluteDefaultY) => (absoluteDefaultY - 5.7) * prop.torso;
+
+  // ---- Torso: tapered chest with rounded shoulders (or a ribcage) ----
+  let torso;
+  if (skeleton) {
+    torso = new THREE.Group();
+    const spine = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, torsoH, 8), bone));
+    torso.add(spine);
+    for (let i = 0; i < 5; i += 1) {
+      const rib = shade(new THREE.Mesh(new THREE.TorusGeometry(1.05 - i * 0.06, 0.11, 6, 20, Math.PI * 1.6), bone));
+      rib.rotation.x = Math.PI / 2;
+      rib.rotation.z = Math.PI * 0.7;
+      rib.scale.set(1.25, 0.75, 1);
+      rib.position.y = torsoH * 0.32 - i * 0.48 * prop.torso;
+      torso.add(rib);
+    }
+    const collarbone = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 6), bone));
+    collarbone.rotation.z = Math.PI / 2;
+    collarbone.position.y = torsoH / 2 - 0.25;
+    torso.add(collarbone);
+  } else {
+    const profile = [
+      [0.01, -0.5], [0.98, -0.5], [1.02, -0.36], [0.92, -0.12], [1.12, 0.12],
+      [1.32, 0.3], [1.36, 0.4], [1.22, 0.47], [0.62, 0.5], [0.01, 0.5],
+    ].map(([r, y]) => new THREE.Vector2(r, y * torsoH));
+    torso = shade(new THREE.Mesh(new THREE.LatheGeometry(profile, 22), torsoMat));
+    torso.scale.set(1.18, 1, 0.66);
+    torso.userData.surfaceScale = true;
+  }
+  torso.position.y = torsoY;
   group.add(torso);
+  // Children of the torso move with it (and aren't stretched by its x/z scale).
+  const torsoAnchor = new THREE.Group();
+  if (!skeleton) torsoAnchor.scale.set(1 / 1.18, 1, 1 / 0.66);
+  torso.add(torsoAnchor);
 
-  if (avatar.outfit === "coat") {
-    const coat = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth + 0.45, 5.4, 1.85), torsoMat);
-    coat.position.y = 5.0;
-    coat.castShadow = true;
-    group.add(coat);
+  // Hips / pelvis
+  const pelvis = shade(new THREE.Mesh(new THREE.SphereGeometry(1.0, 18, 12), skeleton ? bone : std(avatar.pants || "#26364f", 0.86)));
+  pelvis.scale.set(skeleton ? 1.2 : 1.55, skeleton ? 0.55 : 0.62, skeleton ? 0.8 : 0.95);
+  pelvis.position.y = hipY + 0.55;
+  group.add(pelvis);
+
+  if (!skeleton && avatar.outfit === "coat") {
+    const coatProfile = [[1.0, 0.5], [1.12, 0.1], [1.28, -0.4], [1.42, -0.62]].map(([r, y]) => new THREE.Vector2(r, y * 5.4));
+    const coat = shade(new THREE.Mesh(new THREE.LatheGeometry(coatProfile, 22, 0, Math.PI * 2), std(avatar.torsoColor || avatar.shirt || "#1b85aa", 0.84, { side: THREE.DoubleSide })));
+    coat.scale.set(1.2, 1, 0.72);
+    coat.position.y = onTorso(5.0) - 0.1;
+    torsoAnchor.add(coat);
+  }
+  if (!skeleton && avatar.outfit === "armor") {
+    const plate = shade(new THREE.Mesh(new THREE.SphereGeometry(1.0, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), trim));
+    plate.scale.set(1.55, 1.25, 0.6);
+    plate.rotation.x = -Math.PI / 2;
+    plate.position.set(0, onTorso(6.15), 0.62);
+    torsoAnchor.add(plate);
   }
 
-  if (avatar.outfit === "armor") {
-    const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(torsoWidth + 0.25, 2.2, 0.22), trim);
-    chestPlate.position.set(0, 6.15, 0.92);
-    chestPlate.castShadow = true;
-    group.add(chestPlate);
-  }
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(1.25, 24, 18), skin);
-  head.position.y = 8.65;
-  head.castShadow = true;
-  head.userData = { isHead: true };
-  group.add(head);
-
-  addHair(group, avatar.hairStyle || "short", hair);
-
-  if (options.bandanaColor) {
-    const bandana = new THREE.Mesh(
-      new THREE.TorusGeometry(1.35, 0.26, 12, 28),
-      new THREE.MeshStandardMaterial({ color: options.bandanaColor, roughness: 0.74 }),
-    );
-    bandana.position.y = 9.05;
-    bandana.rotation.x = Math.PI / 2;
-    group.add(bandana);
-  }
-
-  const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), eyes);
-  leftEye.position.set(-0.42, 0.07, 1.08);
-  head.add(leftEye);
-
-  const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), eyes);
-  rightEye.position.set(0.42, 0.07, 1.08);
-  head.add(rightEye);
-
-  // Reddish mouth material for premium aesthetics
-  const mouthMaterial = new THREE.MeshStandardMaterial({ color: "#5c1e28", roughness: 0.6 });
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.05, 8, 16, Math.PI * 0.8), mouthMaterial);
-  mouth.position.set(0, -0.35, 1.16);
-  mouth.rotation.set(0.15, 0, Math.PI * 1.1); // Rotate to smile + align
-  head.add(mouth);
-
-  // Eyebrows matching hair color
-  const leftEyebrow = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.12), hair);
-  leftEyebrow.position.set(-0.42, 0.25, 1.14);
-  leftEyebrow.rotation.set(0, 0, -0.12);
-  head.add(leftEyebrow);
-
-  const rightEyebrow = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.12), hair);
-  rightEyebrow.position.set(0.42, 0.25, 1.14);
-  rightEyebrow.rotation.set(0, 0, 0.12);
-  head.add(rightEyebrow);
-
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.55, 14), skin);
-  neck.position.y = 7.45;
-  neck.castShadow = true;
+  // ---- Neck & head ----
+  const neck = shade(new THREE.Mesh(new THREE.CylinderGeometry(skeleton ? 0.2 : 0.42, skeleton ? 0.22 : 0.5, 0.7, 12), skin));
+  neck.position.y = torsoTop + 0.2;
   group.add(neck);
 
-  // Shirt collar/neck trim for professional detail
-  const collarMaterial = avatar.outfit === "adventurer" ? leather : shirt;
-  const collarGeo = avatar.outfit === "adventurer"
-    ? new THREE.CylinderGeometry(0.56, 0.6, 0.48, 14, 1, true)
-    : new THREE.TorusGeometry(0.55, 0.12, 8, 16);
-  const collar = new THREE.Mesh(collarGeo, collarMaterial);
-  if (avatar.outfit === "adventurer") {
-    collar.position.y = 7.75;
+  const head = new THREE.Group(); // pivot at the head centre; scaled by head size
+  head.position.y = headY;
+  head.scale.setScalar(prop.head);
+  head.userData = { isHead: true };
+  group.add(head);
+  const eyesList = [];
+
+  if (skeleton) {
+    const skull = shade(new THREE.Mesh(new THREE.SphereGeometry(1.2, 22, 16), bone));
+    skull.scale.set(0.95, 1.0, 1.02);
+    head.add(skull);
+    const jaw = shade(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.45, 1.1), bone));
+    jaw.position.set(0, -0.95, 0.35);
+    head.add(jaw);
+    const socketMat = std("#14110e", 0.9);
+    [-0.42, 0.42].forEach((x) => {
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), socketMat);
+      socket.scale.set(1, 1.1, 0.5);
+      socket.position.set(x, 0.1, 1.02);
+      head.add(socket);
+      eyesList.push(socket);
+    });
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 3), socketMat);
+    nose.rotation.x = Math.PI;
+    nose.position.set(0, -0.3, 1.12);
+    head.add(nose);
+    for (let i = -2; i <= 2; i += 1) {
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.06), bone);
+      tooth.position.set(i * 0.17, -0.68, 1.08);
+      head.add(tooth);
+    }
   } else {
-    collar.position.y = 7.65;
-    collar.rotation.x = Math.PI / 2;
+    const face = shade(new THREE.Mesh(new THREE.SphereGeometry(1.25, 28, 20), skin));
+    face.scale.set(0.93, 1.08, 0.98);
+    head.add(face);
+    const jaw = shade(new THREE.Mesh(new THREE.SphereGeometry(0.85, 18, 12), skin));
+    jaw.scale.set(1.05, 0.7, 0.95);
+    jaw.position.set(0, -0.68, 0.2);
+    head.add(jaw);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), skin);
+    nose.scale.set(0.8, 1, 1.15);
+    nose.position.set(0, -0.3, 1.2);
+    head.add(nose);
+    [-1, 1].forEach((side) => {
+      const ear = shade(new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), skin));
+      ear.scale.set(0.45, 1, 0.7);
+      ear.position.set(side * 1.15, -0.15, 0);
+      head.add(ear);
+    });
+    const white = std("#f6f3ec", 0.35);
+    const iris = std(avatar.eyes || "#101820", 0.3);
+    [-0.42, 0.42].forEach((x) => {
+      const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), white);
+      eyeWhite.scale.set(1, 0.8, 0.6);
+      eyeWhite.position.set(x, -0.06, 1.05);
+      head.add(eyeWhite);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), iris);
+      pupil.position.set(x, -0.06, 1.15);
+      head.add(pupil);
+      eyesList.push(eyeWhite);
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.12), hair);
+      brow.position.set(x, 0.17, 1.15);
+      brow.rotation.z = x < 0 ? -0.1 : 0.1;
+      head.add(brow);
+    });
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.05, 8, 16, Math.PI * 0.75), std("#7a2f34", 0.6));
+    mouth.position.set(0, -0.68, 1.08);
+    mouth.rotation.set(0.15, 0, Math.PI * 1.12);
+    head.add(mouth);
+
+    // Hair is authored around a head centred at y = 8.65, so offset it into head space.
+    const hairGroup = new THREE.Group();
+    hairGroup.position.y = -8.65;
+    addHair(hairGroup, avatar.hairStyle || "short", hair);
+    head.add(hairGroup);
   }
-  collar.castShadow = true;
-  group.add(collar);
 
-  const leftArm = addLimb(group, -2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, -0.15, leftArmMat);
-  const rightArm = addLimb(group, 2.25 * buildScale, 5.9, 0, 0.45 * buildScale, 2.5, skin, 0.15, rightArmMat);
-  const leftLeg = addLimb(group, -0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, leftLegMat, 0.04);
-  const rightLeg = addLimb(group, 0.85 * buildScale, 2.45, 0, 0.55 * buildScale, 3.8, rightLegMat, -0.04);
-
-  // Armor accessories (shoulder pads, gauntlets) if wearing armor outfit
-  if (avatar.outfit === "armor") {
-    const leftPad = new THREE.Mesh(new THREE.BoxGeometry(1.25 * buildScale, 0.8, 1.25 * buildScale), trim);
-    leftPad.position.set(0, -0.2, 0);
-    leftPad.castShadow = true;
-    leftArm.add(leftPad);
-
-    const rightPad = new THREE.Mesh(new THREE.BoxGeometry(1.25 * buildScale, 0.8, 1.25 * buildScale), trim);
-    rightPad.position.set(0, -0.2, 0);
-    rightPad.castShadow = true;
-    rightArm.add(rightPad);
-
-    const leftGauntlet = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * buildScale, 0.5 * buildScale, 0.95, 12), trim);
-    leftGauntlet.position.set(0, -1.8, 0);
-    leftGauntlet.castShadow = true;
-    leftArm.add(leftGauntlet);
-
-    const rightGauntlet = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * buildScale, 0.5 * buildScale, 0.95, 12), trim);
-    rightGauntlet.position.set(0, -1.8, 0);
-    rightGauntlet.castShadow = true;
-    rightArm.add(rightGauntlet);
+  if (options.bandanaColor) {
+    const bandana = new THREE.Mesh(new THREE.TorusGeometry(1.32, 0.26, 12, 28), std(options.bandanaColor, 0.74));
+    bandana.position.y = 0.4;
+    bandana.rotation.x = Math.PI / 2;
+    head.add(bandana);
   }
 
-  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.28 * buildScale, 10, 10), skin);
-  leftHand.position.set(0, -2.75, 0);
-  leftArm.add(leftHand);
+  // Headless: hide the head entirely, cap the neck.
+  if (headStyle === "headless") {
+    head.visible = false;
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(skeleton ? 0.2 : 0.42, 14), std("#5a1a1e", 0.7));
+    cap.rotation.x = -Math.PI / 2;
+    cap.position.y = torsoTop + 0.56;
+    group.add(cap);
+  }
 
-  const rightHand = new THREE.Mesh(new THREE.SphereGeometry(0.28 * buildScale, 10, 10), skin);
-  rightHand.position.set(0, -2.75, 0);
-  rightArm.add(rightHand);
+  if (!skeleton) {
+    const collar = shade(new THREE.Mesh(
+      avatar.outfit === "adventurer" ? new THREE.CylinderGeometry(0.62, 0.68, 0.45, 14, 1, true) : new THREE.TorusGeometry(0.6, 0.13, 8, 18),
+      avatar.outfit === "adventurer" ? leather : shirt,
+    ));
+    if (avatar.outfit !== "adventurer") collar.rotation.x = Math.PI / 2;
+    collar.position.y = torsoTop + (avatar.outfit === "adventurer" ? 0.05 : -0.05);
+    group.add(collar);
+  }
 
-  const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), bootsMat);
-  leftBoot.position.set(0, -3.85, 0.14);
-  leftBoot.castShadow = true;
-  leftLeg.add(leftBoot);
+  // ---- Limbs: shoulder/hip pivot groups, with elbow/knee joints ----
+  const makeArm = (side, sleeveMat) => {
+    const arm = new THREE.Group();
+    arm.position.set(side * 2.25, shoulderY, 0);
+    arm.rotation.z = side * 0.15;
+    const r = skeleton ? 0.16 : 0.45;
+    const upperLen = armLen * 0.55;
+    const lowerLen = armLen * 0.45;
+    const shoulder = shade(new THREE.Mesh(new THREE.SphereGeometry(skeleton ? 0.3 : 0.52, 14, 10), skeleton ? bone : sleeveMat));
+    shoulder.scale.set(1, 0.85, 1);
+    shoulder.position.set(-side * 0.12, -0.05, 0);
+    arm.add(shoulder);
+    const upper = shade(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.88, upperLen, 12), skeleton ? bone : sleeveMat));
+    upper.position.y = -upperLen / 2;
+    arm.add(upper);
+    const elbow = shade(new THREE.Mesh(new THREE.SphereGeometry(r * (skeleton ? 1.5 : 0.9), 12, 8), skeleton ? bone : skin));
+    elbow.position.y = -upperLen;
+    arm.add(elbow);
+    const lower = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.85, r * 0.7, lowerLen, 12), skin));
+    lower.position.y = -upperLen - lowerLen / 2;
+    arm.add(lower);
+    // Hand: palm with fingers and a thumb (pivot at the wrist like before).
+    const hand = new THREE.Group();
+    hand.position.y = -armLen - 0.25 * prop.arm;
+    const palm = shade(new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.4 : 0.5, 0.55, 0.26), skin));
+    hand.add(palm);
+    const fingers = shade(new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.36 : 0.46, 0.34, 0.22), skin));
+    fingers.position.set(0, -0.42, 0.04);
+    fingers.rotation.x = 0.35;
+    hand.add(fingers);
+    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.32, 6), skin);
+    thumb.position.set(-side * 0.28, -0.1, 0.12);
+    thumb.rotation.z = side * 0.6;
+    hand.add(thumb);
+    arm.add(hand);
+    group.add(arm);
+    return { arm, hand };
+  };
+  const makeLeg = (side, legMat) => {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.85, hipY, 0);
+    leg.rotation.z = -side * 0.04;
+    const r = skeleton ? 0.2 : 0.58;
+    const thighLen = legLen * 0.52;
+    const shinLen = legLen * 0.48;
+    const thigh = shade(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.82, thighLen, 12), skeleton ? bone : legMat));
+    thigh.position.y = -thighLen / 2;
+    leg.add(thigh);
+    const knee = shade(new THREE.Mesh(new THREE.SphereGeometry(r * (skeleton ? 1.5 : 0.86), 12, 8), skeleton ? bone : legMat));
+    knee.position.y = -thighLen;
+    leg.add(knee);
+    const shin = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.66, shinLen, 12), skeleton ? bone : legMat));
+    shin.position.y = -thighLen - shinLen / 2;
+    leg.add(shin);
+    // Rounded boot (or a bony foot).
+    const foot = shade(new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), skeleton ? bone : bootsMat));
+    foot.scale.set(skeleton ? 0.7 : 0.92, 0.75, 1.3);
+    foot.position.set(0, -legLen - 0.2, 0.2);
+    leg.add(foot);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.75 : 1.05, 0.16, 1.55), skeleton ? bone : darkLeather);
+    sole.position.set(0, -legLen - 0.17, 0.2);
+    leg.add(sole);
+    if (!skeleton) {
+      const cuff = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, 0.32, 12), trim));
+      cuff.position.y = -legLen + 0.25;
+      leg.add(cuff);
+    }
+    group.add(leg);
+    return leg;
+  };
+  const { arm: leftArm, hand: leftHand } = makeArm(-1, leftArmMat);
+  const { arm: rightArm, hand: rightHand } = makeArm(1, rightArmMat);
+  const leftLeg = makeLeg(-1, leftLegMat);
+  const rightLeg = makeLeg(1, rightLegMat);
 
-  const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(1.05 * buildScale, 0.42, 1.25), bootsMat);
-  rightBoot.position.set(0, -3.85, 0.14);
-  rightBoot.castShadow = true;
-  rightLeg.add(rightBoot);
+  if (!skeleton && avatar.outfit === "armor") {
+    [leftArm, rightArm].forEach((arm) => {
+      const pad = shade(new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), trim));
+      pad.position.y = 0.15;
+      arm.add(pad);
+      const gauntlet = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.95, 12), trim));
+      gauntlet.position.y = -armLen * 0.78;
+      arm.add(gauntlet);
+    });
+  }
 
-  // Boot cuffs trim for layered clothing feel
-  const leftBootCuff = new THREE.Mesh(new THREE.BoxGeometry(1.15 * buildScale, 0.25, 1.35), trim);
-  leftBootCuff.position.set(0, -3.65, 0.14);
-  leftBootCuff.castShadow = true;
-  leftLeg.add(leftBootCuff);
+  // Belt sits on the hips.
+  if (!skeleton) {
+    const belt = shade(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.38, 20), beltMat));
+    belt.scale.set(1.3, 1, 0.78);
+    belt.position.y = hipY + 1.25;
+    group.add(belt);
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.1), metal);
+    buckle.position.set(0, hipY + 1.25, 0.95);
+    group.add(buckle);
+  }
 
-  const rightBootCuff = new THREE.Mesh(new THREE.BoxGeometry(1.15 * buildScale, 0.25, 1.35), trim);
-  rightBootCuff.position.set(0, -3.65, 0.14);
-  rightBootCuff.castShadow = true;
-  rightLeg.add(rightBootCuff);
-
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(3.4 * buildScale, 0.38, 1.75), beltMat);
-  belt.position.y = 3.7;
-  belt.castShadow = true;
-  group.add(belt);
-
-  if (avatar.outfit === "adventurer") {
-    // Harness / Shoulder Straps
-    const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 4.15, 1.76), leather);
-    strapL.position.set(-0.82 * buildScale, 5.7, 0.02);
-    strapL.castShadow = true;
-    group.add(strapL);
-
-    const strapR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 4.15, 1.76), leather);
-    strapR.position.set(0.82 * buildScale, 5.7, 0.02);
-    strapR.castShadow = true;
-    group.add(strapR);
-
-    // Silver buckles on shoulder straps (front only)
-    const buckleL = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.26, 0.12), metal);
-    buckleL.position.set(-0.82 * buildScale, 6.8, 0.89);
-    buckleL.castShadow = true;
-    group.add(buckleL);
-
-    const buckleR = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.26, 0.12), metal);
-    buckleR.position.set(0.82 * buildScale, 6.8, 0.89);
-    buckleR.castShadow = true;
-    group.add(buckleR);
-
-    // Diagonal crossing chest strap
-    const crossStrap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 4.8, 1.8), leather);
-    crossStrap.position.set(0, 5.7, 0.05);
-    crossStrap.rotation.z = -0.55;
-    crossStrap.castShadow = true;
-    group.add(crossStrap);
-
-    // Backpack / Rolled bedroll on the back
-    const backpack = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 3.4 * buildScale, 12), leather);
-    backpack.position.set(0, 5.9, -1.25);
+  if (!skeleton && avatar.outfit === "adventurer") {
+    const strap = (x) => {
+      const s2 = shade(new THREE.Mesh(new THREE.BoxGeometry(0.34, torsoH, 0.06), leather));
+      s2.position.set(x, 0, 0.98);
+      torsoAnchor.add(s2);
+      const back = s2.clone();
+      back.position.z = -0.98;
+      torsoAnchor.add(back);
+    };
+    strap(-0.82);
+    strap(0.82);
+    [-0.82, 0.82].forEach((x) => {
+      const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.24, 0.1), metal);
+      buckle.position.set(x, onTorso(6.8), 1.02);
+      torsoAnchor.add(buckle);
+    });
+    const backpack = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 3.2, 12), leather));
+    backpack.position.set(0, onTorso(5.9), -1.35);
     backpack.rotation.z = Math.PI / 2;
-    backpack.castShadow = true;
-    group.add(backpack);
-
-    // Backpack straps (vertical rings looping around bedroll)
-    const bpStrapL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 1.45), darkLeather);
-    bpStrapL.position.set(-0.95 * buildScale, 5.9, -1.25);
-    bpStrapL.castShadow = true;
-    group.add(bpStrapL);
-
-    const bpStrapR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 1.45), darkLeather);
-    bpStrapR.position.set(0.95 * buildScale, 5.9, -1.25);
-    bpStrapR.castShadow = true;
-    group.add(bpStrapR);
-
-    // Hip Pouches (attached to belt)
-    const pouchR = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.95, 0.52), leather);
-    pouchR.position.set(1.68 * buildScale, 3.55, 0.38);
-    pouchR.rotation.y = 0.25;
-    pouchR.rotation.z = -0.15;
-    pouchR.castShadow = true;
-    group.add(pouchR);
-
-    const satchelL = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.62), leather);
-    satchelL.position.set(-1.68 * buildScale, 3.42, 0.22);
-    satchelL.rotation.y = -0.25;
-    satchelL.rotation.z = 0.15;
-    satchelL.castShadow = true;
-    group.add(satchelL);
-
-    // Fingerless gloves (adds cuff/bodies on hands)
-    const gloveBodyL = new THREE.Mesh(new THREE.CylinderGeometry(0.52 * buildScale, 0.48 * buildScale, 0.72, 12), darkLeather);
-    gloveBodyL.position.set(0, -0.05, 0);
-    gloveBodyL.castShadow = true;
-    leftHand.add(gloveBodyL);
-
-    const gloveBodyR = new THREE.Mesh(new THREE.CylinderGeometry(0.52 * buildScale, 0.48 * buildScale, 0.72, 12), darkLeather);
-    gloveBodyR.position.set(0, -0.05, 0);
-    gloveBodyR.castShadow = true;
-    rightHand.add(gloveBodyR);
-
-    // Knee pads on legs
-    const kneePadL = new THREE.Mesh(new THREE.BoxGeometry(0.85 * buildScale, 0.85, 0.35), darkLeather);
-    kneePadL.position.set(0, -1.9, 0.58);
-    kneePadL.castShadow = true;
-    leftLeg.add(kneePadL);
-
-    const kneePadR = new THREE.Mesh(new THREE.BoxGeometry(0.85 * buildScale, 0.85, 0.35), darkLeather);
-    kneePadR.position.set(0, -1.9, 0.58);
-    kneePadR.castShadow = true;
-    rightLeg.add(kneePadR);
-
-    // Boot Straps
-    const bootStrapL = new THREE.Mesh(new THREE.BoxGeometry(1.18 * buildScale, 0.15, 0.45), leather);
-    bootStrapL.position.set(0, -3.72, 0.42);
-    bootStrapL.castShadow = true;
-    leftLeg.add(bootStrapL);
-
-    const bootStrapR = new THREE.Mesh(new THREE.BoxGeometry(1.18 * buildScale, 0.15, 0.45), leather);
-    bootStrapR.position.set(0, -3.72, 0.42);
-    bootStrapR.castShadow = true;
-    rightLeg.add(bootStrapR);
-
-    // Wooden Runic Staff attached to Left Arm
-    const staffShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 7.8, 8), leather);
-    staffShaft.position.set(0, -1.8, 0.45);
-    staffShaft.castShadow = true;
-    leftArm.add(staffShaft);
-
-    // Curved top of staff
-    const staffTop = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), leather);
-    staffTop.position.set(0, 3.9, 0);
-    staffShaft.add(staffTop);
-
-    const staffHorn = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.11, 8, 16, Math.PI * 0.72), leather);
-    staffHorn.position.set(0, 4.0, 0.15);
-    staffHorn.rotation.x = Math.PI / 2;
-    staffShaft.add(staffHorn);
-
-    // Glowing Neon-Blue Runes
+    torsoAnchor.add(backpack);
+    const pouch = shade(new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.9, 0.5), leather));
+    pouch.position.set(1.62, hipY + 1.05, 0.38);
+    pouch.rotation.y = 0.25;
+    group.add(pouch);
+    const satchel = shade(new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.6), leather));
+    satchel.position.set(-1.62, hipY + 0.95, 0.22);
+    satchel.rotation.y = -0.25;
+    group.add(satchel);
+    [leftHand, rightHand].forEach((hand) => {
+      const glove = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.42, 12), darkLeather));
+      glove.position.y = 0.32;
+      hand.add(glove);
+    });
+    [leftLeg, rightLeg].forEach((leg) => {
+      const pad = shade(new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), darkLeather));
+      pad.scale.set(1, 1, 0.55);
+      pad.position.set(0, -legLen * 0.52, 0.45);
+      leg.add(pad);
+    });
+    // Wooden staff with glowing runes, held in the left hand.
+    const staff = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 7.8, 8), leather));
+    staff.position.set(0, armLen * 0.72 - 2.2, 0.45);
+    leftArm.add(staff);
+    const horn = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.11, 8, 16, Math.PI * 0.72), leather);
+    horn.position.set(0, 4.0, 0.15);
+    horn.rotation.x = Math.PI / 2;
+    staff.add(horn);
     const runeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-    const rune1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
-    rune1.position.set(0, 3.0, 0.16);
-    staffShaft.add(rune1);
-
-    const rune2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
-    rune2.position.set(0, 2.6, 0.16);
-    staffShaft.add(rune2);
-
-    const rune3 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
-    rune3.position.set(0, 2.2, 0.16);
-    staffShaft.add(rune3);
+    [3.0, 2.6, 2.2].forEach((y) => {
+      const rune = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
+      rune.position.set(0, y, 0.16);
+      staff.add(rune);
+    });
   }
 
-  // Save eye references to userData for blinking animations
-  group.userData.eyesList = [leftEye, rightEye];
-
+  // ---- Accessories ----
   let halo;
-  if (avatar.outfit !== "adventurer") {
-    // Golden halo floating above head
-    const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
-    halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), haloMat);
-    halo.position.set(0, 10.6, 0);
+  if (accessory === "halo") {
+    halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffd700 }));
+    halo.position.set(0, headY + 1.95 * prop.head, 0);
     halo.rotation.x = Math.PI / 2;
     group.add(halo);
   }
+  let spectralHands;
+  if (accessory === "spectral-hands") {
+    // Two floating, glowing hands that drift beside the shoulders.
+    spectralHands = new THREE.Group();
+    const glow = new THREE.MeshStandardMaterial({ color: 0xbfe9ff, emissive: 0x58b8ff, emissiveIntensity: 1.2, transparent: true, opacity: 0.78, roughness: 0.3 });
+    [-1, 1].forEach((side) => {
+      const ghost = new THREE.Group();
+      const palm = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.25, 0.32), glow);
+      ghost.add(palm);
+      for (let f = 0; f < 4; f += 1) {
+        const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.1, 0.75, 6), glow);
+        finger.position.set(-0.39 + f * 0.26, 0.95, 0);
+        ghost.add(finger);
+      }
+      const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.6, 6), glow);
+      thumb.position.set(side * -0.68, 0.2, 0);
+      thumb.rotation.z = side * 0.9;
+      ghost.add(thumb);
+      ghost.position.set(side * 3.6, shoulderY + 1.6, -0.6);
+      ghost.rotation.z = side * -0.25;
+      ghost.userData.side = side;
+      spectralHands.add(ghost);
+    });
+    group.add(spectralHands);
+  }
 
+  // ---- Cape (hangs from the shoulders and moves with the torso) ----
   let cape;
   const capeStyle = avatar.capeStyle || (avatar.outfit !== "adventurer" ? "normal" : "none");
   if (capeStyle !== "none") {
-    const capeColorVal = avatar.capeColor || avatar.shirt || "#a82020";
-    const capeMat = new THREE.MeshStandardMaterial({
-      color: capeColorVal,
-      roughness: 0.85,
-      metalness: 0.1,
-      side: THREE.DoubleSide
-    });
-    if (capeStyle === "normal") {
-      cape = new THREE.Mesh(new THREE.BoxGeometry(2.8 * buildScale, 5.0, 0.15), capeMat);
-      cape.position.set(0, 4.4, -0.92);
-      cape.rotation.x = 0.12;
-      cape.castShadow = true;
-      group.add(cape);
-    } else if (capeStyle === "long") {
-      cape = new THREE.Mesh(new THREE.BoxGeometry(3.0 * buildScale, 6.2, 0.15), capeMat);
-      cape.position.set(0, 3.8, -0.92);
-      cape.rotation.x = 0.15;
-      cape.castShadow = true;
-      group.add(cape);
-    } else if (capeStyle === "torn") {
-      const leftStrip = new THREE.Mesh(new THREE.BoxGeometry(1.1 * buildScale, 4.8, 0.12), capeMat);
-      leftStrip.position.set(-0.6 * buildScale, 4.4, -0.92);
-      leftStrip.rotation.set(0.15, 0, 0.05);
-      leftStrip.castShadow = true;
-      group.add(leftStrip);
-
-      const rightStrip = new THREE.Mesh(new THREE.BoxGeometry(1.1 * buildScale, 4.6, 0.12), capeMat);
-      rightStrip.position.set(0.6 * buildScale, 4.5, -0.92);
-      rightStrip.rotation.set(0.12, 0, -0.08);
-      rightStrip.castShadow = true;
-      group.add(rightStrip);
-
-      cape = leftStrip;
+    const capeMat = std(avatar.capeColor || avatar.shirt || "#a82020", 0.85, { metalness: 0.1, side: THREE.DoubleSide });
+    const len = capeStyle === "long" ? 6.2 : capeStyle === "torn" ? 4.8 : 5.0;
+    const capeGeo = new THREE.PlaneGeometry(capeStyle === "long" ? 3.0 : 2.8, len, 6, 8);
+    // Gentle curve around the back.
+    const pos = capeGeo.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      const x = pos.getX(i);
+      pos.setZ(i, -Math.pow(x / 1.5, 2) * 0.35);
+      if (capeStyle === "torn" && pos.getY(i) < -len * 0.3) pos.setY(i, pos.getY(i) + Math.abs(Math.sin(x * 4)) * 0.9);
     }
+    capeGeo.computeVertexNormals();
+    const capeCloth = shade(new THREE.Mesh(capeGeo, capeMat));
+    capeCloth.position.y = -len / 2;
+    // Pivot at the shoulders so the animation swings it from the top.
+    cape = new THREE.Group();
+    cape.position.set(0, torsoH / 2 - 0.25, -0.95);
+    cape.rotation.x = 0.12;
+    cape.add(capeCloth);
+    torsoAnchor.add(cape);
   }
 
   avatarParts.leftArm = leftArm;
@@ -7045,40 +7705,36 @@ function createHumanAvatarModel(avatar, options = {}) {
   avatarParts.head = head;
   if (halo) avatarParts.halo = halo;
   if (cape) avatarParts.cape = cape;
+  if (spectralHands) avatarParts.spectralHands = spectralHands;
   group.userData.parts = avatarParts;
+  group.userData.eyesList = eyesList;
+  // Resting heights the animation system bobs around.
+  group.userData.rest = { torsoY, headY, haloY: halo ? halo.position.y : 0 };
 
   if (showSword) {
     const swordGroup = new THREE.Group();
     swordGroup.name = "swordGroup";
-
-    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), metal);
-    sword.position.set(2.55, 4.7, -0.55);
+    const sword = shade(new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), metal));
+    sword.position.set(2.55, onTorso(4.7), -1.05);
     sword.rotation.z = -0.62;
-    sword.castShadow = true;
     swordGroup.add(sword);
-
-    const swordHandle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.85, 0.22, 0.22),
-      new THREE.MeshStandardMaterial({ color: 0x5b351e, roughness: 0.75 }),
-    );
-    swordHandle.position.set(1.35, 6.1, -0.55);
+    const swordHandle = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.22, 0.22), std(0x5b351e, 0.75));
+    swordHandle.position.set(1.35, onTorso(6.1), -1.05);
     swordHandle.rotation.z = -0.62;
     swordGroup.add(swordHandle);
-
     const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), metal);
-    pommel.position.set(1.1, 5.2, -0.55);
+    pommel.position.set(1.1, onTorso(5.2), -1.05);
     swordGroup.add(pommel);
-
-    group.add(swordGroup);
+    torsoAnchor.add(swordGroup);
   }
 
   if (showName) {
     const nameLabel = makeLabel(avatar.name, 0.95);
-    nameLabel.position.y = 11.2;
+    nameLabel.position.y = headY + 2.55 * prop.head;
     group.add(nameLabel);
   }
 
-  group.scale.set(buildScale, heightScale, buildScale);
+  group.scale.set(prop.width, prop.height, prop.width);
   return group;
 }
 
@@ -7235,6 +7891,7 @@ function updateDerivedStats(avatar = getSelectedAvatar()) {
   player.stamina = Math.min(player.stamina, player.maxStamina);
 }
 
+// ── 16-game-loop-and-movement.js ─ Main loop, player movement, swimming, collisions, animation and mobility skills.
 function loop(time) {
   const loopStart = performance.now();
   const dt = Math.min(0.033, (time - (loop.lastTime || time)) / 1000);
@@ -7243,9 +7900,11 @@ function loop(time) {
   hitStopTimer = Math.max(0, hitStopTimer - dt);
 
   if (gameStarted) {
-    // Day-Night progression (1 full cycle in 160 seconds)
-    timeOfDay = (timeOfDay + stepDt * 0.15) % 24;
+    // Day -> sunset -> night -> sunrise, 10 minutes each (see DAY_CYCLE).
+    advanceDayCycle(stepDt);
     updateDayNightLighting(stepDt);
+    updateWindGrass(stepDt);
+    updateWindmills(stepDt);
     updateWeather(stepDt);
 
     updatePlayer(stepDt);
@@ -7355,13 +8014,14 @@ function updateBlinking(dt) {
           node.userData.isBlinking = true;
           node.userData.blinkTimer = 0.12; // blink duration
           node.userData.eyesList.forEach((eye) => {
+            if (eye.userData.openScaleY === undefined) eye.userData.openScaleY = eye.scale.y;
             eye.scale.y = 0.001;
           });
         } else {
           node.userData.isBlinking = false;
           node.userData.blinkTimer = 2.5 + Math.random() * 3.5; // next blink delay
           node.userData.eyesList.forEach((eye) => {
-            eye.scale.y = 1.0;
+            eye.scale.y = eye.userData.openScaleY ?? 1.0;
           });
         }
       }
@@ -7511,6 +8171,7 @@ function updatePlayer(dt) {
   }
   
   if (player.stunTimer > 0) {
+    playerMoveState.velocity.set(0, 0, 0);
     player.stunTimer = Math.max(0, player.stunTimer - dt);
     player.lastMoveSpeed = 0;
     player.isBlocking = false;
@@ -7552,6 +8213,7 @@ function updatePlayer(dt) {
     player.stamina = player.maxStamina;
   }
   if (isHelming) {
+    playerMoveState.velocity.set(0, 0, 0);
     updateBoat(dt);
     return;
   }
@@ -7588,6 +8250,9 @@ function updatePlayer(dt) {
     Number(keys.has("KeyS") || keys.has("ArrowDown")) - Number(keys.has("KeyW") || keys.has("ArrowUp")),
   );
 
+  // Smoothed movement: ramp up/down instead of snapping, with less control in the air.
+  const moveVelocity = playerMoveState.velocity;
+  const grounded = isGrounded && jumpOffset <= 0.05;
   if (input.lengthSq() > 0) {
     input.normalize();
     const forward = new THREE.Vector3(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
@@ -7597,10 +8262,26 @@ function updatePlayer(dt) {
     const modeSpeed = player.movementMode === "sprint" ? 1.55 : 0.72;
     const swimSpeed = player.isSwimming ? 0.54 : 1;
     const speed = 95 * getAvatarTraits().speedMultiplier * modeSpeed * staminaFactor * swimSpeed;
-    playerMesh.position.addScaledVector(move, dt * speed);
-    player.lastMoveSpeed = speed * input.length();
-    playerMesh.rotation.y = Math.atan2(move.x, move.z);
+    const accel = grounded ? 12 : 4.5;
+    moveVelocity.lerp(move.multiplyScalar(speed), 1 - Math.exp(-accel * dt));
+    // Turn toward the movement direction along the shortest arc.
+    const targetYaw = Math.atan2(moveVelocity.x, moveVelocity.z);
+    let turn = targetYaw - playerMesh.rotation.y;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    playerMesh.rotation.y += turn * (1 - Math.exp(-16 * dt));
+  } else {
+    const decel = grounded ? 14 : 2.5;
+    moveVelocity.multiplyScalar(Math.exp(-decel * dt));
+    if (moveVelocity.lengthSq() < 0.5) moveVelocity.set(0, 0, 0);
+  }
+
+  if (moveVelocity.lengthSq() > 0) {
+    playerMesh.position.addScaledVector(moveVelocity, dt);
+    player.lastMoveSpeed = moveVelocity.length();
     resolveWallCollision(previousPosition);
+    // Don't keep pushing into a wall after sliding along it.
+    const actual = playerMesh.position.clone().sub(previousPosition).setY(0).divideScalar(Math.max(dt, 1e-4));
+    if (actual.lengthSq() < moveVelocity.lengthSq()) moveVelocity.copy(actual);
 
     // Sprint footstep dust VFX
     if (!player.isSwimming && player.movementMode === "sprint") {
@@ -7638,7 +8319,7 @@ function updatePlayer(dt) {
     player.flashStepCooldown = Math.max(0, player.flashStepCooldown - dt);
   }
 
-  // Update Observation Haki dodge regeneration
+  // Update Foresight dodge regeneration
   if (player.observationHaki && player.observationHaki.unlocked) {
     if (player.observationHaki.dodges < player.observationHaki.maxDodges) {
       player.observationHaki.regenTimer = (player.observationHaki.regenTimer || 0) + dt;
@@ -7652,13 +8333,13 @@ function updatePlayer(dt) {
     }
   }
 
-  // Update Diable Jambe timer and visual effects
+  // Update Inferno Kick timer and visual effects
   if (player.diableJambeTimer > 0) {
     player.diableJambeTimer = Math.max(0, player.diableJambeTimer - dt);
     if (player.diableJambeTimer <= 0) {
       player.diableJambeHits = 0;
-      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Diable Jambe Extinguished", "#ff7700");
-      log("🔥 Diable Jambe legs extinguished.");
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Inferno Kick Extinguished", "#ff7700");
+      log("🔥 Inferno Kick legs extinguished.");
     } else {
       if (Math.random() < 0.28) {
         const firePos = playerMesh.position.clone().add(new THREE.Vector3(
@@ -7763,54 +8444,132 @@ function updateIslandArrival(island) {
   }
 }
 
-function resolveWallCollision(previousPosition) {
-  let collision = getWallCollision(playerMesh.position);
-  if (!collision) return;
+const PLAYER_COLLISION_RADIUS = 2.4;
+const collisionContact = { depth: 0, nx: 0, nz: 0 };
 
-  const initialCollision = collision;
-  let hitDirection = playerMesh.position.clone().sub(collision.center).setY(0);
-  if (hitDirection.lengthSq() < 0.001) {
-    hitDirection.copy(playerMesh.position.clone().sub(previousPosition).setY(0).multiplyScalar(-1));
-  }
-  hitDirection.normalize();
+// Exact overlap test between the player's body circle and one volume.
+// Fills `out` with the push-out normal and depth; returns false when clear.
+function measureCollision(volume, position, radius, out) {
+  const px = position.x;
+  const pz = position.z;
+  const cx = volume.center.x;
+  const cz = volume.center.z;
+  const reach = volume.bound + radius;
+  const ddx = px - cx;
+  const ddz = pz - cz;
+  if (volume.shape !== "segment" && ddx * ddx + ddz * ddz > reach * reach) return false;
 
-  let iterations = 0;
-  while (collision && iterations < 3) {
-    const pushVec = playerMesh.position.clone().sub(collision.center).setY(0);
-    const dist = pushVec.length();
-    if (dist < collision.radius) {
-      const penetration = collision.radius - dist;
-      if (dist > 0.001) {
-        pushVec.divideScalar(dist);
-      } else {
-        pushVec.copy(hitDirection);
-      }
-      playerMesh.position.addScaledVector(pushVec, penetration + 0.05);
+  // Jumped high enough to clear it.
+  if (volume.height !== Infinity && position.y - volume.center.y >= volume.height) return false;
+
+  let dx;
+  let dz;
+  let limit = volume.radius + radius;
+  if (volume.shape === "box") {
+    // Into the box's local frame (inverse of rotation.y).
+    const lx = ddx * volume.cos - ddz * volume.sin;
+    const lz = ddx * volume.sin + ddz * volume.cos;
+    const qx = Math.max(-volume.halfX, Math.min(volume.halfX, lx));
+    const qz = Math.max(-volume.halfZ, Math.min(volume.halfZ, lz));
+    let nlx = lx - qx;
+    let nlz = lz - qz;
+    let dist = Math.hypot(nlx, nlz);
+    let depth;
+    if (dist > 1e-4) {
+      if (dist >= radius) return false;
+      depth = radius - dist;
+      nlx /= dist;
+      nlz /= dist;
+    } else {
+      // Centre is inside the box: leave through the nearest face.
+      const toX = volume.halfX - Math.abs(lx);
+      const toZ = volume.halfZ - Math.abs(lz);
+      if (toX < toZ) { nlx = Math.sign(lx) || 1; nlz = 0; depth = toX + radius; }
+      else { nlx = 0; nlz = Math.sign(lz) || 1; depth = toZ + radius; }
     }
-    iterations++;
-    collision = getWallCollision(playerMesh.position);
+    out.nx = nlx * volume.cos + nlz * volume.sin;
+    out.nz = -nlx * volume.sin + nlz * volume.cos;
+    out.depth = depth;
+    return true;
   }
+  if (volume.shape === "segment") {
+    const sx = volume.end.x - cx;
+    const sz = volume.end.z - cz;
+    const lenSq = sx * sx + sz * sz || 1;
+    const t = Math.max(0, Math.min(1, (ddx * sx + ddz * sz) / lenSq));
+    dx = px - (cx + sx * t);
+    dz = pz - (cz + sz * t);
+  } else {
+    dx = ddx;
+    dz = ddz;
+  }
+  const distSq = dx * dx + dz * dz;
+  if (distSq >= limit * limit) return false;
+  const dist = Math.sqrt(distSq);
+  out.depth = limit - dist;
+  if (dist > 1e-4) { out.nx = dx / dist; out.nz = dz / dist; }
+  else { out.nx = 0; out.nz = 1; }
+  return true;
+}
 
+function getWallCollision(position, radius = PLAYER_COLLISION_RADIUS) {
+  for (const volume of collisionVolumes) {
+    if (measureCollision(volume, position, radius, collisionContact)) return volume;
+  }
+  return null;
+}
+
+// Pushes the player out of every overlapping obstacle so they slide along walls
+// instead of sticking. Head-on, fast impacts still bump (and can hurt when sprinting).
+function resolveWallCollision(previousPosition) {
+  const moveX = playerMesh.position.x - previousPosition.x;
+  const moveZ = playerMesh.position.z - previousPosition.z;
+  const moveLen = Math.hypot(moveX, moveZ);
+  let hardest = null;
+  let hardestFacing = 0;
+  let hitNx = 0;
+  let hitNz = 0;
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    let moved = false;
+    for (const volume of collisionVolumes) {
+      if (!measureCollision(volume, playerMesh.position, PLAYER_COLLISION_RADIUS, collisionContact)) continue;
+      playerMesh.position.x += collisionContact.nx * (collisionContact.depth + 0.01);
+      playerMesh.position.z += collisionContact.nz * (collisionContact.depth + 0.01);
+      moved = true;
+      // How directly were we running into it? 1 = head-on, 0 = grazing.
+      const facing = moveLen > 1e-4 ? -(moveX * collisionContact.nx + moveZ * collisionContact.nz) / moveLen : 0;
+      if (facing > hardestFacing) {
+        hardest = volume;
+        hardestFacing = facing;
+        hitNx = collisionContact.nx;
+        hitNz = collisionContact.nz;
+      }
+    }
+    if (!moved) break;
+  }
+  if (!hardest) return;
+
+  const hitDirection = new THREE.Vector3(hitNx, 0, hitNz);
   const impactDamage = calculateImpactDamage({
-    speed: player.lastMoveSpeed,
+    speed: player.lastMoveSpeed * hardestFacing,
     verticalVelocity: 0,
-    material: initialCollision.material,
-    toughness: initialCollision.toughness,
-    baseDamage: initialCollision.damage ?? 10,
+    material: hardest.material,
+    toughness: hardest.toughness,
+    baseDamage: hardest.damage ?? 10,
   });
 
   if (impactDamage > 0 && wallHitCooldown <= 0) {
-    applyImpactDamage(impactDamage, playerMesh.position.clone(), hitDirection, initialCollision.label);
+    applyImpactDamage(impactDamage, playerMesh.position.clone(), hitDirection, hardest.label);
     wallHitCooldown = 0.75;
     updateHud();
     if (player.health <= 0) {
       killPlayer("crashing into a wall");
     }
-  } else {
-    if (wallHitCooldown <= 0) {
-      triggerWallHitAnimation(hitDirection, initialCollision.label, false);
-      wallHitCooldown = 0.25;
-    }
+  } else if (hardestFacing > 0.85 && player.lastMoveSpeed > 120 && wallHitCooldown <= 0) {
+    // Sprinting straight into something: small bump, no message spam.
+    triggerWallHitAnimation(hitDirection, hardest.label, false, false);
+    wallHitCooldown = 0.6;
   }
 }
 
@@ -7836,7 +8595,7 @@ function applyImpactDamage(amount, position, direction, label) {
   player.health = Math.max(0, player.health - amount);
   cameraShake = Math.max(cameraShake, Math.min(1.8, amount / 18));
   hitStopTimer = Math.max(hitStopTimer, Math.min(0.16, amount / 180));
-  triggerWallHitAnimation(direction, label, amount > 0);
+  triggerWallHitAnimation(direction, label, amount > 0, false);
   createFloatingText(position, `-${amount}`, "#ff6b4a");
   if (amount >= 18) {
     createDustCloud(position);
@@ -7846,21 +8605,14 @@ function applyImpactDamage(amount, position, direction, label) {
   }
 }
 
-function getWallCollision(position) {
-  return collisionVolumes.find((volume) => {
-    const flat = new THREE.Vector2(position.x - volume.center.x, position.z - volume.center.z);
-    return flat.length() < volume.radius;
-  });
-}
-
-function triggerWallHitAnimation(direction, label, showDamage = true) {
+function triggerWallHitAnimation(direction, label, showDamage = true, announce = true) {
   const anim = playerMesh.userData.animation || {};
   anim.wallHitTimer = 0.28;
   anim.wallHitDuration = 0.28;
   anim.wallHitDirection = direction.clone();
   playerMesh.userData.animation = anim;
   createWallHitEffect(playerMesh.position.clone(), showDamage);
-  log(showDamage ? `You bumped into ${label} and took 10 damage.` : `${label} blocks the way.`);
+  if (announce && showDamage) log(`You crashed into ${label}.`);
 }
 
 function getIslandUnderPlayer() {
@@ -7901,11 +8653,14 @@ function updateTeleport(dt) {
 function updatePlayerAnimation(dt) {
   const model = playerMesh.children[0];
   if (!model?.userData?.parts) return;
+  // Resting heights depend on the avatar's proportions (set by createHumanAvatarModel).
+  const rest = model.userData.rest || { torsoY: 5.7, headY: 8.65, haloY: 10.6 };
   const anim = playerMesh.userData.animation || { walkPhase: 0, attackTimer: 0, attackDuration: 0.22 };
-  const moving = keys.has("KeyW") || keys.has("KeyA") || keys.has("KeyS") || keys.has("KeyD");
+  const groundSpeed = playerMoveState.velocity.length();
+  const moving = groundSpeed > 6 || ((keys.has("KeyW") || keys.has("KeyA") || keys.has("KeyS") || keys.has("KeyD")) && player.isSwimming);
 
   if (moving) {
-    anim.walkPhase += dt * 6;
+    anim.walkPhase += dt * THREE.MathUtils.clamp(groundSpeed / 11, 3.5, 13);
   } else {
     anim.walkPhase += dt * 1.2;
   }
@@ -7976,8 +8731,8 @@ function updatePlayerAnimation(dt) {
     if (anim.attackTimer <= 0) {
       model.userData.parts.torso.rotation.z = 0;
     }
-    model.userData.parts.torso.position.y = 5.7;
-    model.userData.parts.head.position.y = 8.65;
+    model.userData.parts.torso.position.y = rest.torsoY;
+    model.userData.parts.head.position.y = rest.headY;
 
     if (anim.punchChargeTimer <= 0) {
       model.userData.parts.rightArm.rotation.y = 0;
@@ -7998,7 +8753,7 @@ function updatePlayerAnimation(dt) {
     model.userData.parts.rightLeg.rotation.z = -0.04;
 
     // Normal land animations
-    const walkIntensity = moving ? 1 : 0.08;
+    const walkIntensity = moving ? THREE.MathUtils.clamp(groundSpeed / 75, 0.3, 1.15) : 0.08;
     const armSwing = Math.sin(anim.walkPhase + Math.PI) * 0.55 * walkIntensity;
     const legSwing = Math.sin(anim.walkPhase) * 1.1 * walkIntensity;
     const bodyBob = Math.sin(anim.walkPhase * 2) * 0.08 * walkIntensity;
@@ -8007,8 +8762,41 @@ function updatePlayerAnimation(dt) {
     model.userData.parts.rightArm.rotation.x = -0.2 - armSwing;
     model.userData.parts.leftLeg.rotation.x = 0.1 + legSwing;
     model.userData.parts.rightLeg.rotation.x = 0.1 - legSwing;
-    model.userData.parts.head.position.y = 8.65 + bodyBob * 0.6;
-    model.userData.parts.torso.position.y = 5.7 + bodyBob;
+    model.userData.parts.head.position.y = rest.headY + bodyBob * 0.6;
+    model.userData.parts.torso.position.y = rest.torsoY + bodyBob;
+
+    // Jump pose, blended in and out so it never pops.
+    const airborne = !isGrounded && jumpOffset > 0.05;
+    anim.air = THREE.MathUtils.lerp(anim.air || 0, airborne ? 1 : 0, 1 - Math.exp(-(airborne ? 14 : 18) * dt));
+    if (anim.air > 0.01 && anim.slamTimer <= 0) {
+      const w = anim.air;
+      const rise = THREE.MathUtils.clamp(verticalVelocity / JUMP_VELOCITY, -1, 1); // 1 take-off, 0 apex, -1 falling
+      const up = Math.max(0, rise);
+      const down = Math.max(0, -rise);
+      const parts = model.userData.parts;
+      const mix = (from, to) => from + (to - from) * w;
+      // Arms: thrust up on take-off, spread for balance while falling.
+      parts.leftArm.rotation.x = mix(parts.leftArm.rotation.x, -2.3 * up - 1.1 * (1 - up) + 0.5 * down);
+      parts.rightArm.rotation.x = mix(parts.rightArm.rotation.x, -1.9 * up - 0.9 * (1 - up) + 0.5 * down);
+      parts.leftArm.rotation.z = mix(parts.leftArm.rotation.z, -0.35 - 0.75 * down);
+      parts.rightArm.rotation.z = mix(parts.rightArm.rotation.z, 0.35 + 0.75 * down);
+      // Legs: lead knee tucks on the way up, both reach for the ground coming down.
+      parts.leftLeg.rotation.x = mix(parts.leftLeg.rotation.x, -1.05 * up - 0.35 * (1 - up) - 0.25 * down);
+      parts.rightLeg.rotation.x = mix(parts.rightLeg.rotation.x, 0.45 * up + 0.1 * (1 - up) - 0.1 * down);
+      parts.torso.rotation.x = mix(parts.torso.rotation.x, -0.12 * up + 0.1 * down);
+    }
+
+    // Landing: knees bend and the body dips.
+    if (jumpState.landingTimer > 0) {
+      const t = 1 - jumpState.landingTimer / 0.24;
+      const dip = Math.sin(t * Math.PI) * jumpState.landingStrength;
+      model.userData.parts.torso.position.y -= dip * 0.9;
+      model.userData.parts.head.position.y -= dip * 0.9;
+      model.userData.parts.leftLeg.rotation.x -= dip * 0.6;
+      model.userData.parts.rightLeg.rotation.x -= dip * 0.5;
+      model.userData.parts.leftArm.rotation.z -= dip * 0.4;
+      model.userData.parts.rightArm.rotation.z += dip * 0.4;
+    }
 
     if (anim.slamTimer > 0) {
       const slamProgress = 1 - anim.slamTimer / anim.slamDuration;
@@ -8017,14 +8805,14 @@ function updatePlayerAnimation(dt) {
         model.userData.parts.leftArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
         model.userData.parts.rightArm.rotation.x = -0.2 + (-2.6 - (-0.2)) * p;
         model.userData.parts.torso.rotation.x = -0.3 * p;
-        model.userData.parts.torso.position.y = 5.7 + 0.8 * p;
+        model.userData.parts.torso.position.y = rest.torsoY + 0.8 * p;
       } else {
         const p = (slamProgress - 0.35) / 0.65;
         const easeDown = Math.pow(p, 2.5);
         model.userData.parts.leftArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
         model.userData.parts.rightArm.rotation.x = -2.6 + (1.5 - (-2.6)) * easeDown;
         model.userData.parts.torso.rotation.x = -0.3 + (1.1 - (-0.3)) * easeDown;
-        model.userData.parts.torso.position.y = 6.5 + (3.2 - 6.5) * easeDown;
+        model.userData.parts.torso.position.y = (rest.torsoY + 0.8) + ((rest.torsoY - 2.5) - (rest.torsoY + 0.8)) * easeDown;
       }
     } else if (anim.punchChargeTimer > 0) {
       const chargeProgress = 1 - anim.punchChargeTimer / anim.punchChargeDuration;
@@ -8032,7 +8820,7 @@ function updatePlayerAnimation(dt) {
       model.userData.parts.rightArm.rotation.y = 0.5 * chargeProgress;
       model.userData.parts.leftArm.rotation.x = -0.2 + (-1.4 - (-0.2)) * chargeProgress;
       model.userData.parts.torso.rotation.y = -0.45 * chargeProgress;
-      model.userData.parts.torso.position.y = 5.7 - 0.5 * chargeProgress;
+      model.userData.parts.torso.position.y = rest.torsoY - 0.5 * chargeProgress;
     } else {
       model.userData.parts.torso.rotation.x = 0;
       model.userData.parts.rightArm.rotation.y = 0;
@@ -8040,10 +8828,31 @@ function updatePlayerAnimation(dt) {
     }
   }
 
+  // Squash & stretch: stretch on take-off, squash on landing.
+  if (!model.userData.baseScale) model.userData.baseScale = model.scale.clone();
+  const base = model.userData.baseScale;
+  let stretch = 0;
+  if (!player.isSwimming) {
+    if (jumpState.takeoffTimer > 0) stretch += Math.sin((1 - jumpState.takeoffTimer / 0.2) * Math.PI) * 0.12;
+    if (jumpState.landingTimer > 0) stretch -= Math.sin((1 - jumpState.landingTimer / 0.24) * Math.PI) * 0.16 * jumpState.landingStrength;
+  }
+  model.scale.set(base.x * (1 - stretch * 0.5), base.y * (1 + stretch), base.z * (1 - stretch * 0.5));
+
   // Animate the bobbing/rotation of the halo
   if (model.userData.parts.halo) {
     model.userData.parts.halo.rotation.z += dt * 1.5;
-    model.userData.parts.halo.position.y = 10.6 + Math.sin(performance.now() * 0.003) * 0.15;
+    model.userData.parts.halo.position.y = rest.haloY + Math.sin(performance.now() * 0.003) * 0.15;
+  }
+
+  // Spectral hands drift and turn slowly beside the shoulders.
+  if (model.userData.parts.spectralHands) {
+    const t = performance.now() * 0.0015;
+    model.userData.parts.spectralHands.children.forEach((ghost) => {
+      const side = ghost.userData.side;
+      if (ghost.userData.baseY === undefined) ghost.userData.baseY = ghost.position.y;
+      ghost.position.y = ghost.userData.baseY + Math.sin(t * 2 + side) * 0.45;
+      ghost.rotation.y = Math.sin(t + side) * 0.4;
+    });
   }
 
   // Animate the flapping of the cape
@@ -8081,10 +8890,34 @@ function updatePlayerAnimation(dt) {
   }
 }
 
+const playerMoveState = { velocity: new THREE.Vector3() };
+const JUMP_VELOCITY = 60;
+const JUMP_GRAVITY = 140;
+const jumpState = { buffer: 0, held: false, takeoffTimer: 0, landingTimer: 0, landingStrength: 0, airTime: 0 };
+
+// Pressing jump is remembered briefly, so a press just before landing still jumps.
 function jump() {
-  if (!gameStarted || !isGrounded) return;
-  verticalVelocity = 58;
+  if (!gameStarted) return;
+  jumpState.held = true;
+  jumpState.buffer = 0.14;
+  tryJump();
+}
+
+function tryJump() {
+  if (!isGrounded || jumpOffset > 0.05 || player.isSwimming || player.stunTimer > 0) return false;
+  verticalVelocity = JUMP_VELOCITY;
   isGrounded = false;
+  jumpState.buffer = 0;
+  jumpState.takeoffTimer = 0.2;
+  jumpState.airTime = 0;
+  if (playerMesh && player.lastMoveSpeed > 40) createFootstepDustEffect(playerMesh.position.clone());
+  return true;
+}
+
+// Letting go early cuts the rise short for a small hop.
+function releaseJump() {
+  jumpState.held = false;
+  if (verticalVelocity > 18) verticalVelocity *= 0.5;
 }
 
 function dash() {
@@ -8292,15 +9125,15 @@ function flashStep() {
 function toggleObservationHaki() {
   if (!gameStarted) return;
   if (!player.observationHaki || !player.observationHaki.unlocked) {
-    log("👁️ Observation Haki is locked! Learn it from the Observation Master in Snowy Village (Level 80+).");
+    log("👁️ Foresight is locked! Learn it from the Foresight Master in Snowy Village (Level 80+).");
     return;
   }
 
   player.observationHaki.active = !player.observationHaki.active;
   if (player.observationHaki.active) {
     audio.playObservation();
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "👁️ OBSERVATION HAKI: ON", "#ff4444");
-    log(`👁️ Observation Haki activated! (${player.observationHaki.dodges}/${player.observationHaki.maxDodges} Dodges ready). Threats highlighted.`);
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "👁️ FORESIGHT: ON", "#ff4444");
+    log(`👁️ Foresight activated! (${player.observationHaki.dodges}/${player.observationHaki.maxDodges} Dodges ready). Threats highlighted.`);
     
     // Spreading observation pulse
     const pulseRing = new THREE.Mesh(
@@ -8315,14 +9148,24 @@ function toggleObservationHaki() {
       mesh.material.opacity = 0.85 * (1 - progress);
     });
   } else {
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "Observation Haki: OFF", "#aaaaaa");
-    log("👁️ Observation Haki deactivated.");
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "Foresight: OFF", "#aaaaaa");
+    log("👁️ Foresight deactivated.");
   }
 }
 
 function updateJump(dt) {
+  jumpState.buffer = Math.max(0, jumpState.buffer - dt);
+  jumpState.takeoffTimer = Math.max(0, jumpState.takeoffTimer - dt);
+  jumpState.landingTimer = Math.max(0, jumpState.landingTimer - dt);
+  if (jumpState.buffer > 0 && isGrounded && jumpOffset <= 0) tryJump();
+
   if (!isGrounded || jumpOffset > 0) {
-    verticalVelocity -= 138 * dt;
+    jumpState.airTime += dt;
+    // Floatier near the top while held, heavier on the way down for a snappy arc.
+    let gravity = JUMP_GRAVITY;
+    if (verticalVelocity < 0) gravity *= 1.5;
+    else if (jumpState.held && verticalVelocity < 14) gravity *= 0.65;
+    verticalVelocity -= gravity * dt;
     jumpOffset += verticalVelocity * dt;
     player.lastFallVelocity = Math.min(player.lastFallVelocity, verticalVelocity);
     if (jumpOffset <= 0) {
@@ -8336,15 +9179,25 @@ function updateJump(dt) {
       if (fallDamage > 0) {
         applyImpactDamage(fallDamage, playerMesh.position.clone(), new THREE.Vector3(0, 0, 1), "the ground");
       }
+      // Landing squash scales with how hard we came down.
+      const impact = Math.min(1, Math.abs(player.lastFallVelocity) / 95);
+      if (jumpState.airTime > 0.12) {
+        jumpState.landingStrength = 0.35 + impact * 0.65;
+        jumpState.landingTimer = 0.24;
+        createFootstepDustEffect(playerMesh.position.clone());
+        if (impact > 0.75) createDustCloud(playerMesh.position.clone());
+      }
       jumpOffset = 0;
       verticalVelocity = 0;
       player.lastFallVelocity = 0;
       isGrounded = true;
+      jumpState.airTime = 0;
     }
   }
   playerMesh.position.y += jumpOffset;
 }
 
+// ── 17-enemy-ai-and-damage.js ─ Enemy AI updates and damage to/from the player.
 function setEnemyWeaponVisuals(enemy, weapon) {
   if (!enemy.mesh) return;
   enemy.mesh.children.forEach(child => {
@@ -8378,7 +9231,7 @@ function updateEnemies(dt) {
 
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
 
-    // Captain Buggy chop-chop dismemberment animation
+    // Captain Jester split-apart animation
     if (enemy.type === "buggy" && enemy.parts) {
       const parts = enemy.parts;
       const t = performance.now() * 0.015;
@@ -8786,7 +9639,7 @@ function updateEnemies(dt) {
             }
           }
         } else if (enemy.falconCharging) {
-          // --- Falcon Punch windup ---
+          // --- Meteor Fist windup ---
           enemy.falconWindup += dt;
           // During windup, Yeti trembles in place
           enemy.mesh.position.x += (Math.random() - 0.5) * 0.4;
@@ -8804,7 +9657,7 @@ function updateEnemies(dt) {
             const punchDist = enemy.mesh.position.distanceTo(playerMesh.position);
             if (punchDist < 22) {
               const dmg = Math.round(55 * getAvatarTraits().incomingDamageMultiplier);
-              damagePlayer(dmg, "Yeti Falcon Punch");
+              damagePlayer(dmg, "Yeti Meteor Fist");
               // Knock the player back hard
               player.knockedDown = true;
               player.stunTimer = 1.8;
@@ -8827,12 +9680,12 @@ function updateEnemies(dt) {
             enemy.slamCount = 4;
             enemy.slamTimer = 0.5;
           }
-          // Trigger Falcon Punch windup
+          // Trigger Meteor Fist windup
           else if (enemy.falconCooldown <= 0 && distance < 100) {
             enemy.falconCharging = true;
             enemy.falconWindup = 0;
             createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 14, 0)), "FALCON PUNCH!!!", "#ff6600");
-            log("⚠️ The Yeti is winding up a Falcon Punch!");
+            log("⚠️ The Yeti is winding up a Meteor Fist!");
           }
           // Basic melee
           else if (distance < 12 && enemy.hitTimer <= 0) {
@@ -8845,7 +9698,7 @@ function updateEnemies(dt) {
       }
     } else {
 
-      // Non-brutes standard logic (Buggy, Pirate, Bandits)
+      // Non-brutes standard logic (Jester, Pirate, Bandits)
       enemy.ai = enemy.ai || { cooldown: 0, rush: 1, slash: 1, slam: 1, dodge: 1 };
       enemy.ai.cooldown = Math.max(0, enemy.ai.cooldown - dt);
       enemy.ai.rush = Math.max(0, enemy.ai.rush - dt);
@@ -8901,7 +9754,7 @@ function damagePlayer(amount, source) {
   if (player.isGodMode) return; // Admin Invulnerability!
   if (player.shieldTimer > 0) return; // Invulnerable shield active!
 
-  // Observation Haki Auto-Dodge
+  // Foresight Auto-Dodge
   if (player.observationHaki && player.observationHaki.active && player.observationHaki.dodges > 0) {
     player.observationHaki.dodges -= 1;
     audio.playFlashStep();
@@ -8915,10 +9768,10 @@ function damagePlayer(amount, source) {
 
     createEvasionGhost(startPos);
     createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 11, 0)), `⚡ DODGE! (${player.observationHaki.dodges}/${player.observationHaki.maxDodges})`, "#ff4444");
-    log(`👁️ Observation Haki dodged an attack from ${source || "an enemy"}! (${player.observationHaki.dodges} dodges left)`);
+    log(`👁️ Foresight dodged an attack from ${source || "an enemy"}! (${player.observationHaki.dodges} dodges left)`);
 
     if (player.observationHaki.dodges === 0) {
-      log("⚠️ Observation Haki dodges depleted! Regenerating 1 dodge every 4s...");
+      log("⚠️ Foresight dodges depleted! Regenerating 1 dodge every 4s...");
     }
     return 0; // Completely dodge attack!
   }
@@ -9083,6 +9936,7 @@ function killPlayer(source) {
   log(`You were defeated by ${source}! Click Respawn to return to the starter dock.`);
 }
 
+// ── 18-camera-and-quests.js ─ Camera, interaction prompts and quest dialogue.
 function updateCamera() {
   const targetYaw = isHelming ? boatYaw : (shiftLockEnabled ? playerMesh.rotation.y : cameraYaw);
   const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
@@ -9278,15 +10132,15 @@ function acceptMajorQuest(id) {
 
 function purchaseHaki() {
   if (player.haki.unlocked) {
-    log("You already know Armament Haki. Press H or use the Haki button to toggle it.");
+    log("You already know Iron Aura. Press H or use the Aura button to toggle it.");
     return;
   }
   if (player.level < 60) {
-    log("The Haki Trainer refuses: reach level 60 before training.");
+    log("The Aura Trainer refuses: reach level 60 before training.");
     return;
   }
   if (player.money < 3500) {
-    log("Armament Haki training costs $3500.");
+    log("Iron Aura training costs $3500.");
     return;
   }
   player.money -= 3500;
@@ -9297,10 +10151,11 @@ function purchaseHaki() {
   hakiToggle?.classList.add("active");
   applyHakiVisuals();
   updateHud();
-  log("Armament Haki Level 1 unlocked.");
+  log("Iron Aura Level 1 unlocked.");
   saveGame();
 }
 
+// ── 19-combat-and-effects.js ─ Attacks, projectiles, hazards and combat visual effects.
 function attack(event = null) {
   if (!gameStarted || attackCooldown > 0 || player.weapon === "special") return;
 
@@ -9352,13 +10207,13 @@ function attack(event = null) {
   let damage = getDamage();
   let isFalcon = false;
 
-  // Falcon Punch: 15% chance for double damage + knockback
+  // Meteor Fist: 15% chance for double damage + knockback
   if (player.weapon === "melee" && player.mastery.melee >= 5 && Math.random() < 0.15) {
     isFalcon = true;
     damage = Math.round(damage * 2.5);
   }
 
-  // Diable Jambe multiplier
+  // Inferno Kick multiplier
   const isDiableJambeActive = player.weapon === "melee" && player.diableJambeTimer > 0;
   if (isDiableJambeActive) {
     damage = Math.round(damage * 2.5);
@@ -9485,8 +10340,8 @@ function attack(event = null) {
     if (player.diableJambeHits >= 5) {
       player.diableJambeTimer = 0;
       player.diableJambeHits = 0;
-      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Diable Jambe Extinguished", "#ff7700");
-      log("🔥 Diable Jambe legs extinguished after 5 strikes.");
+      createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "🔥 Inferno Kick Extinguished", "#ff7700");
+      log("🔥 Inferno Kick legs extinguished after 5 strikes.");
     }
     createFireBurst(target.mesh.position.clone());
   }
@@ -9494,7 +10349,7 @@ function attack(event = null) {
   if (isFalcon) {
     const pushDir = target.mesh.position.clone().sub(playerMesh.position).setY(0).normalize();
     target.mesh.position.addScaledVector(pushDir, 35);
-    const label = isDiableJambeActive ? "🔥 Diable Falcon Punch" : "Falcon Punch";
+    const label = isDiableJambeActive ? "🔥 Inferno Meteor Fist" : "Meteor Fist";
     const color = isDiableJambeActive ? "#ff2200" : "#ff8a3d";
     damageEnemy(target, damage, label, color);
   } else {
@@ -10115,13 +10970,14 @@ function updateBossHud() {
   }
   bossBar?.classList.remove("hidden");
   let bossDisplayName = "Boss";
-  if (boss.type === "buggy") bossDisplayName = "Buggy the Clown Captain";
+  if (boss.type === "buggy") bossDisplayName = "Captain Jester Captain";
   else if (boss.type === "gorilla_king") bossDisplayName = "Gorilla King";
   else if (boss.type === "yeti") bossDisplayName = "The Yeti";
   if (bossName) bossName.textContent = bossDisplayName;
   if (bossHealthBar) bossHealthBar.style.width = `${Math.max(0, (boss.health / boss.maxHealth) * 100)}%`;
 }
 
+// ── 20-rewards-and-hud.js ─ Damage formulas, enemy defeat rewards, quests, XP and HUD updates.
 
 function getDamage() {
   const traits = getAvatarTraits();
@@ -10245,7 +11101,7 @@ function defeatEnemy(enemy) {
       player.haki.level += 1;
       player.haki.nextKills *= 2;
       applyHakiVisuals();
-      log(`Armament Haki reached Level ${player.haki.level}.`);
+      log(`Iron Aura reached Level ${player.haki.level}.`);
     }
   }
   if (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") {
@@ -10253,7 +11109,7 @@ function defeatEnemy(enemy) {
   }
   if (enemy.type === "buggy") {
     player.materials.jungleCore += 2;
-    log("Buggy defeated: massive XP, cash, and rare cores acquired.");
+    log("Jester defeated: massive XP, cash, and rare cores acquired.");
   } else if (enemy.type === "gorilla_king") {
     player.materials.jungleCore += 1;
     log("Gorilla King defeated: massive XP, cash, and jungle cores acquired.");
@@ -10334,11 +11190,11 @@ function updateHud() {
   ui.points.textContent = `${player.statPoints} points`;
 
   if (activeQuest?.active) {
-    ui.questTitle.textContent = `${activeQuest.title} | Haki ${player.haki.level || 0}`;
-    ui.questDetail.textContent = `${activeQuest.detail} Progress: ${activeQuest.defeated}/${activeQuest.target}. Haki kills: ${player.haki.kills}/${player.haki.nextKills}.`;
+    ui.questTitle.textContent = `${activeQuest.title} | Aura ${player.haki.level || 0}`;
+    ui.questDetail.textContent = `${activeQuest.detail} Progress: ${activeQuest.defeated}/${activeQuest.target}. Aura kills: ${player.haki.kills}/${player.haki.nextKills}.`;
   } else if (quest.complete) {
     ui.questTitle.textContent = "Starter Island Cleared";
-    ui.questDetail.textContent = `Special ability unlocked. Haki ${player.haki.unlocked ? `Lv ${player.haki.level}` : "locked until level 60 Desert training"}.`;
+    ui.questDetail.textContent = `Special ability unlocked. Aura ${player.haki.unlocked ? `Lv ${player.haki.level}` : "locked until level 60 Desert training"}.`;
   } else if (quest.active) {
     ui.questTitle.textContent = "Bandit Trouble";
     ui.questDetail.textContent = `Defeat bandits: ${quest.defeated}/${quest.target}. Reward: $${quest.rewardMoney}, ${quest.rewardXp} XP.`;
@@ -10363,6 +11219,9 @@ function log(message) {
   messageLog.textContent = message;
 }
 
+// How far the island rock base sits below the grass surface at its centre.
+const ISLAND_BASE_SINK = 1.4;
+// ── 21-geometry-helpers.js ─ Island height sampling and procedural geometry helpers.
 function getOutpostIslandProfileRadius(angle, maxRadius) {
   const ax = -900, az = -300;
   const bx = 900, bz = 300;
@@ -10407,55 +11266,55 @@ function getOutpostIslandProfileRadius(angle, maxRadius) {
   return low;
 }
 
+// Islands are a flat plateau in the middle that rolls smoothly down to the shore.
+// Everything that stands on the ground (player, buildings, grass, paths) uses this.
+function islandPlateauStart(index) {
+  if (index === 0) return 0.56;
+  if (index >= 5) return 0.25;
+  return 0.42;
+}
+
+function islandSlopeShape(normDist, index) {
+  const start = islandPlateauStart(index);
+  const t = Math.min(1, Math.max(0, (normDist - start) / (1 - start)));
+  return t * t * (3 - 2 * t);
+}
+
+// Where the island's rock base meets the sea, by direction.
+function islandCoastRadius(angle, radius, index) {
+  return islandProfileRadius(angle, radius * 0.9, index + 3);
+}
+
+// Outline of the grassy top: its own wobbly shape, but never past the coast.
+function islandGrassRadius(angle, radius, index) {
+  return Math.min(islandProfileRadius(angle, radius * 0.88, index + 9), islandCoastRadius(angle, radius, index) * 0.97);
+}
+
 function getLocalSurfaceHeightAt(lx, lz, radius, height, index) {
+  const seed = index + 9;
+  const angle = Math.atan2(lz, lx);
+  const centerHeight = height + 0.5;
+  const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
+  const edgeHeight = 0.16 + uneven;
+  let normDist;
+
   if (index === 2) {
+    // Outpost: two round lobes joined by a land bridge.
     const ax = -900, az = -300;
     const bx = 900, bz = 300;
     const vx = bx - ax, vz = bz - az;
-    const v_len_sq = vx * vx + vz * vz;
-    
-    const r1 = 950;
-    const r2 = 950;
-    const bridgeWidth = 280;
-
-    const dx1 = lx - ax, dz1 = lz - az;
-    const dist1 = Math.sqrt(dx1 * dx1 + dz1 * dz1) / r1;
-    
-    const dx2 = lx - bx, dz2 = lz - bz;
-    const dist2 = Math.sqrt(dx2 * dx2 + dz2 * dz2) / r2;
-    
-    const wx = lx - ax, wz = lz - az;
-    let t = (wx * vx + wz * vz) / v_len_sq;
-    t = Math.max(0, Math.min(1, t));
-    const cx = ax + t * vx;
-    const cz = az + t * vz;
-    const dxB = lx - cx, dzB = lz - cz;
-    const distB = Math.sqrt(dxB * dxB + dzB * dzB) / bridgeWidth;
-    
-    const minDist = Math.min(dist1, dist2, distB);
-    const normDist = Math.min(1, minDist);
-    
-    const centerHeight = height + 0.5;
-    const seed = index + 9;
-    const slope = -height;
-    const angle = Math.atan2(lz, lx);
-    const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
-    const edgeHeight = height + 0.16 + slope + uneven;
-    
-    return centerHeight + (edgeHeight - centerHeight) * normDist;
+    const lenSq = vx * vx + vz * vz;
+    const dist1 = Math.hypot(lx - ax, lz - az) / 950;
+    const dist2 = Math.hypot(lx - bx, lz - bz) / 950;
+    const t = Math.max(0, Math.min(1, ((lx - ax) * vx + (lz - az) * vz) / lenSq));
+    const distB = Math.hypot(lx - (ax + t * vx), lz - (az + t * vz)) / 280;
+    normDist = Math.min(1, dist1, dist2, distB);
+  } else {
+    // Measured against the real coastline (the rock base rim), so land meets the sea there.
+    normDist = Math.min(1, Math.hypot(lx, lz) / (islandCoastRadius(angle, radius, index) * 0.98));
   }
 
-  const r = Math.sqrt(lx * lx + lz * lz);
-  const normDist = Math.min(1, r / (radius * 0.96));
-  const angle = Math.atan2(lz, lx);
-  
-  const centerHeight = height + 0.5;
-  const seed = index + 9;
-  const slope = -height;
-  const uneven = Math.sin(angle * 6 + seed) * 1.5 + Math.cos(angle * 11) * 0.8;
-  const edgeHeight = height + 0.16 + slope + uneven;
-  
-  return centerHeight + (edgeHeight - centerHeight) * normDist;
+  return centerHeight + (edgeHeight - centerHeight) * islandSlopeShape(normDist, index);
 }
 
 function getIslandSurfaceHeightAt(x, z, island) {
@@ -10464,39 +11323,92 @@ function getIslandSurfaceHeightAt(x, z, island) {
   return getLocalSurfaceHeightAt(x - island.position.x, z - island.position.z, island.radius, height, island.index);
 }
 
-function makeIrregularCylinderGeometry(radius, height, segments, seed, index = -1) {
+// Island rock base. Its top is built in rings that follow the terrain a little
+// below the grass, then drops at the rim to the sea floor.
+// `terrain` = { radius, height, index } of the island (omit for a plain cone).
+function makeIrregularCylinderGeometry(radius, height, segments, seed, index = -1, terrain = null) {
   const positions = [];
   const indices = [];
-  const topCenterIndex = 0;
-  const bottomCenterIndex = 1;
-  positions.push(0, height / 2, 0, 0, -height / 2 - 40, 0);
+  const rings = terrain ? terrain.rings || 14 : 1;
+  const bottomY = -height / 2 - 40;
+  const centerY = terrain
+    ? getLocalSurfaceHeightAt(0, 0, terrain.radius, terrain.height, terrain.index) - height / 2 - ISLAND_BASE_SINK
+    : height / 2 - ISLAND_BASE_SINK;
+  positions.push(0, centerY, 0, 0, bottomY, 0);
+  const perAngle = rings + 1; // top ring vertices + one bottom vertex per angle
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
     const topRadius = islandProfileRadius(angle, radius * 0.9, seed, index);
     const bottomRadius = islandProfileRadius(angle + 0.08, radius, seed + 2, index);
-    
-    // Sloped edge height matching the disc
-    const slope = -height;
     const uneven = Math.sin(angle * 6 + (seed + 6)) * 1.5 + Math.cos(angle * 11) * 0.8;
-    const ledge = slope + uneven;
-    
-    positions.push(Math.cos(angle) * topRadius, height / 2 + ledge, Math.sin(angle) * topRadius);
-    positions.push(Math.cos(angle) * bottomRadius, -height / 2 - 40, Math.sin(angle) * bottomRadius);
+    const rimY = -height / 2 + uneven; // sea level at the rim (mesh-local)
+    for (let ring = 1; ring <= rings; ring += 1) {
+      const t = ring / rings;
+      const x = Math.cos(angle) * topRadius * t;
+      const z = Math.sin(angle) * topRadius * t;
+      let y = rimY;
+      if (terrain) {
+        // Just under the grass everywhere; reaches sea level at the coast.
+        y = getLocalSurfaceHeightAt(x, z, terrain.radius, terrain.height, terrain.index) - height / 2 - ISLAND_BASE_SINK;
+      }
+      positions.push(x, y, z);
+    }
+    positions.push(Math.cos(angle) * bottomRadius, bottomY, Math.sin(angle) * bottomRadius);
   }
 
   for (let i = 0; i < segments; i += 1) {
     const next = (i + 1) % segments;
-    const topA = 2 + i * 2;
-    const bottomA = topA + 1;
-    const topB = 2 + next * 2;
-    const bottomB = topB + 1;
-
-    indices.push(topA, bottomA, topB, topB, bottomA, bottomB);
-    indices.push(topCenterIndex, topB, topA);
-    indices.push(bottomCenterIndex, bottomA, bottomB);
+    const a = 2 + i * perAngle;
+    const b = 2 + next * perAngle;
+    indices.push(0, b, a);
+    for (let ring = 0; ring < rings - 1; ring += 1) {
+      indices.push(a + ring, b + ring, a + ring + 1, b + ring, b + ring + 1, a + ring + 1);
+    }
+    const rimA = a + rings - 1;
+    const rimB = b + rings - 1;
+    const botA = a + rings;
+    const botB = b + rings;
+    indices.push(rimA, botA, rimB, rimB, botA, botB);
+    indices.push(1, botA, botB);
   }
 
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+// Grass surface built on a polar grid whose heights come straight from
+// getLocalSurfaceHeightAt, so what you see is exactly what you walk on.
+function makeTerrainSurfaceGeometry(radius, height, index, segments, rings) {
+  const seed = index + 9;
+  const positions = [0, getLocalSurfaceHeightAt(0, 0, radius, height, index) - 0.04, 0];
+  const indices = [];
+  for (let ring = 1; ring <= rings; ring += 1) {
+    // Rings bunch up toward the shore where the slope changes most.
+    const t = Math.pow(ring / rings, 0.85);
+    for (let i = 0; i < segments; i += 1) {
+      const angle = (i / segments) * Math.PI * 2;
+      const r = islandGrassRadius(angle, radius, index) * t;
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+      positions.push(x, getLocalSurfaceHeightAt(x, z, radius, height, index) - 0.04, z);
+    }
+  }
+  for (let i = 0; i < segments; i += 1) {
+    const next = (i + 1) % segments;
+    indices.push(0, 1 + next, 1 + i);
+  }
+  for (let ring = 1; ring < rings; ring += 1) {
+    const a0 = 1 + (ring - 1) * segments;
+    const b0 = 1 + ring * segments;
+    for (let i = 0; i < segments; i += 1) {
+      const next = (i + 1) % segments;
+      indices.push(a0 + i, a0 + next, b0 + i, a0 + next, b0 + next, b0 + i);
+    }
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
@@ -10531,44 +11443,43 @@ function makeIrregularDiscGeometry(radius, segments, seed, height = 0, index = -
   return geometry;
 }
 
+// A wobbly ring (beaches, shallows). Drawn flat in x/y and laid down by the caller
+// with rotation.x = -PI/2. With `height` > 0 it follows the island terrain: the caller
+// also sets position.y = height, so vertex z = ground - height.
 function makeIrregularRingGeometry(innerRadius, outerRadius, segments, seed, height = 0, index = -1, maxRadius = 1) {
   const positions = [];
   const indices = [];
+  const rings = height > 0 ? 9 : 1;
 
   for (let i = 0; i < segments; i += 1) {
     const angle = (i / segments) * Math.PI * 2;
     const inner = islandProfileRadius(angle + 0.12, innerRadius, seed + 1, index);
     const outer = islandProfileRadius(angle, outerRadius, seed, index);
-    
-    let innerRise = Math.sin(angle * 15 + seed) * 0.3;
-    let outerRise = -innerRise;
-    
-    if (height > 0) {
-      const slope = -height;
-      const seedVal = index + 9;
-      const uneven = Math.sin(angle * 6 + seedVal) * 1.5 + Math.cos(angle * 11) * 0.8;
-      
-      const centerHeight = 0.5;
-      const edgeHeight = 0.16 + slope + uneven;
-      
-      const normInner = Math.min(1, inner / (maxRadius * 0.96));
-      const normOuter = Math.min(1, outer / (maxRadius * 0.96));
-      
-      innerRise = centerHeight + (edgeHeight - centerHeight) * normInner;
-      outerRise = centerHeight + (edgeHeight - centerHeight) * normOuter;
+    for (let k = 0; k <= rings; k += 1) {
+      const r = inner + (outer - inner) * (k / rings);
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      let z;
+      if (height > 0) {
+        // After rotation.x = -PI/2, local (x, y) lands at world (x, -y).
+        // Sits clearly above the grass so the two never interleave at the edge.
+        z = getLocalSurfaceHeightAt(x, -y, maxRadius, height, index) + 0.35 - height;
+      } else {
+        const wobble = Math.sin(angle * 15 + seed) * 0.3;
+        z = k === 0 ? wobble : -wobble;
+      }
+      positions.push(x, y, z);
     }
-    
-    positions.push(Math.cos(angle) * inner, Math.sin(angle) * inner, innerRise);
-    positions.push(Math.cos(angle) * outer, Math.sin(angle) * outer, outerRise);
   }
 
+  const stride = rings + 1;
   for (let i = 0; i < segments; i += 1) {
     const next = (i + 1) % segments;
-    const innerA = i * 2;
-    const outerA = innerA + 1;
-    const innerB = next * 2;
-    const outerB = innerB + 1;
-    indices.push(innerA, outerA, innerB, innerB, outerA, outerB);
+    for (let k = 0; k < rings; k += 1) {
+      const a = i * stride + k;
+      const b = next * stride + k;
+      indices.push(a, a + 1, b, b, a + 1, b + 1);
+    }
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -10644,6 +11555,7 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 
+// ── 22-effects-weather-boats.js ─ Hit effects, day/night lighting, weather and boat helming.
 function createBloodSplatter(position) {
   if (!position) return;
   const count = 8 + Math.floor(Math.random() * 6);
@@ -10703,43 +11615,102 @@ function triggerHitFlash(group) {
   });
 }
 
-function updateDayNightLighting(dt) {
-  let skyTopColor, skyHorizonColor, sunGlowColor, sunIntensity, sunColor, nightMix;
+// Reused colour objects so the day/night cycle does not allocate every frame.
+const skyBlend = { top: new THREE.Color(), horizon: new THREE.Color(), glow: new THREE.Color(), sun: new THREE.Color(), tmp: new THREE.Color() };
+const SUN_COLORS = { dawn: 0xffd8b5, day: 0xfff5e6, dusk: 0xff8833, night: 0x8faecc };
 
-  if (timeOfDay >= 6 && timeOfDay < 9) {
-    const p = (timeOfDay - 6) / 3;
-    skyTopColor = new THREE.Color(0x1a2e54).lerp(new THREE.Color(0x0c4b8e), p);
-    skyHorizonColor = new THREE.Color(0xfd9468).lerp(new THREE.Color(0x98cded), p);
-    sunGlowColor = new THREE.Color(0xffaa55).lerp(new THREE.Color(0xffe7b5), p);
-    sunIntensity = 0.8 + p * 1.6;
-    sunColor = new THREE.Color(0xffd8b5).lerp(new THREE.Color(0xfff5e6), p);
-    nightMix = Math.max(0, 1 - p * 2);
-  } else if (timeOfDay >= 9 && timeOfDay < 17) {
-    skyTopColor = new THREE.Color(0x0c4b8e);
-    skyHorizonColor = new THREE.Color(0x98cded);
-    sunGlowColor = new THREE.Color(0xfff0cc);
-    sunIntensity = 2.4;
-    sunColor = new THREE.Color(0xfff5e6);
-    nightMix = 0.0;
-  } else if (timeOfDay >= 17 && timeOfDay < 20) {
-    const p = (timeOfDay - 17) / 3;
-    skyTopColor = new THREE.Color(0x0c4b8e).lerp(new THREE.Color(0x141f3d), p);
-    skyHorizonColor = new THREE.Color(0x98cded).lerp(new THREE.Color(0xf75e38), p);
-    sunGlowColor = new THREE.Color(0xffe7b5).lerp(new THREE.Color(0xff4411), p);
-    sunIntensity = 2.4 - p * 1.7;
-    sunColor = new THREE.Color(0xfff5e6).lerp(new THREE.Color(0xff8833), p);
-    nightMix = Math.min(1, p * 1.5);
-  } else {
-    let p = 0;
-    if (timeOfDay >= 20) p = (timeOfDay - 20) / 4;
-    else p = 1 - (timeOfDay / 6);
-    skyTopColor = new THREE.Color(0x050e1f);
-    skyHorizonColor = new THREE.Color(0x081729);
-    sunGlowColor = new THREE.Color(0x3a5a78);
-    sunIntensity = 0.35;
-    sunColor = new THREE.Color(0x8faecc);
-    nightMix = 1.0;
+function blendSky(from, to, p) {
+  const sky = WORLD_PALETTE.sky;
+  skyBlend.top.setHex(sky[from].top).lerp(skyBlend.tmp.setHex(sky[to].top), p);
+  skyBlend.horizon.setHex(sky[from].horizon).lerp(skyBlend.tmp.setHex(sky[to].horizon), p);
+  skyBlend.glow.setHex(sky[from].glow).lerp(skyBlend.tmp.setHex(sky[to].glow), p);
+  skyBlend.sun.setHex(SUN_COLORS[from]).lerp(skyBlend.tmp.setHex(SUN_COLORS[to]), p);
+}
+
+// The day is four equal phases. `from`/`to` are clock hours used to place the sun.
+const DAY_CYCLE = {
+  phaseSeconds: 600,
+  phases: [
+    { name: "day", label: "Day", from: 8.5, to: 17, message: "" },
+    { name: "sunset", label: "Sunset", from: 17, to: 19.5, message: "The sun begins to set." },
+    { name: "night", label: "Night", from: 19.5, to: 29, message: "Night falls over the islands." },
+    { name: "sunrise", label: "Sunrise", from: 29, to: 32.5, message: "Dawn breaks on the horizon." },
+  ],
+};
+const dayCycle = { phase: 0, elapsed: 0, progress: 0 };
+
+function smoothstep01(edge0, edge1, x) {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function advanceDayCycle(dt) {
+  dayCycle.elapsed += dt;
+  if (dayCycle.elapsed >= DAY_CYCLE.phaseSeconds) {
+    dayCycle.elapsed -= DAY_CYCLE.phaseSeconds;
+    dayCycle.phase = (dayCycle.phase + 1) % DAY_CYCLE.phases.length;
+    const next = DAY_CYCLE.phases[dayCycle.phase];
+    if (next.message) log(next.message);
   }
+  dayCycle.progress = dayCycle.elapsed / DAY_CYCLE.phaseSeconds;
+  const phase = DAY_CYCLE.phases[dayCycle.phase];
+  timeOfDay = (phase.from + (phase.to - phase.from) * dayCycle.progress) % 24;
+  updateDayPhaseHud(phase);
+}
+
+function updateDayPhaseHud(phase) {
+  const chip = document.querySelector("#day-phase");
+  if (!chip) return;
+  const remaining = Math.max(0, Math.ceil(DAY_CYCLE.phaseSeconds - dayCycle.elapsed));
+  const text = `${phase.label} · ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+  if (chip.textContent !== text) chip.textContent = text;
+  if (chip.dataset.phase !== phase.name) chip.dataset.phase = phase.name;
+}
+
+function updateDayNightLighting(dt) {
+  let sunIntensity, nightMix, daylight;
+  const p = dayCycle.progress;
+
+  switch (DAY_CYCLE.phases[dayCycle.phase].name) {
+    case "day":
+      blendSky("day", "day", 0);
+      sunIntensity = 2.4;
+      nightMix = 0;
+      daylight = 1;
+      break;
+    case "sunset":
+      if (p < 0.65) blendSky("day", "dusk", smoothstep01(0, 0.65, p));
+      else blendSky("dusk", "night", smoothstep01(0.65, 1, p));
+      sunIntensity = 2.4 - 2.05 * smoothstep01(0, 1, p);
+      nightMix = smoothstep01(0.55, 1, p);
+      daylight = 1 - 0.78 * smoothstep01(0.3, 1, p);
+      break;
+    case "night":
+      blendSky("night", "night", 0);
+      sunIntensity = 0.35;
+      nightMix = 1;
+      daylight = 0.22;
+      break;
+    default: // sunrise
+      if (p < 0.4) blendSky("night", "dawn", smoothstep01(0, 0.4, p));
+      else blendSky("dawn", "day", smoothstep01(0.4, 1, p));
+      sunIntensity = 0.35 + 2.05 * smoothstep01(0, 1, p);
+      nightMix = 1 - smoothstep01(0, 0.45, p);
+      daylight = 0.22 + 0.78 * smoothstep01(0, 0.8, p);
+      break;
+  }
+
+  // Fill lights dim and turn moonlit-blue as night falls.
+  hemiLight.intensity = WORLD_PALETTE.lighting.hemisphere * (0.4 + 0.6 * daylight);
+  ambientLight.intensity = WORLD_PALETTE.lighting.ambient * (0.6 + 0.4 * daylight);
+  hemiLight.color.setHex(0x9fd2f5).lerp(skyBlend.tmp.setHex(0x4a6496), 1 - daylight);
+  // Cottage windows glow warmly after dark.
+  houseWindowGlass.emissiveIntensity = 0.05 + 1.5 * (1 - daylight) / 0.78;
+
+  const skyTopColor = skyBlend.top;
+  const skyHorizonColor = skyBlend.horizon;
+  const sunGlowColor = skyBlend.glow;
+  const sunColor = skyBlend.sun;
 
   if (weatherActive) {
     skyTopColor.multiplyScalar(0.38);
@@ -10759,7 +11730,7 @@ function updateDayNightLighting(dt) {
   scene.fog.color.copy(skyHorizonColor);
   renderer.setClearColor(skyHorizonColor);
   sun.color.copy(sunColor);
-  sun.intensity = sunIntensity;
+  sun.intensity = sunIntensity * WORLD_PALETTE.lighting.sunScale;
 
   // Dynamic sun positioning around player/camera so shadows follow across all islands
   const angle = (timeOfDay / 24) * Math.PI * 2 - Math.PI / 2;
@@ -10773,12 +11744,27 @@ function updateDayNightLighting(dt) {
   sun.target.updateMatrixWorld();
 
   const isNight = timeOfDay >= 19.5 || timeOfDay < 5.5;
-  scene.traverse((child) => {
-    if (child.name === "lanternGlow" || (child.material && child.material.emissive && (child.material.color.getHex() === 0xffd25a))) {
-      child.material.emissiveIntensity = isNight ? (weatherActive ? 3.0 : 2.0) : 0.1;
-    }
-  });
+  const glowIntensity = isNight ? (weatherActive ? 3.0 : 2.0) : 0.1;
+  // Walking the whole scene is expensive, so lanterns are collected occasionally
+  // and their glow is only written when it actually changes.
+  lanternGlowCache.age += dt || 0;
+  if (!lanternGlowCache.materials || lanternGlowCache.age > 5) {
+    const materials = new Set();
+    scene.traverse((child) => {
+      if (child.name === "lanternGlow" || (child.material && child.material.emissive && (child.material.color.getHex() === 0xffd25a))) {
+        materials.add(child.material);
+      }
+    });
+    if (!lanternGlowCache.materials || materials.size !== lanternGlowCache.materials.size) lanternGlowCache.intensity = null;
+    lanternGlowCache.materials = materials;
+    lanternGlowCache.age = 0;
+  }
+  if (lanternGlowCache.intensity !== glowIntensity) {
+    lanternGlowCache.materials.forEach((material) => { material.emissiveIntensity = glowIntensity; });
+    lanternGlowCache.intensity = glowIntensity;
+  }
 }
+const lanternGlowCache = { materials: null, age: 0, intensity: null };
 
 function updateWeather(dt) {
   weatherTimer -= dt;
@@ -10928,6 +11914,7 @@ function updateBoat(dt) {
   updateCamera();
 }
 
+// ── 23-skills-and-compass.js ─ Weapon skills, quest unlocks, compass and combat HUD.
 function triggerSwordQ() {
   audio.playSlash();
   createSpecialBurst({ mesh: playerMesh });
@@ -11006,14 +11993,7 @@ function executeSkillByKey(keyChar) {
   if (!gameStarted) return;
   const weapon = player.weapon;
   let skills = masterySkills[weapon] || [];
-  if (weapon === "melee") {
-    skills = skills.filter(skill => {
-      if (skill.id === "flambage-shot" || skill.id === "diable-jambe") {
-        return player.hasFlamingFeet;
-      }
-      return true;
-    });
-  }
+  // Ember Shot (C) and Inferno Kick (V) are standard melee attacks for everyone.
   const skill = skills.find(s => s.key === keyChar);
   if (!skill) return;
 
@@ -11100,14 +12080,7 @@ function updateCombatHud() {
   if (ui.combatWeaponName) ui.combatWeaponName.textContent = weaponNames[weapon] || "COMBAT";
 
   let skills = masterySkills[weapon] || [];
-  if (weapon === "melee") {
-    skills = skills.filter(skill => {
-      if (skill.id === "flambage-shot" || skill.id === "diable-jambe") {
-        return player.hasFlamingFeet;
-      }
-      return true;
-    });
-  }
+  // Ember Shot (C) and Inferno Kick (V) are standard melee attacks for everyone.
   const masteryInfo = getMasteryInfo(val);
   const currentLevel = masteryInfo.level;
   const currentLevelPoints = masteryInfo.currentLevelPoints;
@@ -11510,7 +12483,7 @@ function triggerActiveSkill(skillId) {
           const dmg = Math.round(getDamage() * 1.8);
           const push = e.mesh.position.clone().sub(startPos).setY(0).normalize();
           e.mesh.position.addScaledVector(push, 20);
-          damageEnemy(e, dmg, "🔥 Flambage Shot", "#ff3300");
+          damageEnemy(e, dmg, "🔥 Ember Shot", "#ff3300");
           createFireBurst(e.mesh.position.clone());
         }
       });
@@ -11522,12 +12495,13 @@ function triggerActiveSkill(skillId) {
     player.diableJambeTimer = 18;
     player.diableJambeHits = 0;
     createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 3, 0)));
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "🔥 DIABLE JAMBE!", "#ff2200");
-    log("🔥 Diable Jambe activated! Kicks are now infused with friction flames!");
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "🔥 INFERNO KICK!", "#ff2200");
+    log("🔥 Inferno Kick activated! Kicks are now infused with friction flames!");
   }
 }
 
-// ===== Escape Menu & Performance Stats Bar (Roblox Style) =====
+// ── 24-settings-menu.js ─ Escape menu, graphics quality, volume and performance stats.
+// ===== Escape Menu & Performance Stats Bar =====
 
 const escMenu = document.querySelector("#esc-menu");
 const escClose = document.querySelector("#esc-close");
@@ -11586,6 +12560,7 @@ function setGraphicsQuality(level) {
       child.material.needsUpdate = true;
     }
   });
+  setWindGrassQuality(level);
 }
 
 function drawPerfGraph(canvasId, history, color, minVal, maxVal) {
@@ -11668,7 +12643,7 @@ escResumeBtn?.addEventListener("click", () => toggleEscMenu(false));
 
 escResetBtn?.addEventListener("click", () => {
   if (playerMesh) {
-    playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 0);
+    playerMesh.position.set(0, STARTER_SURFACE_Y + 0.15, 12); // just south of the flagpole
     verticalVelocity = 0;
     jumpOffset = 0;
   }
@@ -11816,11 +12791,1578 @@ document.querySelector("#admin-tp-jungle")?.addEventListener("click", () => {
   }
 });
 
+// ── 25-surfaces.js ─ Procedural surface textures applied to world meshes.
+// ===== Realistic Surfaces: procedural textures for world blocks and terrain =====
+// Generates tileable detail textures (wood planks, stone bricks, rock, cliff strata,
+// grass, sand, snow, dirt, bark, foliage, metal) at load time and applies them to
+// world meshes. Textures are near-white detail maps, so each object's original
+// color is kept and the texture only adds grain, seams and relief.
+const SURFACE_TEX_SIZE = 512;
+let surfaceLibrary = null;
+const surfaceMaterialCache = new Map();
+const surfaceGeometryCache = new Map();
+
+function surfaceRandom(seed) {
+  let s = (seed * 2654435761) >>> 0 || 1;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+// Tileable value noise with independent cell counts on each axis (stretched noise = grain).
+function surfaceNoise(size, cellsX, cellsY, seed) {
+  const rand = surfaceRandom(seed);
+  const grid = new Float32Array(cellsX * cellsY);
+  for (let i = 0; i < grid.length; i += 1) grid[i] = rand();
+  const out = new Float32Array(size * size);
+  for (let y = 0; y < size; y += 1) {
+    const fy = (y / size) * cellsY;
+    const y0 = Math.floor(fy);
+    let ty = fy - y0;
+    ty = ty * ty * (3 - 2 * ty);
+    const y1 = (y0 + 1) % cellsY;
+    for (let x = 0; x < size; x += 1) {
+      const fx = (x / size) * cellsX;
+      const x0 = Math.floor(fx);
+      let tx = fx - x0;
+      tx = tx * tx * (3 - 2 * tx);
+      const x1 = (x0 + 1) % cellsX;
+      const a = grid[y0 * cellsX + x0];
+      const b = grid[y0 * cellsX + x1];
+      const c = grid[y1 * cellsX + x0];
+      const d = grid[y1 * cellsX + x1];
+      out[y * size + x] = (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+    }
+  }
+  return out;
+}
+
+function surfaceFbm(size, baseCells, octaves, seed, stretchX = 1, stretchY = 1) {
+  const out = new Float32Array(size * size);
+  let amp = 1;
+  let total = 0;
+  for (let o = 0; o < octaves; o += 1) {
+    const cells = baseCells * (1 << o);
+    const n = surfaceNoise(size, Math.max(1, Math.round(cells * stretchX)), Math.max(1, Math.round(cells * stretchY)), seed + o * 101);
+    for (let i = 0; i < out.length; i += 1) out[i] += n[i] * amp;
+    total += amp;
+    amp *= 0.5;
+  }
+  for (let i = 0; i < out.length; i += 1) out[i] /= total;
+  return out;
+}
+
+function surfaceCanvasFromValues(size, values) {
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d");
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < values.length; i += 1) {
+    const v = Math.max(0, Math.min(255, Math.round(values[i] * 255)));
+    img.data[i * 4] = v;
+    img.data[i * 4 + 1] = v;
+    img.data[i * 4 + 2] = v;
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function surfaceTexture(canvas) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
+  return tex;
+}
+
+const surfacePainters = {
+  wood(size) {
+    const rand = surfaceRandom(11);
+    const rows = 6;
+    const ph = size / rows;
+    const grainA = surfaceNoise(size, 3, 96, 21);
+    const grainB = surfaceNoise(size, 8, 192, 22);
+    const blotch = surfaceFbm(size, 4, 3, 23);
+    const tones = [];
+    const joints = [];
+    for (let r = 0; r < rows; r += 1) {
+      tones.push(0.8 + rand() * 0.2);
+      joints.push(Math.floor(rand() * size));
+    }
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let y = 0; y < size; y += 1) {
+      const row = Math.floor(y / ph);
+      const inRow = y - row * ph;
+      const seamDist = Math.min(inRow, ph - inRow);
+      for (let x = 0; x < size; x += 1) {
+        const i = y * size + x;
+        const g = grainA[i] * 0.6 + grainB[i] * 0.4;
+        let v = tones[row] * (0.74 + 0.26 * g) * (0.9 + 0.1 * blotch[i]);
+        let h = 0.75 + 0.25 * g;
+        const j = joints[row];
+        const jd = Math.min(Math.abs(x - j), Math.abs(x - ((j + size / 2) % size)), size - Math.abs(x - j));
+        if (seamDist < 2.2 || jd < 1.6) { v *= 0.45; h = 0.05; }
+        else if (seamDist < 5) { v *= 0.86; h *= 0.7; }
+        // nail heads near the joints
+        if (Math.abs(jd - 7) < 2 && Math.abs(inRow - ph * 0.5) < 2) { v *= 0.5; }
+        col[i] = Math.min(1, v * 1.08);
+        hgt[i] = h;
+      }
+    }
+    return { color: col, height: hgt };
+  },
+
+  stone(size) {
+    const rand = surfaceRandom(31);
+    const rows = 4;
+    const perRow = 3;
+    const bh = size / rows;
+    const bw = size / perRow;
+    const mortar = 5;
+    const detail = surfaceFbm(size, 8, 4, 32);
+    const pits = surfaceNoise(size, 64, 64, 33);
+    const tones = Array.from({ length: rows * perRow * 2 }, () => 0.78 + rand() * 0.22);
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let y = 0; y < size; y += 1) {
+      const row = Math.floor(y / bh);
+      const iy = y - row * bh;
+      const offset = row % 2 ? bw / 2 : 0;
+      for (let x = 0; x < size; x += 1) {
+        const i = y * size + x;
+        const sx = (x + offset) % size;
+        const b = Math.floor(sx / bw);
+        const ix = sx - b * bw;
+        const edge = Math.min(ix, bw - ix, iy, bh - iy);
+        const tone = tones[(row * perRow + b) % tones.length];
+        if (edge < mortar) {
+          col[i] = 0.5 + detail[i] * 0.12;
+          hgt[i] = 0.05;
+        } else {
+          const bevel = Math.min(1, (edge - mortar) / 10);
+          const pit = pits[i] < 0.12 ? 0.82 : 1;
+          col[i] = Math.min(1, tone * (0.8 + detail[i] * 0.28) * (0.88 + 0.12 * bevel) * pit);
+          hgt[i] = (0.45 + 0.55 * bevel) * (0.8 + 0.2 * detail[i]);
+        }
+      }
+    }
+    return { color: col, height: hgt };
+  },
+
+  rock(size) {
+    const base = surfaceFbm(size, 4, 6, 41);
+    const ridge = surfaceFbm(size, 6, 3, 42);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const r = 1 - Math.abs(ridge[i] * 2 - 1);
+      const crack = r > 0.975 ? 0.78 : 1;
+      col[i] = (0.58 + 0.5 * base[i]) * crack;
+    }
+    return { color: col, height: base };
+  },
+
+  cliff(size) {
+    const strata = surfaceNoise(size, 2, 18, 51);
+    const strataFine = surfaceNoise(size, 4, 64, 52);
+    const base = surfaceFbm(size, 4, 5, 53);
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const band = strata[i] * 0.6 + strataFine[i] * 0.4;
+      col[i] = 0.6 + 0.24 * band + 0.2 * base[i];
+      hgt[i] = band * 0.5 + base[i] * 0.5;
+    }
+    return { color: col, height: hgt };
+  },
+
+  grass(size) {
+    const clumps = surfaceFbm(size, 3, 3, 61);
+    const patches = surfaceFbm(size, 10, 2, 64);
+    const fine = surfaceFbm(size, 48, 3, 62);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const c = clumps[i] * 2 - 1;
+      col[i] = 0.8 + 0.12 * c + 0.14 * (patches[i] - 0.5) + 0.14 * (fine[i] - 0.5);
+    }
+    const canvas = surfaceCanvasFromValues(size, col);
+    const ctx = canvas.getContext("2d");
+    const rand = surfaceRandom(63);
+    // short blade strokes, drawn three times offset so the tile stays seamless
+    for (let n = 0; n < 5200; n += 1) {
+      const x = rand() * size;
+      const y = rand() * size;
+      const len = 3 + rand() * 6;
+      const lean = (rand() - 0.5) * 3;
+      const light = rand() > 0.5;
+      ctx.strokeStyle = light ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.22)";
+      ctx.lineWidth = 1;
+      for (const [ox, oy] of [[0, 0], [-size, 0], [0, -size], [size, 0], [0, size]]) {
+        ctx.beginPath();
+        ctx.moveTo(x + ox, y + oy);
+        ctx.lineTo(x + ox + lean, y + oy - len);
+        ctx.stroke();
+      }
+    }
+    return { canvas, height: fine };
+  },
+
+  sand(size) {
+    const rand = surfaceRandom(71);
+    const warp = surfaceFbm(size, 3, 3, 72);
+    const soft = surfaceFbm(size, 16, 3, 73);
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const i = y * size + x;
+        const ripple = Math.sin(((y / size) * 10 + warp[i] * 2.2) * Math.PI * 2);
+        const grain = rand();
+        col[i] = 0.84 + ripple * 0.02 + (soft[i] - 0.5) * 0.12 + (grain - 0.5) * 0.14;
+        hgt[i] = 0.5 + ripple * 0.15 + (grain - 0.5) * 0.3;
+      }
+    }
+    return { color: col, height: hgt };
+  },
+
+  snow(size) {
+    const rand = surfaceRandom(81);
+    const soft = surfaceFbm(size, 4, 4, 82);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const sparkle = rand() > 0.997 ? 0.08 : 0;
+      col[i] = Math.min(1, 0.9 + soft[i] * 0.08 + sparkle);
+    }
+    return { color: col, height: soft };
+  },
+
+  dirt(size) {
+    const rand = surfaceRandom(91);
+    const base = surfaceFbm(size, 6, 5, 92);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) col[i] = 0.7 + base[i] * 0.3;
+    const canvas = surfaceCanvasFromValues(size, col);
+    const ctx = canvas.getContext("2d");
+    for (let n = 0; n < 420; n += 1) {
+      const x = rand() * size;
+      const y = rand() * size;
+      const r = 1.5 + rand() * 4;
+      const shade = rand() > 0.5 ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.2)";
+      ctx.fillStyle = shade;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * (0.6 + rand() * 0.4), rand() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return { canvas, height: base };
+  },
+
+  bark(size) {
+    const streaks = surfaceNoise(size, 40, 3, 101);
+    const streaksFine = surfaceNoise(size, 96, 6, 102);
+    const base = surfaceFbm(size, 4, 3, 103);
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const s = streaks[i] * 0.65 + streaksFine[i] * 0.35;
+      const groove = s < 0.32 ? 0.55 : 1;
+      col[i] = (0.68 + 0.32 * s) * groove * (0.9 + 0.1 * base[i]);
+      hgt[i] = s * groove;
+    }
+    return { color: col, height: hgt };
+  },
+
+  foliage(size) {
+    const leaves = surfaceFbm(size, 12, 3, 111);
+    const big = surfaceFbm(size, 3, 2, 112);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) {
+      const l = leaves[i];
+      const edge = l > 0.55 ? 1 : l > 0.45 ? 0.82 : 0.66;
+      col[i] = edge * (0.82 + 0.18 * big[i]) + 0.1;
+    }
+    return { color: col, height: leaves };
+  },
+
+  metal(size) {
+    const rand = surfaceRandom(121);
+    const brushed = surfaceNoise(size, 2, 256, 122);
+    const stains = surfaceFbm(size, 3, 3, 123);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) col[i] = 0.82 + brushed[i] * 0.1 + stains[i] * 0.08;
+    const canvas = surfaceCanvasFromValues(size, col);
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    for (let n = 0; n < 60; n += 1) {
+      const x = rand() * size;
+      const y = rand() * size;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (rand() - 0.5) * 60, y + (rand() - 0.5) * 12);
+      ctx.stroke();
+    }
+    return { canvas, height: brushed };
+  },
+
+  // Overlapping curved clay tiles in staggered rows.
+  tiles(size) {
+    const rows = 8;
+    const perRow = 6;
+    const ph = size / rows;
+    const tw = size / perRow;
+    const rand = surfaceRandom(141);
+    const grain = surfaceFbm(size, 5, 4, 142);
+    const tones = [];
+    for (let i = 0; i < rows * perRow; i += 1) tones.push(0.82 + rand() * 0.18);
+    const col = new Float32Array(size * size);
+    const hgt = new Float32Array(size * size);
+    for (let y = 0; y < size; y += 1) {
+      const row = Math.floor(y / ph);
+      const inRow = (y - row * ph) / ph; // 0 top of tile, 1 lower edge
+      const offset = (row % 2) * tw * 0.5;
+      for (let x = 0; x < size; x += 1) {
+        const i = y * size + x;
+        const tx = (x + offset) % size;
+        const tile = Math.floor(tx / tw);
+        const across = (tx - tile * tw) / tw; // 0..1 across the tile
+        const curve = Math.sin(across * Math.PI);  // rounded profile
+        const scallop = 0.82 + 0.18 * curve;        // lower edge is curved
+        const edge = inRow > scallop ? 0.55 : 1;
+        let v = tones[row * perRow + tile] * (0.72 + 0.28 * curve) * (0.9 + 0.1 * grain[i]) * edge;
+        v *= 0.82 + 0.18 * (1 - inRow);             // shade under the tile above
+        col[i] = Math.min(1, v * 1.08);
+        hgt[i] = edge < 1 ? 0.1 : 0.35 + 0.45 * curve + 0.2 * (1 - inRow);
+      }
+    }
+    return { color: col, height: hgt };
+  },
+
+  plaster(size) {
+    const soft = surfaceFbm(size, 6, 5, 131);
+    const col = new Float32Array(size * size);
+    for (let i = 0; i < col.length; i += 1) col[i] = 0.88 + soft[i] * 0.12;
+    return { color: col, height: soft };
+  },
+};
+
+// World units covered by one texture tile, and how strong the relief is.
+const surfaceSettings = {
+  wood:    { tile: 4,  bump: 0.045, roughness: 0.82 },
+  stone:   { tile: 7,  bump: 0.06,  roughness: 0.9 },
+  rock:    { tile: 9,  bump: 0.07,  roughness: 0.93 },
+  cliff:   { tile: 26, bump: 0.09,  roughness: 0.95 },
+  grass:   { tile: 16, bump: 0.025, roughness: 0.92 },
+  sand:    { tile: 10, bump: 0.02,  roughness: 0.96 },
+  snow:    { tile: 16, bump: 0.015, roughness: 0.8 },
+  dirt:    { tile: 9,  bump: 0.04,  roughness: 0.97 },
+  bark:    { tile: 3,  bump: 0.06,  roughness: 0.94 },
+  foliage: { tile: 3,  bump: 0.04,  roughness: 0.85 },
+  metal:   { tile: 4,  bump: 0.01,  roughness: 0.42, metalness: 0.65 },
+  plaster: { tile: 6,  bump: 0.02,  roughness: 0.88 },
+  tiles:   { tile: 7,  bump: 0.07,  roughness: 0.82 },
+};
+
+function getSurfaceLibrary() {
+  if (surfaceLibrary) return surfaceLibrary;
+  surfaceLibrary = {};
+  Object.keys(surfacePainters).forEach((kind) => {
+    const result = surfacePainters[kind](SURFACE_TEX_SIZE);
+    const colorCanvas = result.canvas || surfaceCanvasFromValues(SURFACE_TEX_SIZE, result.color);
+    const heightCanvas = surfaceCanvasFromValues(SURFACE_TEX_SIZE, result.height);
+    surfaceLibrary[kind] = { map: surfaceTexture(colorCanvas), bump: surfaceTexture(heightCanvas) };
+  });
+  // Soft edge shading for blocks so corners read as solid, bevelled edges.
+  const s = 128;
+  const ao = new Float32Array(s * s);
+  for (let y = 0; y < s; y += 1) {
+    for (let x = 0; x < s; x += 1) {
+      const d = Math.min(x, y, s - 1 - x, s - 1 - y) / s;
+      const t = Math.min(1, d / 0.06);
+      ao[y * s + x] = 0.6 + 0.4 * (t * t * (3 - 2 * t));
+    }
+  }
+  const aoTex = new THREE.CanvasTexture(surfaceCanvasFromValues(s, ao));
+  surfaceLibrary.edgeAO = aoTex;
+  return surfaceLibrary;
+}
+
+function classifySurface(mesh, mat) {
+  if (mesh.userData.surface) return mesh.userData.surface;
+  const type = mesh.geometry.type;
+  const hsl = { h: 0, s: 0, l: 0 };
+  mat.color.getHSL(hsl);
+  const { h, s, l } = hsl;
+  const isBox = type === "BoxGeometry" || type === "BoxBufferGeometry";
+  const isCyl = type.startsWith("Cylinder");
+  const isRound = /Sphere|Dodecahedron|Icosahedron|Octahedron|Tetrahedron|Cone/.test(type);
+  const isFlat = /Plane|Circle/.test(type);
+
+  if (s < 0.12) {
+    if (l > 0.86) return isRound ? null : "snow";
+    if (l < 0.16) return isBox || isCyl ? "metal" : "rock";
+    return isBox ? "stone" : isCyl ? "stone" : "rock";
+  }
+  if (h >= 0.17 && h <= 0.47) {
+    if (isRound || isCyl) return "foliage";
+    if (isBox) {
+      const p = mesh.geometry.parameters || {};
+      const thin = (p.height || 1) < Math.min(p.width || 1, p.depth || 1) * 0.5;
+      return thin ? "grass" : "foliage";
+    }
+    return "grass";
+  }
+  if (h >= 0.02 && h < 0.17) {
+    if (l > 0.55 && s > 0.25) return isRound ? "rock" : "sand";
+    if (s < 0.33 && l > 0.32) return isCyl ? "bark" : isRound ? "rock" : "dirt";
+    if (isCyl) return "bark";
+    if (isBox) {
+      const p = mesh.geometry.parameters || {};
+      const tall = (p.height || 1) > Math.max(p.width || 1, p.depth || 1) * 3;
+      return tall ? "bark" : "wood";
+    }
+    if (isFlat) return "wood";
+    return "dirt";
+  }
+  if (h > 0.47 && h < 0.7 && s < 0.3) return isBox ? "stone" : "rock";
+  return isBox ? "plaster" : null;
+}
+
+function surfaceUvsForMesh(mesh, kind) {
+  const src = mesh.geometry;
+  const worldScale = new THREE.Vector3();
+  mesh.getWorldScale(worldScale);
+  const sx = Math.abs(worldScale.x) || 1;
+  const sy = Math.abs(worldScale.y) || 1;
+  const sz = Math.abs(worldScale.z) || 1;
+  const key = `${src.uuid}|${kind}|${sx.toFixed(2)}|${sy.toFixed(2)}|${sz.toFixed(2)}`;
+  if (surfaceGeometryCache.has(key)) return surfaceGeometryCache.get(key);
+
+  const tile = surfaceSettings[kind].tile;
+  const type = src.type;
+  const isBox = type === "BoxGeometry" || type === "BoxBufferGeometry";
+  const isCyl = type.startsWith("Cylinder") || type.startsWith("Cone");
+  let geo;
+
+  if (isBox || isCyl) {
+    geo = src.clone();
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+    const pos = geo.attributes.position;
+    const nor = geo.attributes.normal;
+    const origUv = geo.attributes.uv;
+    const uv = new Float32Array(pos.count * 2);
+    const p = src.parameters || {};
+    const radius = isCyl ? ((p.radiusTop ?? p.radius ?? 1) + (p.radiusBottom ?? p.radius ?? 1)) / 2 : 1;
+    for (let i = 0; i < pos.count; i += 1) {
+      const nx = Math.abs(nor.getX(i));
+      const ny = Math.abs(nor.getY(i));
+      const nz = Math.abs(nor.getZ(i));
+      let u;
+      let v;
+      if (isCyl && ny < 0.9 && origUv) {
+        u = origUv.getX(i) * Math.PI * 2 * radius * Math.max(sx, sz);
+        v = pos.getY(i) * sy;
+      } else if (ny >= nx && ny >= nz) {
+        u = pos.getX(i) * sx;
+        v = pos.getZ(i) * sz;
+      } else if (nx >= nz) {
+        u = pos.getZ(i) * sz;
+        v = pos.getY(i) * sy;
+      } else {
+        u = pos.getX(i) * sx;
+        v = pos.getY(i) * sy;
+      }
+      uv[i * 2] = u / tile;
+      uv[i * 2 + 1] = v / tile;
+    }
+    if (isBox && origUv) geo.setAttribute("uv2", new THREE.BufferAttribute(new Float32Array(origUv.array), 2));
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  } else {
+    // Free-form shapes (rocks, foliage, terrain): planar projection chosen per triangle.
+    geo = src.index ? src.toNonIndexed() : src.clone();
+    const pos = geo.attributes.position;
+    const uv = new Float32Array(pos.count * 2);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const c = new THREE.Vector3();
+    const n = new THREE.Vector3();
+    for (let t = 0; t < pos.count; t += 3) {
+      a.fromBufferAttribute(pos, t);
+      b.fromBufferAttribute(pos, t + 1);
+      c.fromBufferAttribute(pos, t + 2);
+      n.subVectors(c, b).cross(a.clone().sub(b));
+      const ax = Math.abs(n.x * sy * sz);
+      const ay = Math.abs(n.y * sx * sz);
+      const az = Math.abs(n.z * sx * sy);
+      for (let k = 0; k < 3; k += 1) {
+        const i = t + k;
+        let u;
+        let v;
+        if (ay >= ax && ay >= az) { u = pos.getX(i) * sx; v = pos.getZ(i) * sz; }
+        else if (ax >= az) { u = pos.getZ(i) * sz; v = pos.getY(i) * sy; }
+        else { u = pos.getX(i) * sx; v = pos.getY(i) * sy; }
+        uv[i * 2] = u / tile;
+        uv[i * 2 + 1] = v / tile;
+      }
+    }
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    if (!geo.attributes.normal) geo.computeVertexNormals();
+  }
+  if (!geo.attributes.uv2) {
+    geo.setAttribute("uv2", new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2).fill(0.5), 2));
+  }
+  surfaceGeometryCache.set(key, geo);
+  return geo;
+}
+
+function surfaceMaterialFor(mat, kind, withEdges) {
+  // Materials are upgraded in place so any code holding a reference keeps working.
+  const done = surfaceMaterialCache.get(mat.uuid);
+  if (done) {
+    if (withEdges && !mat.aoMap) { mat.aoMap = getSurfaceLibrary().edgeAO; mat.aoMapIntensity = 0.85; mat.needsUpdate = true; }
+    return mat;
+  }
+  const lib = getSurfaceLibrary();
+  const settings = surfaceSettings[kind];
+  mat.map = lib[kind].map;
+  mat.bumpMap = lib[kind].bump;
+  mat.bumpScale = settings.bump;
+  mat.roughness = settings.roughness;
+  if (settings.metalness !== undefined) mat.metalness = settings.metalness;
+  if (withEdges) {
+    mat.aoMap = lib.edgeAO;
+    mat.aoMapIntensity = 0.85;
+  }
+  // Detail maps darken slightly on average; lift the base color to keep the original look.
+  mat.color.multiplyScalar(kind === "snow" || kind === "plaster" ? 1.04 : 1.12);
+  mat.needsUpdate = true;
+  surfaceMaterialCache.set(mat.uuid, kind);
+  return mat;
+}
+
+function enhanceWorldSurfaces(root, skip = new Set()) {
+  if (!root) return;
+  root.updateMatrixWorld(true);
+  const visit = (obj) => {
+    if (skip.has(obj) || obj.userData.noSurface) return;
+    if (obj.isMesh && obj.material && obj.material.isMeshStandardMaterial && !Array.isArray(obj.material)) {
+      const mat = obj.material;
+      const glowing = mat.emissiveIntensity > 0.2 && (mat.emissive.r + mat.emissive.g + mat.emissive.b) > 0.24;
+      if (!mat.map && !mat.transparent && !mat.vertexColors && !glowing && mat.opacity >= 1) {
+        const kind = classifySurface(obj, mat);
+        if (kind && surfaceSettings[kind]) {
+          try {
+            const isBox = obj.geometry.type === "BoxGeometry" || obj.geometry.type === "BoxBufferGeometry";
+            obj.geometry = surfaceUvsForMesh(obj, kind);
+            surfaceMaterialFor(mat, kind, isBox);
+          } catch (error) {
+            console.warn("Surface enhancement skipped for a mesh:", error);
+          }
+        }
+      }
+    }
+    obj.children.forEach(visit);
+  };
+  visit(root);
+}
+
+// ── 26-wind-grass.js ─ Instanced grass blades that sway in a shared wind field.
+//
+// Each island gets one InstancedMesh of tapered blades. The wind is done in the
+// vertex shader (rolling gusts + flutter), so thousands of blades cost one draw call.
+
+const windUniforms = {
+  uWindTime: { value: 0 },
+  uWindDir: { value: new THREE.Vector2(0.86, 0.5).normalize() },
+  uWindStrength: { value: 1.0 },
+};
+
+// Blades per square world unit at the highest quality, per island index.
+const WIND_GRASS_DENSITY = { 0: 0.85, 1: 0.85, 2: 0.65, 3: 0.12, default: 0.5 };
+const WIND_GRASS_CELL = 64;           // grass is generated in square cells this wide
+const WIND_GRASS_FULL_RANGE = 80;     // full density inside this distance
+const WIND_GRASS_FADE_RANGE = 210;    // thins out to nothing by here
+const WIND_GRASS_DROP_RANGE = 330;    // cells beyond this are freed
+const windGrassIslands = [];
+// `var` so the graphics setting can be applied before this file has run.
+var windGrassQuality = 1;
+var windGrassTimer = 0;
+let windGrassGeometry = null;
+
+function updateWind(dt) {
+  windUniforms.uWindTime.value += dt;
+  // Storms push the grass harder; ease in and out.
+  const target = typeof weatherActive !== "undefined" && weatherActive ? 2.1 : 1.0;
+  windUniforms.uWindStrength.value += (target - windUniforms.uWindStrength.value) * Math.min(1, dt * 0.6);
+  // Wind direction wanders slowly.
+  const a = 0.52 + Math.sin(windUniforms.uWindTime.value * 0.021) * 0.45;
+  windUniforms.uWindDir.value.set(Math.cos(a), Math.sin(a));
+}
+
+function setWindGrassQuality(level) {
+  windGrassQuality = ({ 1: 0.18, 2: 0.35, 3: 0.6, 4: 0.82, 5: 1 })[level] ?? 1;
+  windGrassTimer = 0; // re-apply densities on the next update
+}
+
+// A tapered, slightly curved blade, 1 unit tall. `bladeT` runs 0 at the root to 1 at the tip.
+function createGrassBladeGeometry() {
+  const segments = 4;
+  const positions = [];
+  const bladeT = [];
+  const normals = [];
+  const indices = [];
+  for (let i = 0; i <= segments; i += 1) {
+    const t = i / segments;
+    const halfWidth = 0.17 * Math.pow(1 - t, 0.9) + 0.004;
+    const lean = t * t * 0.32;
+    positions.push(-halfWidth, t, lean, halfWidth, t, lean);
+    bladeT.push(t, t);
+    // Up-facing normals light blades like the ground they grow from (no dark backsides).
+    normals.push(0, 1, 0.25, 0, 1, 0.25);
+  }
+  for (let i = 0; i < segments; i += 1) {
+    const a = i * 2;
+    indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("bladeT", new THREE.Float32BufferAttribute(bladeT, 1));
+  geometry.setIndex(indices);
+  return geometry;
+}
+
+function createWindGrassMaterial(rootHex, tipHex) {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.9,
+    side: THREE.DoubleSide,
+  });
+  material.userData.noSurface = true;
+  const rootColor = worldColor(rootHex);
+  const tipColor = worldColor(tipHex);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWindTime = windUniforms.uWindTime;
+    shader.uniforms.uWindDir = windUniforms.uWindDir;
+    shader.uniforms.uWindStrength = windUniforms.uWindStrength;
+    shader.uniforms.uRootColor = { value: rootColor };
+    shader.uniforms.uTipColor = { value: tipColor };
+    shader.vertexShader = `
+      attribute float bladeT;
+      uniform float uWindTime;
+      uniform vec2 uWindDir;
+      uniform float uWindStrength;
+      varying float vBladeT;
+    ` + shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `
+      vBladeT = bladeT;
+      vec4 localPos = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        localPos = instanceMatrix * localPos;
+      #endif
+      vec4 worldPos = modelMatrix * localPos;
+      vec4 rootWorld = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      // Big rolling gusts travel across the field; small flutter on top.
+      float along = dot(rootWorld.xz, uWindDir);
+      float gust = sin(along * 0.045 - uWindTime * 1.6) * 0.5 + 0.5;
+      gust = gust * gust;
+      float sway = sin(uWindTime * 2.3 + rootWorld.x * 0.21 + rootWorld.z * 0.17) * 0.28
+                 + sin(uWindTime * 5.1 + rootWorld.x * 0.73 - rootWorld.z * 0.61) * 0.08;
+      float bend = (0.35 + gust * 1.1 + sway) * uWindStrength * bladeT * bladeT;
+      float bladeHeight = length(instanceMatrix[1].xyz);
+      worldPos.xz += uWindDir * bend * bladeHeight * 0.55;
+      worldPos.y -= bend * bend * bladeHeight * 0.12;
+      vec4 mvPosition = viewMatrix * worldPos;
+      gl_Position = projectionMatrix * mvPosition;
+      `,
+    );
+    shader.fragmentShader = `
+      uniform vec3 uRootColor;
+      uniform vec3 uTipColor;
+      varying float vBladeT;
+    ` + shader.fragmentShader.replace(
+      "#include <color_fragment>",
+      `
+      #include <color_fragment>
+      // Dark, shaded roots fading to sunlit tips.
+      diffuseColor.rgb *= mix(uRootColor, uTipColor, smoothstep(0.0, 1.0, vBladeT));
+      `,
+    );
+  };
+  return material;
+}
+
+// Islands register once; their grass is generated cell by cell as the player approaches.
+function addWindGrass(group, radius, height, index) {
+  if (index === 4) return; // snowy island
+  const dry = index === 3;
+  windGrassIslands.push({
+    group,
+    radius,
+    height,
+    index,
+    dry,
+    density: WIND_GRASS_DENSITY[index] ?? WIND_GRASS_DENSITY.default,
+    cells: new Map(),
+    pool: [], // freed cells are reused so GPU buffers are not leaked
+    covers: null,
+    material: dry ? createWindGrassMaterial(0x8a7a3e, 0xe0cd84) : createWindGrassMaterial(0x2f5e26, 0xa9d46a),
+    tints: (dry ? [0xf2e2a0, 0xe6d08a, 0xd8c27a] : [0xffffff, 0xe6f2d2, 0xf4f8e4, 0xd2e8b6, 0xfff1c8]).map((hex) => new THREE.Color(hex)),
+  });
+}
+
+// Flat ground cover (paths, plaza, beach rings, farm plots) that grass must not poke through.
+function collectGrassCovers(island) {
+  const covers = [];
+  const box = new THREE.Box3();
+  const groundTop = island.group.position.y + island.height + 3;
+  island.group.updateMatrixWorld(true);
+  island.group.traverse((obj) => {
+    if (!obj.isMesh || obj.isInstancedMesh) return;
+    const surface = obj.userData.surface;
+    if (surface === "grass" || surface === "cliff" || surface === "rock") return;
+    box.setFromObject(obj);
+    if (obj.userData.groundCover || (box.max.y - box.min.y < 3.5 && box.min.y < groundTop)) covers.push({ mesh: obj, box: box.clone() });
+  });
+  return covers;
+}
+
+const grassRaycaster = new THREE.Raycaster();
+const grassDown = new THREE.Vector3(0, -1, 0);
+const grassOrigin = new THREE.Vector3();
+const grassProbe = new THREE.Vector3();
+const grassDummy = new THREE.Object3D();
+
+function grassCellCovered(covers, wx, wz, wy) {
+  for (const cover of covers) {
+    const b = cover.box;
+    if (wx < b.min.x || wx > b.max.x || wz < b.min.z || wz > b.max.z || b.max.y < wy - 0.5) continue;
+    grassOrigin.set(wx, wy + 10, wz);
+    grassRaycaster.set(grassOrigin, grassDown);
+    if (grassRaycaster.intersectObject(cover.mesh, false).length) return true;
+  }
+  return false;
+}
+
+function buildGrassCell(island, cx, cz) {
+  if (!windGrassGeometry) {
+    windGrassGeometry = createGrassBladeGeometry();
+    // Every cell keeps its blades within this sphere around the cell centre, so
+    // the shared bound lets each cell be frustum-culled on its own.
+    windGrassGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), WIND_GRASS_CELL * 0.75 + 8);
+  }
+  if (!island.covers) island.covers = collectGrassCovers(island);
+  const { radius, height, index, dry, group } = island;
+  const seed = index + 9;
+  const profileRadius = radius * 0.88;
+  const half = WIND_GRASS_CELL / 2;
+  const centerX = (cx + 0.5) * WIND_GRASS_CELL;
+  const centerZ = (cz + 0.5) * WIND_GRASS_CELL;
+  const target = Math.round(WIND_GRASS_CELL * WIND_GRASS_CELL * island.density);
+  let mesh = island.pool.pop();
+  if (!mesh) {
+    mesh = new THREE.InstancedMesh(windGrassGeometry, island.material, target);
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.userData.noSurface = true;
+    group.add(mesh);
+  }
+  mesh.position.set(centerX, 0, centerZ);
+
+  let state = ((cx * 73856093) ^ (cz * 19349663) ^ (index * 83492791)) >>> 0;
+  const rng = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  let placed = 0;
+  for (let attempt = 0; attempt < target * 1.4 && placed < target; attempt += 1) {
+    const lx = centerX + (rng() - 0.5) * WIND_GRASS_CELL;
+    const lz = centerZ + (rng() - 0.5) * WIND_GRASS_CELL;
+    const r = Math.hypot(lx, lz);
+    const angle = Math.atan2(lz, lx);
+    const edge = islandGrassRadius(angle, radius, index);
+    if (r > edge * 0.96) continue;
+    // Same height function the terrain mesh and the player use.
+    const ly = getLocalSurfaceHeightAt(lx, lz, radius, height, index) - 0.04;
+    if (ly < 1.5) continue; // too close to the waterline
+    const wx = group.position.x + lx;
+    const wz = group.position.z + lz;
+    const wy = group.position.y + ly;
+    grassProbe.set(wx, wy, wz);
+    if (getWallCollision(grassProbe, 0.6)) continue;
+    if (grassCellCovered(island.covers, wx, wz, wy)) continue;
+
+    const bladeHeight = (dry ? 1.5 : 2.0) + rng() * (dry ? 1.5 : 2.6);
+    grassDummy.position.set(lx - centerX, ly - 0.05, lz - centerZ);
+    grassDummy.rotation.set((rng() - 0.5) * 0.3, rng() * Math.PI * 2, (rng() - 0.5) * 0.3);
+    grassDummy.scale.set(0.8 + rng() * 0.7, bladeHeight, 1);
+    grassDummy.updateMatrix();
+    mesh.setMatrixAt(placed, grassDummy.matrix);
+    mesh.setColorAt(placed, island.tints[Math.floor(rng() * island.tints.length)]);
+    placed += 1;
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.userData.maxCount = placed;
+  mesh.count = 0;
+  mesh.visible = false;
+  return mesh;
+}
+
+// Streams cells in and out around the player and thins distant ones.
+function updateWindGrass(dt) {
+  updateWind(dt);
+  windGrassTimer -= dt;
+  if (windGrassTimer > 0 || !playerMesh) return;
+  windGrassTimer = 0.25;
+  const px = playerMesh.position.x;
+  const pz = playerMesh.position.z;
+  let builtThisTick = 0;
+
+  windGrassIslands.forEach((island) => {
+    const gx = island.group.position.x;
+    const gz = island.group.position.z;
+    const localX = px - gx;
+    const localZ = pz - gz;
+    const nearIsland = Math.hypot(localX, localZ) < island.radius + WIND_GRASS_DROP_RANGE;
+
+    // Free far cells.
+    island.cells.forEach((mesh, key) => {
+      const d = Math.hypot(mesh.position.x - localX, mesh.position.z - localZ);
+      if (!nearIsland || d > WIND_GRASS_DROP_RANGE) {
+        mesh.count = 0;
+        mesh.visible = false;
+        island.pool.push(mesh);
+        island.cells.delete(key);
+      }
+    });
+    if (!nearIsland || windGrassQuality <= 0) return;
+
+    const reach = Math.ceil(WIND_GRASS_FADE_RANGE / WIND_GRASS_CELL);
+    const pcx = Math.floor(localX / WIND_GRASS_CELL);
+    const pcz = Math.floor(localZ / WIND_GRASS_CELL);
+    const wanted = [];
+    for (let cx = pcx - reach; cx <= pcx + reach; cx += 1) {
+      for (let cz = pcz - reach; cz <= pcz + reach; cz += 1) {
+        const ccx = (cx + 0.5) * WIND_GRASS_CELL;
+        const ccz = (cz + 0.5) * WIND_GRASS_CELL;
+        if (Math.hypot(ccx, ccz) > island.radius) continue; // off the island
+        const d = Math.max(0, Math.hypot(ccx - localX, ccz - localZ) - WIND_GRASS_CELL * 0.5);
+        if (d > WIND_GRASS_FADE_RANGE) continue;
+        wanted.push({ key: `${cx},${cz}`, cx, cz, d });
+      }
+    }
+    wanted.sort((a, b) => a.d - b.d);
+    wanted.forEach(({ key, cx, cz, d }) => {
+      let mesh = island.cells.get(key);
+      if (!mesh) {
+        if (builtThisTick >= 2) return; // spread the work over several frames
+        mesh = buildGrassCell(island, cx, cz);
+        island.cells.set(key, mesh);
+        builtThisTick += 1;
+      }
+      const fade = d <= WIND_GRASS_FULL_RANGE ? 1 : 1 - (d - WIND_GRASS_FULL_RANGE) / (WIND_GRASS_FADE_RANGE - WIND_GRASS_FULL_RANGE);
+      // Blades were placed in random order, so a shorter count thins the cell evenly.
+      // Thin quickly with distance: far blades are tiny on screen anyway.
+      mesh.count = Math.floor(mesh.userData.maxCount * Math.pow(Math.max(0, fade), 1.6) * windGrassQuality);
+      mesh.visible = mesh.count > 0;
+    });
+  });
+  if (builtThisTick >= 2) windGrassTimer = 0; // keep building next frame
+}
+
+// ── 27-windmills.js ─ Tower windmills, a wheat field and hay bales for the starter island.
+
+const windmillRotors = [];
+
+function updateWindmills(dt) {
+  const strength = windUniforms.uWindStrength.value;
+  windmillRotors.forEach((rotor) => {
+    rotor.mesh.rotation.z -= dt * rotor.speed * (0.6 + strength * 0.5);
+  });
+}
+
+function createWindmill(scale = 1, seed = 0) {
+  const village = WORLD_PALETTE.village;
+  const mat = (hex, roughness, surface, extra = {}) => {
+    const m = new THREE.MeshStandardMaterial({ color: worldHex(hex), roughness, ...extra });
+    m.userData.surface = surface;
+    return m;
+  };
+  const stone = mat(village.foundation, 0.95, "stone");
+  const plaster = mat(village.walls[seed % village.walls.length], 0.9, "plaster");
+  const timber = mat(village.timber, 0.85, "wood");
+  const roofMat = mat(village.roofs[(seed + 1) % village.roofs.length], 0.78, "tiles", { side: THREE.DoubleSide });
+  const sailCloth = mat(0xefe6d2, 0.95, "plaster", { side: THREE.DoubleSide });
+  const trim = mat(village.trims[seed % village.trims.length], 0.7, "wood");
+
+  const mill = new THREE.Group();
+  const shade = (mesh) => {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  // Tapered tower: stone base, plastered body (curved profile via a lathe).
+  const towerProfile = [];
+  for (let i = 0; i <= 12; i += 1) {
+    const t = i / 12;
+    towerProfile.push(new THREE.Vector2(11 - 4.2 * t - 0.8 * Math.sin(t * Math.PI), 6 + t * 34));
+  }
+  const tower = shade(new THREE.Mesh(new THREE.LatheGeometry(towerProfile, 28), plaster));
+  mill.add(tower);
+  const base = shade(new THREE.Mesh(new THREE.CylinderGeometry(11.4, 12.4, 6, 28), stone));
+  base.position.y = 3;
+  mill.add(base);
+
+  // Balcony / reefing stage with railing.
+  const stage = shade(new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 0.8, 28), timber));
+  stage.position.y = 22;
+  mill.add(stage);
+  for (let i = 0; i < 16; i += 1) {
+    const a = (i / 16) * Math.PI * 2;
+    const post = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 3.2, 6), timber));
+    post.position.set(Math.cos(a) * 10.6, 23.6, Math.sin(a) * 10.6);
+    mill.add(post);
+  }
+  const rail = shade(new THREE.Mesh(new THREE.TorusGeometry(10.6, 0.25, 6, 32), timber));
+  rail.rotation.x = Math.PI / 2;
+  rail.position.y = 25.1;
+  mill.add(rail);
+
+  // Arched door and windows (reuse the cottage window glass so they glow at night).
+  const door = shade(new THREE.Mesh(flatPanel(archShape(5.6, 9), 0.6), timber));
+  door.position.set(0, 0.2, 11.6);
+  mill.add(door);
+  const doorFrame = shade(new THREE.Mesh(flatPanel(archFrameShape(5.6, 9, 1), 1), stone));
+  doorFrame.position.set(0, 0.2, 11.7);
+  mill.add(doorFrame);
+  [[12, 0.6], [30, 2.6], [30, -2.4]].forEach(([y, a]) => {
+    const r = 11 - 4.2 * ((y - 6) / 34) - 0.8 * Math.sin(((y - 6) / 34) * Math.PI);
+    const win = new THREE.Group();
+    const frame = new THREE.Mesh(flatPanel(archFrameShape(2.6, 4, 0.6), 0.6), trim);
+    const glass = new THREE.Mesh(flatPanel(archShape(2.6, 4), 0.25), houseWindowGlass);
+    glass.userData.noSurface = true;
+    win.add(frame, glass);
+    win.position.set(Math.sin(a) * (r - 0.15), y, Math.cos(a) * (r - 0.15));
+    win.rotation.y = a;
+    mill.add(win);
+  });
+
+  // Rotating cap with a bell-curved roof; the sails face +z.
+  const cap = new THREE.Group();
+  cap.position.y = 40;
+  const capProfile = [];
+  for (let i = 0; i <= 14; i += 1) {
+    const t = i / 14;
+    capProfile.push(new THREE.Vector2(7.8 * Math.pow(1 - t, 0.8) * (1 - 0.18 * Math.sin(t * Math.PI)) + 0.05, t * 10));
+  }
+  const capRoof = shade(new THREE.Mesh(new THREE.LatheGeometry(capProfile, 24), roofMat));
+  cap.add(capRoof);
+  const capRing = shade(new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 1.2, 24), timber));
+  capRing.position.y = 0.2;
+  cap.add(capRing);
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat(0xc9a24a, 0.35, "metal", { metalness: 0.7 }));
+  finial.position.y = 10.4;
+  cap.add(finial);
+  const axle = shade(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, 6, 12), timber));
+  axle.rotation.x = Math.PI / 2;
+  axle.position.set(0, 4, 8.2);
+  cap.add(axle);
+
+  const rotor = new THREE.Group();
+  rotor.position.set(0, 4, 11.4);
+  const hub = shade(new THREE.Mesh(new THREE.SphereGeometry(1.6, 14, 10), trim));
+  rotor.add(hub);
+  for (let s = 0; s < 4; s += 1) {
+    const sail = new THREE.Group();
+    const spar = shade(new THREE.Mesh(new THREE.BoxGeometry(0.9, 30, 0.9), timber));
+    spar.position.y = 15;
+    sail.add(spar);
+    // Lattice frame with a cloth panel on one side of the spar.
+    const cloth = shade(new THREE.Mesh(new THREE.PlaneGeometry(6, 24, 1, 1), sailCloth));
+    cloth.position.set(3.6, 17.5, -0.3);
+    sail.add(cloth);
+    for (let k = 0; k <= 6; k += 1) {
+      const bar = shade(new THREE.Mesh(new THREE.BoxGeometry(7, 0.35, 0.35), timber));
+      bar.position.set(3.2, 5.5 + k * 4, 0.1);
+      sail.add(bar);
+    }
+    const edge = shade(new THREE.Mesh(new THREE.BoxGeometry(0.35, 24.5, 0.35), timber));
+    edge.position.set(6.7, 17.5, 0.1);
+    sail.add(edge);
+    sail.rotation.z = (s / 4) * Math.PI * 2;
+    rotor.add(sail);
+  }
+  rotor.rotation.z = seed * 0.7;
+  cap.add(rotor);
+  mill.add(cap);
+  windmillRotors.push({ mesh: rotor, speed: 0.55 + (seed % 3) * 0.08 });
+
+  mill.scale.setScalar(scale);
+  return mill;
+}
+
+function createHayBale(radius = 3) {
+  const bale = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, radius * 1.3, 18),
+    new THREE.MeshStandardMaterial({ color: worldHex(0xd9b866), roughness: 0.95 }),
+  );
+  bale.rotation.z = Math.PI / 2;
+  bale.castShadow = true;
+  bale.receiveShadow = true;
+  bale.userData.surface = "dirt";
+  return bale;
+}
+
+// Golden wheat that sways with the same wind as the grass.
+function createWheatField(width, depth, seed = 0) {
+  const field = new THREE.Group();
+  const soil = new THREE.Mesh(
+    new THREE.BoxGeometry(width, 0.6, depth),
+    new THREE.MeshStandardMaterial({ color: worldHex(0x7a5a3a), roughness: 0.98 }),
+  );
+  soil.position.y = 0.3;
+  soil.receiveShadow = true;
+  soil.userData.surface = "dirt";
+  field.add(soil);
+
+  const count = Math.round(width * depth * 1.6);
+  const wheat = new THREE.InstancedMesh(createGrassBladeGeometry(), createWindGrassMaterial(0x9a7a32, 0xf3d77a), count);
+  wheat.frustumCulled = false;
+  wheat.receiveShadow = true;
+  wheat.userData.noSurface = true;
+  const dummy = new THREE.Object3D();
+  let state = (seed + 7) * 2246822519 >>> 0;
+  const rng = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const tint = new THREE.Color();
+  for (let i = 0; i < count; i += 1) {
+    // Planted in rows along x.
+    const row = Math.floor(rng() * Math.floor(depth / 2.2));
+    dummy.position.set((rng() - 0.5) * (width - 2), 0.55, -depth / 2 + 1.5 + row * 2.2 + (rng() - 0.5) * 0.6);
+    dummy.rotation.set((rng() - 0.5) * 0.2, rng() * Math.PI * 2, (rng() - 0.5) * 0.2);
+    dummy.scale.set(0.9 + rng() * 0.5, 4.2 + rng() * 1.8, 1);
+    dummy.updateMatrix();
+    wheat.setMatrixAt(i, dummy.matrix);
+    wheat.setColorAt(i, tint.setHSL(0.11 + rng() * 0.03, 0.5, 0.82 + rng() * 0.15));
+  }
+  wheat.instanceMatrix.needsUpdate = true;
+  if (wheat.instanceColor) wheat.instanceColor.needsUpdate = true;
+  field.add(wheat);
+  return field;
+}
+
+function addStarterWindmills(group, radius, height) {
+  const surface = (x, z) => getLocalSurfaceHeightAt(x, z, radius, height, 0);
+  const mills = [
+    // x, z, scale, facing (radians, sails point roughly into the wind)
+    [330, -70, 1.15, -0.6],
+    [-170, -300, 1.0, 0.4],
+    [150, -340, 0.9, -0.2],
+  ];
+  mills.forEach(([x, z, scale, facing], i) => {
+    const y = surface(x, z);
+    const mill = createWindmill(scale, i);
+    mill.position.set(x, y - 0.4, z);
+    mill.rotation.y = facing;
+    group.add(mill);
+    addCollisionCircle(new THREE.Vector3(x, y, z), 12.2 * scale, "Windmill", { material: "stone" });
+  });
+
+  // Wheat field and hay bales beside the big mill.
+  const fx = 280;
+  const fz = -150;
+  const field = createWheatField(56, 34, 3);
+  field.position.set(fx, surface(fx, fz) - 0.1, fz);
+  field.rotation.y = -0.6;
+  group.add(field);
+  const fenceY = surface(fx, fz);
+  addCollisionBox(new THREE.Vector3(fx, fenceY, fz), 28, 17, -0.6, "Wheat field", { material: "wood", height: 3 });
+
+  [[318, -112, 3.2], [324, -102, 2.8], [312, -96, 3], [246, -196, 3.1]].forEach(([x, z, r], i) => {
+    const bale = createHayBale(r);
+    bale.position.set(x, surface(x, z) + r - 0.2, z);
+    bale.rotation.y = i * 0.9;
+    group.add(bale);
+    addCollisionCircle(new THREE.Vector3(x, surface(x, z), z), r * 1.1, "Hay bale", { material: "wood", damage: 2, height: r * 1.9 });
+  });
+}
+
+// ── 28-ground-settling.js ─ Puts every island object properly on the ground after the world is built.
+//
+// Objects are placed using the ground height at their centre, which leaves the
+// downhill side hanging on slopes. This pass, run once at the end of createWorld:
+//   - drapes thin, flat ground covers (paths, plots, decks) over the terrain, and
+//   - lowers free-standing objects so their lowest corner touches the ground.
+// It leaves alone: water surfaces, things over the sea, intentionally raised parts
+// (anything clearly above the ground everywhere), and parts that hold up another part
+// (arch pillars, well posts), so multi-piece structures stay joined.
+
+const SETTLE_LIFT = 0.08;     // gap left under draped covers to avoid flicker
+const SETTLE_SINK = 0.15;     // how far solid objects are pushed into the ground
+
+function settleIslandObjects(island) {
+  const group = island.mesh;
+  if (!group) return;
+  const { radius, index } = island;
+  const height = island.surfaceY - 0.16;
+  const gx = group.position.x;
+  const gz = group.position.z;
+  const groundLocal = (lx, lz) => getLocalSurfaceHeightAt(lx, lz, radius, height, index);
+  const groundWorld = (wx, wz) => group.position.y + groundLocal(wx - gx, wz - gz);
+
+  group.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  const items = [];
+  const consider = (obj) => {
+    if (obj.userData.isTerrain || obj.userData.noSettle || obj.isInstancedMesh || obj.isSprite || obj.isLight) return;
+    box.setFromObject(obj);
+    if (!isFinite(box.min.y) || box.max.x - box.min.x > radius) return;
+    items.push({ obj, box: box.clone() });
+  };
+  group.children.slice().forEach(consider);
+  scene.children.forEach((obj) => {
+    if (!obj.userData.settleOn) return;
+    if (Math.hypot(obj.position.x - gx, obj.position.z - gz) > radius) return;
+    consider(obj);
+  });
+
+  // Ground under a footprint, sampled on a grid.
+  const footprint = (b) => {
+    const sx = b.max.x - b.min.x;
+    const sz = b.max.z - b.min.z;
+    const nx = Math.min(8, Math.max(2, Math.ceil(sx / 10)));
+    const nz = Math.min(8, Math.max(2, Math.ceil(sz / 10)));
+    let min = Infinity;
+    let max = -Infinity;
+    let atSea = 0;
+    let total = 0;
+    for (let i = 0; i <= nx; i += 1) {
+      for (let j = 0; j <= nz; j += 1) {
+        const wx = b.min.x + (sx * i) / nx;
+        const wz = b.min.z + (sz * j) / nz;
+        const y = groundWorld(wx, wz);
+        min = Math.min(min, y);
+        max = Math.max(max, y);
+        // At or past the coastline the terrain function bottoms out at its edge height.
+        const angle = Math.atan2(wz - gz, wx - gx);
+        const edge = 0.16 + Math.sin(angle * 6 + index + 9) * 1.5 + Math.cos(angle * 11) * 0.8;
+        if (y - group.position.y - edge < 0.05) atSea += 1;
+        total += 1;
+      }
+    }
+    return { min, max, seaShare: atSea / total };
+  };
+
+  // Does anything rest on top of this item? Then moving it would open a gap.
+  const supportsSomething = (item) => items.some((other) => other !== item
+    && Math.abs(other.box.min.y - item.box.max.y) < 1.5
+    && other.box.min.x < item.box.max.x && other.box.max.x > item.box.min.x
+    && other.box.min.z < item.box.max.z && other.box.max.z > item.box.min.z);
+
+  let draped = 0;
+  let lowered = 0;
+  items.forEach((item) => {
+    const { obj, box: b } = item;
+    const material = obj.material;
+    if (material && (material.transparent || material.opacity < 1)) return; // water stays level
+    const ground = footprint(b);
+    if (ground.seaShare > 0.25) return; // mostly over the beach or the sea (docks, shore rocks)
+    const thickness = b.max.y - b.min.y;
+    const span = Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+
+    if (obj.isMesh && thickness < 1.6 && span > 8) {
+      if (ground.max - ground.min > 0.3 || Math.abs(b.min.y - ground.min) > 0.4) {
+        if (drapeMeshOnGround(obj, group, groundLocal, b.min.y - group.position.y)) draped += 1;
+      }
+      return;
+    }
+
+    const gap = b.min.y - ground.min;              // how far the downhill side hangs
+    const aboveHighest = b.min.y - ground.max;     // > 0 everywhere = deliberately raised
+    if (gap > 0.5 && aboveHighest < 3 && !supportsSomething(item)) {
+      obj.position.y -= gap + SETTLE_SINK;
+      lowered += 1;
+    }
+  });
+  return { draped, lowered };
+}
+
+// Rebuilds a flat mesh with enough subdivisions to bend, bakes its transform,
+// then lifts every vertex so the underside follows the terrain.
+function drapeMeshOnGround(mesh, group, groundLocal, bottomLocalY) {
+  const geo = mesh.geometry;
+  const p = geo.parameters || {};
+  const seg = (size) => Math.min(80, Math.max(1, Math.ceil(size / 6)));
+  let next = null;
+  switch (geo.type) {
+    case "BoxGeometry":
+    case "BoxBufferGeometry":
+      next = new THREE.BoxGeometry(p.width, p.height, p.depth, seg(p.width), 1, seg(p.depth));
+      break;
+    case "PlaneGeometry":
+    case "PlaneBufferGeometry":
+      next = new THREE.PlaneGeometry(p.width, p.height, seg(p.width), seg(p.height));
+      break;
+    case "CircleGeometry":
+    case "CircleBufferGeometry":
+      next = new THREE.RingGeometry(0.01, p.radius, Math.max(24, p.segments || 24), seg(p.radius));
+      break;
+    case "RingGeometry":
+    case "RingBufferGeometry":
+      next = new THREE.RingGeometry(p.innerRadius, p.outerRadius, Math.max(24, p.thetaSegments || 24), seg(p.outerRadius - p.innerRadius));
+      break;
+    case "CylinderGeometry":
+    case "CylinderBufferGeometry": {
+      // A thin disc: replace with a subdivided top surface plus its rim.
+      const r = Math.max(p.radiusTop, p.radiusBottom);
+      next = new THREE.RingGeometry(0.01, r, Math.max(32, p.radialSegments || 32), seg(r));
+      next.rotateX(-Math.PI / 2);
+      next.translate(0, p.height / 2, 0);
+      break;
+    }
+    default:
+      next = geo.clone();
+  }
+
+  mesh.updateMatrix();
+  next.applyMatrix4(mesh.matrix); // now in the island group's space
+  const pos = next.attributes.position;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, pos.getY(i) - bottomLocalY + groundLocal(x, z) + SETTLE_LIFT);
+  }
+  pos.needsUpdate = true;
+  next.computeVertexNormals();
+  next.computeBoundingBox();
+  next.computeBoundingSphere();
+  if (mesh.geometry !== next) mesh.geometry.dispose?.();
+  mesh.geometry = next;
+  mesh.userData.groundCover = true; // grass avoids it (see collectGrassCovers)
+  mesh.position.set(0, 0, 0);
+  mesh.rotation.set(0, 0, 0);
+  mesh.scale.set(1, 1, 1);
+  mesh.updateMatrix();
+  return true;
+}
+
+// ── 29-jungle-trees.js ─ Curved rainforest trees with swaying canopies for the jungle island.
+//
+// Six tree shapes are generated once (curved trunk, buttress roots, branches,
+// leaf clusters, vines) and drawn as instanced batches, so the whole forest is a
+// handful of draw calls. A shared wind shader bends each tree from the top and
+// makes the leaves flutter, driven by the same wind as the grass.
+
+const JUNGLE_TREE_HEIGHT = 150; // nominal height the shapes are built at
+const JUNGLE_TREE_VARIANTS = 6;
+let jungleTreeVariants = null;
+let jungleTreeMaterials = null;
+
+// Small deterministic random generator so every run grows the same forest.
+function seededRandom(seed) {
+  let state = (seed * 2654435761) >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+// A tube swept along a curve whose radius shrinks from r0 to r1.
+function makeTaperedTube(curve, segments, radial, r0, r1, color = null) {
+  const frames = curve.computeFrenetFrames(segments, false);
+  const positions = [];
+  const normals = [];
+  const colors = [];
+  const ring = (i) => {
+    const t = i / segments;
+    const p = curve.getPointAt(t);
+    const r = r0 + (r1 - r0) * Math.pow(t, 0.8);
+    const n = frames.normals[i];
+    const b = frames.binormals[i];
+    const out = [];
+    for (let j = 0; j <= radial; j += 1) {
+      const a = (j / radial) * Math.PI * 2;
+      const nx = Math.cos(a) * n.x + Math.sin(a) * b.x;
+      const ny = Math.cos(a) * n.y + Math.sin(a) * b.y;
+      const nz = Math.cos(a) * n.z + Math.sin(a) * b.z;
+      out.push([p.x + nx * r, p.y + ny * r, p.z + nz * r, nx, ny, nz]);
+    }
+    return out;
+  };
+  let prev = ring(0);
+  for (let i = 1; i <= segments; i += 1) {
+    const cur = ring(i);
+    for (let j = 0; j < radial; j += 1) {
+      const quad = [prev[j], cur[j], prev[j + 1], cur[j], cur[j + 1], prev[j + 1]];
+      quad.forEach((v) => {
+        positions.push(v[0], v[1], v[2]);
+        normals.push(v[3], v[4], v[5]);
+        if (color) colors.push(color.r, color.g, color.b);
+      });
+    }
+    prev = cur;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  if (color) geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geo;
+}
+
+// Joins geometries (position/normal[/color]) into one non-indexed geometry.
+function mergeSimpleGeometries(list, withColor) {
+  const parts = list.map((g) => (g.index ? g.toNonIndexed() : g));
+  const total = parts.reduce((n, g) => n + g.attributes.position.count, 0);
+  const pos = new Float32Array(total * 3);
+  const nor = new Float32Array(total * 3);
+  const col = withColor ? new Float32Array(total * 3) : null;
+  let offset = 0;
+  parts.forEach((g) => {
+    pos.set(g.attributes.position.array, offset * 3);
+    nor.set(g.attributes.normal.array, offset * 3);
+    if (col) {
+      if (g.attributes.color) col.set(g.attributes.color.array, offset * 3);
+      else col.fill(1, offset * 3, (offset + g.attributes.position.count) * 3);
+    }
+    offset += g.attributes.position.count;
+  });
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  merged.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+  if (col) merged.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  merged.computeBoundingSphere();
+  return merged;
+}
+
+function leafCluster(center, radius, color, rand) {
+  const geo = new THREE.IcosahedronGeometry(radius, 1).toNonIndexed();
+  geo.deleteAttribute("uv");
+  // Lumpy, flattened clump.
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i += 1) {
+    const k = 0.82 + rand() * 0.3;
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.58, p.getZ(i) * k);
+  }
+  geo.computeVertexNormals();
+  geo.translate(center.x, center.y, center.z);
+  const colors = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i += 3) {
+    // Per-face shade variation, lighter on top.
+    const top = p.getY(i) > center.y ? 1.08 : 0.86;
+    const v = (0.9 + rand() * 0.18) * top;
+    for (let k = 0; k < 3; k += 1) {
+      colors[(i + k) * 3] = color.r * v;
+      colors[(i + k) * 3 + 1] = color.g * v;
+      colors[(i + k) * 3 + 2] = color.b * v;
+    }
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  return geo;
+}
+
+// One tree shape at the nominal height. `straight` keeps the top centred (treehouse tree).
+function buildJungleTreeShape(seed, straight = false) {
+  const rand = seededRandom(seed + 11);
+  const H = JUNGLE_TREE_HEIGHT;
+  const bend = straight ? 2 : 12;
+  const off = () => (rand() - 0.5) * 2 * bend;
+  const trunkCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(off() * 0.4, H * 0.28, off() * 0.4),
+    new THREE.Vector3(off(), H * 0.62, off()),
+    new THREE.Vector3(straight ? 0 : off() * 0.7, H, straight ? 0 : off() * 0.7),
+  ]);
+  const bark = [makeTaperedTube(trunkCurve, 22, 10, 7.2, 2.4)];
+  const leaves = [];
+  const greens = WORLD_PALETTE.foliage.jungleCanopy.map((hex) => worldColor(hex));
+  const vineColor = worldColor(0x3c6b2c);
+
+  // Buttress roots flaring out to the ground.
+  const rootCount = 5;
+  for (let i = 0; i < rootCount; i += 1) {
+    const a = (i / rootCount) * Math.PI * 2 + rand() * 0.6;
+    const reach = 15 + rand() * 7;
+    const root = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(Math.cos(a) * 3, 14 + rand() * 5, Math.sin(a) * 3),
+      new THREE.Vector3(Math.cos(a) * reach * 0.55, 5, Math.sin(a) * reach * 0.55),
+      new THREE.Vector3(Math.cos(a) * reach, -1.5, Math.sin(a) * reach),
+    ]);
+    bark.push(makeTaperedTube(root, 8, 6, 3.4, 0.7));
+  }
+
+  // Branches curving up and out, each ending in a cluster of leaves.
+  const branchCount = 4 + Math.floor(rand() * 2);
+  for (let i = 0; i < branchCount; i += 1) {
+    const t = 0.52 + rand() * 0.38;
+    const start = trunkCurve.getPointAt(t);
+    const a = (i / branchCount) * Math.PI * 2 + rand() * 0.8;
+    const len = 30 + rand() * 20;
+    const mid = start.clone().add(new THREE.Vector3(Math.cos(a) * len * 0.5, len * 0.22, Math.sin(a) * len * 0.5));
+    const end = start.clone().add(new THREE.Vector3(Math.cos(a) * len, len * 0.5, Math.sin(a) * len));
+    bark.push(makeTaperedTube(new THREE.CatmullRomCurve3([start, mid, end]), 8, 7, 2.6, 0.8));
+    for (let k = 0; k < 5; k += 1) {
+      const c = end.clone().add(new THREE.Vector3((rand() - 0.5) * 22, rand() * 9 - 2, (rand() - 0.5) * 22));
+      leaves.push(leafCluster(c, 15 + rand() * 8, greens[Math.floor(rand() * greens.length)], rand));
+    }
+    // A hanging vine from some branches.
+    if (rand() < 0.6) {
+      const drop = 26 + rand() * 30;
+      const v0 = mid.clone();
+      const vine = new THREE.CatmullRomCurve3([
+        v0,
+        v0.clone().add(new THREE.Vector3(rand() * 2 - 1, -drop * 0.5, rand() * 2 - 1)),
+        v0.clone().add(new THREE.Vector3(rand() * 3 - 1.5, -drop, rand() * 3 - 1.5)),
+      ]);
+      leaves.push(makeTaperedTube(vine, 6, 4, 0.45, 0.25, vineColor));
+    }
+  }
+  // Crown on top.
+  const top = trunkCurve.getPointAt(1);
+  for (let k = 0; k < 6; k += 1) {
+    const a = (k / 6) * Math.PI * 2 + rand();
+    const c = top.clone().add(new THREE.Vector3(Math.cos(a) * 15, 2 + rand() * 8, Math.sin(a) * 15));
+    leaves.push(leafCluster(c, 17 + rand() * 7, greens[Math.floor(rand() * greens.length)], rand));
+  }
+  leaves.push(leafCluster(top.clone().add(new THREE.Vector3(0, 14, 0)), 18, greens[1], rand));
+
+  return { bark: mergeSimpleGeometries(bark, false), leaves: mergeSimpleGeometries(leaves, true) };
+}
+
+// Wind: the tree bends from the top (roots stay put) and leaves flutter.
+function addTreeWind(material, flutter) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uWindTime = windUniforms.uWindTime;
+    shader.uniforms.uWindDir = windUniforms.uWindDir;
+    shader.uniforms.uWindStrength = windUniforms.uWindStrength;
+    shader.vertexShader = `
+      uniform float uWindTime;
+      uniform vec2 uWindDir;
+      uniform float uWindStrength;
+    ` + shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `
+      vec4 localPos = vec4(transformed, 1.0);
+      vec4 rootLocal = vec4(0.0, 0.0, 0.0, 1.0);
+      #ifdef USE_INSTANCING
+        localPos = instanceMatrix * localPos;
+        rootLocal = instanceMatrix * rootLocal;
+      #endif
+      vec4 worldPos = modelMatrix * localPos;
+      vec4 rootWorld = modelMatrix * rootLocal;
+      float h = clamp(transformed.y / ${JUNGLE_TREE_HEIGHT.toFixed(1)}, 0.0, 1.2);
+      float phase = rootWorld.x * 0.013 + rootWorld.z * 0.011;
+      float sway = (sin(uWindTime * 0.8 + phase) * 1.6 + sin(uWindTime * 1.9 + phase * 2.3) * 0.5) * uWindStrength;
+      worldPos.xz += uWindDir * sway * h * h * h;
+      ${flutter ? `
+      // Leaves flutter a little on top of the sway.
+      float f = sin(uWindTime * 3.1 + worldPos.x * 0.21 + worldPos.y * 0.17) * 0.55
+              + sin(uWindTime * 4.7 + worldPos.z * 0.19) * 0.3;
+      worldPos.xyz += vec3(uWindDir.x, 0.35, uWindDir.y) * f * uWindStrength * smoothstep(0.35, 0.9, h);
+      ` : ""}
+      vec4 mvPosition = viewMatrix * worldPos;
+      gl_Position = projectionMatrix * mvPosition;
+      `,
+    );
+  };
+  return material;
+}
+
+function getJungleTreeAssets() {
+  if (!jungleTreeVariants) {
+    jungleTreeVariants = [];
+    for (let i = 0; i < JUNGLE_TREE_VARIANTS; i += 1) jungleTreeVariants.push(buildJungleTreeShape(i * 7 + 3));
+    jungleTreeMaterials = {
+      bark: addTreeWind(new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.foliage.jungleBark), roughness: 0.95 }), false),
+      leaves: addTreeWind(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.82, flatShading: true }), true),
+    };
+    jungleTreeMaterials.bark.userData.surface = "bark";
+  }
+  return { variants: jungleTreeVariants, materials: jungleTreeMaterials };
+}
+
+// Single (non-instanced) tree, used for the treehouse tree. Kept the old signature.
+function createJungleTree(height, trunkRadius) {
+  const { materials } = getJungleTreeAssets();
+  const shape = buildJungleTreeShape(99, true);
+  const group = new THREE.Group();
+  const bark = new THREE.Mesh(shape.bark, materials.bark);
+  bark.castShadow = true;
+  bark.receiveShadow = true;
+  bark.userData.surface = "bark";
+  const leaves = new THREE.Mesh(shape.leaves, materials.leaves);
+  leaves.castShadow = true;
+  leaves.userData.noSurface = true;
+  group.add(bark, leaves);
+  const s = height / JUNGLE_TREE_HEIGHT;
+  const w = Math.max(s, (trunkRadius / 10) * 1.1);
+  group.scale.set(w, s, w);
+  return group;
+}
+
+// Scatters the forest across the jungle island as instanced batches.
+function addJungleForest(group, radius, height, count = 180) {
+  const { variants, materials } = getJungleTreeAssets();
+  const placements = variants.map(() => []);
+  const ground = (x, z) => getLocalSurfaceHeightAt(x, z, radius, height, 1);
+  for (let i = 0; i < count; i += 1) {
+    const angle = i * 2.399;
+    const distance = radius * (0.08 + ((i * 37) % 76) / 100);
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    const treeHeight = 120 + (i % 7) * 18;
+    const s = treeHeight / JUNGLE_TREE_HEIGHT;
+    const w = s * (0.85 + ((i * 13) % 7) / 25);
+    // Sit the roots on the lowest ground under the tree so none hang on slopes.
+    const r = 16 * w;
+    const y = Math.min(ground(x, z), ground(x + r, z), ground(x - r, z), ground(x, z + r), ground(x, z - r)) - 0.8;
+    placements[i % variants.length].push({ x, y, z, s, w, rot: angle * 1.7 });
+    addCollisionCircle(group.position.clone().add(new THREE.Vector3(x, ground(x, z), z)), 6.5 * w, "Jungle tree", { material: "wood", damage: 6 });
+  }
+
+  const dummy = new THREE.Object3D();
+  const tint = new THREE.Color();
+  variants.forEach((shape, v) => {
+    const list = placements[v];
+    if (!list.length) return;
+    const bark = new THREE.InstancedMesh(shape.bark, materials.bark, list.length);
+    const leaves = new THREE.InstancedMesh(shape.leaves, materials.leaves, list.length);
+    list.forEach((p, i) => {
+      dummy.position.set(p.x, p.y, p.z);
+      dummy.rotation.set(0, p.rot, 0);
+      dummy.scale.set(p.w, p.s, p.w);
+      dummy.updateMatrix();
+      bark.setMatrixAt(i, dummy.matrix);
+      leaves.setMatrixAt(i, dummy.matrix);
+      leaves.setColorAt(i, tint.setHSL(0.3 + ((i * 7) % 10) / 160, 0.25, 0.72 + ((i * 3) % 5) / 30));
+    });
+    [bark, leaves].forEach((mesh) => {
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false; // instances cover the whole island
+      mesh.userData.noSurface = true;
+      mesh.userData.noSettle = true;
+    });
+    if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
+    group.add(bark, leaves);
+  });
+}
+
+// ── 99-init.js ─ Startup sequence and closes the game closure.
 // Initialization
 createStatButtons();
 renderInventory();
 renderAvatarChoices();
 createWorld();
+enhanceWorldSurfaces(scene, new Set([skyDome, cloudDeck, ocean, ...enemies.map((e) => e.mesh)]));
 createPlayer();
 initMultiplayerBrowser();
 applyAvatarToPlayer();
@@ -11860,4 +14402,3 @@ if (gameLoadStatus) gameLoadStatus.hidden = true;
   document.querySelector("#game-init-retry")?.addEventListener("click", () => window.location.reload());
 }
 })();
-

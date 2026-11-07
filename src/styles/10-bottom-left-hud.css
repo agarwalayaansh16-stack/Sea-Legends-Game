@@ -1,0 +1,189 @@
+/* ===== Bottom Left HUD ===== */
+.bottom-left-hud {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 100;
+  pointer-events: auto;
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 76px);
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.nav-btn {
+  background: var(--gold);
+  color: var(--ink);
+  border: 1.5px solid #d4951c;
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: background 0.15s ease, transform 0.1s ease;
+  text-shadow: none;
+}
+
+.nav-btn:hover {
+  background: #f8c85c;
+  transform: translateY(-1px);
+}
+
+.nav-btn:active {
+  transform: translateY(1px);
+}
+
+.nav-btn.active {
+  background: var(--mint) !important;
+  color: var(--ink) !important;
+  border-color: #27ae60 !important;
+  box-shadow: 0 0 14px rgba(var(--mint-rgb), 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.nav-btn.active:hover {
+  background: #5cf8a6 !important;
+}
+
+.hud-status-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.hud-money {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--mint);
+  text-shadow: 1.5px 1.5px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 4px 8px rgba(0,0,0,0.5);
+  letter-spacing: 0.02em;
+}
+
+.hud-level {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 1.5px 1.5px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  margin-bottom: 2px;
+}
+
+.hud-xp-wrap {
+  position: relative;
+  width: 172px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.hud-xp-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #c084fc, #a855f7);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
+  transition: width 0.3s ease;
+}
+
+.hud-xp-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.hud-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud-bar-container {
+  position: relative;
+  width: 220px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(6, 18, 28, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.hud-bar-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hud-bar-container.health .hud-bar-fill {
+  background: linear-gradient(180deg, #2ecc71, #27ae60);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2);
+}
+
+.hud-bar-container.energy .hud-bar-fill {
+  background: linear-gradient(180deg, #3498db, #2980b9);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2);
+}
+
+.hud-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.04em;
+}
+
+/* Stats card, inventory panel and quest card placement now lives in 40-hud-layout.css */
+
+/* Top Left Escape Menu trigger button */
+.top-left-menu-btn {
+  position: fixed;
+  top: 36px;
+  left: 16px;
+  width: 36px;
+  height: 36px;
+  background: rgba(10, 25, 40, 0.82);
+  border: 1.5px solid rgba(var(--paper-rgb), 0.2);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 10000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  transition: all 0.2s ease;
+}
+
+.top-left-menu-btn:hover {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+  transform: scale(1.05);
+}
+
+.top-row {
+  display: none !important;
+}

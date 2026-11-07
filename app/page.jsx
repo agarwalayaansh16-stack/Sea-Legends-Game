@@ -4,10 +4,10 @@ import Script from "next/script";
 import { siteUrl } from "./site-config";
 
 export const metadata = {
-  title: "Play the Sea Legends Prototype",
+  title: "Play Sea Legends – Free 3D Pirate RPG in Your Browser",
   description: "Choose a faction, explore islands, take on quests, and meet other players in optional Sea Legends multiplayer servers.",
   alternates: { canonical: siteUrl },
-  openGraph: { title: "Play Sea Legends", description: "Explore islands and take on quests in a browser-based 3D action RPG prototype.", url: siteUrl },
+  openGraph: { title: "Play Sea Legends", description: "Explore islands and take on quests in a free browser-based 3D action RPG.", url: siteUrl },
 };
 
 export default function Home() {
@@ -34,9 +34,9 @@ export default function Home() {
       />
       <main className="home-content" aria-labelledby="home-title">
         <div className="home-content-inner">
-          <p className="content-eyebrow">A BROWSER GAME PROTOTYPE</p>
+          <p className="content-eyebrow">A FREE BROWSER GAME</p>
           <h1 id="home-title">Explore the First Sea in Sea Legends</h1>
-          <p className="content-lead">Sea Legends is a browser-based 3D action RPG prototype. Pick a faction, customize an avatar, explore the First Sea, and take on quests. When multiplayer is configured, join a world server with up to 10 players.</p>
+          <p className="content-lead">Sea Legends is a free 3D action RPG you play right in your browser. Pick a faction, design your own pirate or marine, explore a chain of ten islands, and battle bandits, brutes, and bosses. When multiplayer servers are online, join a world with up to 10 players.</p>
           <p><a className="content-button" href="#game-root">Play the game above</a> <a href="/game-guide">Read the game guide</a></p>
 
           <section aria-labelledby="start-title">
@@ -46,7 +46,7 @@ export default function Home() {
               <li>On Starter Island, follow the quest marker and speak with the quest giver using <kbd>E</kbd>.</li>
               <li>Accept the bandit quest, fight using the weapon keys, then return to the quest giver for rewards.</li>
             </ol>
-            <p>Profiles and progress stay in this browser’s local storage. They are not online accounts and do not sync between devices.</p>
+            <p>Your progress is saved automatically in this browser. Profiles are local, so use the same browser to continue your adventure.</p>
           </section>
 
           <section aria-labelledby="features-title">
@@ -54,7 +54,7 @@ export default function Home() {
             <div className="home-feature-grid">
               <article><h3>Choose a faction</h3><p>Join Pirates, Marines, or Neutral. Pirates earn extra quest money; Marines start with one extra defense point.</p></article>
               <article><h3>Build an avatar</h3><p>Choose, preview, and edit a human avatar’s colors, outfit, hair, height, and build. Appearance and build settings affect character attributes.</p></article>
-              <article><h3>Explore islands</h3><p>Travel through the First Sea’s island chain, beginning at Starter Island. The prototype’s available quests and progression are limited to its implemented content.</p></article>
+              <article><h3>Explore islands</h3><p>Travel through the First Sea’s island chain, beginning at Starter Island. Each island has its own terrain, enemies, quest givers, and trainers.</p></article>
               <article><h3>Fight and progress</h3><p>Use melee, sword, and gun attacks. Complete the starter quest to unlock the special ability, earn XP and money, and spend level up points on five stats.</p></article>
             </div>
           </section>

@@ -1,0 +1,136 @@
+/* ==========================================================================
+   HUD layout — where every in-game panel sits on screen. Placement rules for
+   these panels belong here; earlier files only style their contents.
+
+   Desktop map:
+     top-left      menu button, quest card
+     top strip     settings bar (between the menu button and the compass)
+     top-right     compass, message log underneath
+     bottom-left   nav buttons, money/level, XP, health and energy
+     bottom-centre controls cheat sheet
+     bottom-right  combat / mastery panel
+   ========================================================================== */
+:root {
+  --hud-gap: 16px;
+  --hud-top-bar-h: 56px;
+  --hud-compass: 76px;
+}
+
+.top-left-menu-btn {
+  top: var(--hud-gap);
+  left: var(--hud-gap);
+  width: 44px;
+  height: 44px;
+}
+
+.settings-bar {
+  top: var(--hud-gap) !important;
+  left: calc(var(--hud-gap) + 56px) !important;
+  right: calc(var(--hud-gap) * 2 + var(--hud-compass)) !important;
+  min-height: var(--hud-top-bar-h);
+  padding: 6px 10px !important;
+  gap: 10px;
+}
+.settings-bar.collapsed { right: auto !important; }
+.settings-bar .settings-section { flex-wrap: nowrap; gap: 8px; min-width: 0; }
+.settings-bar .toggle,
+.settings-bar #home-teleport-button,
+.settings-bar .settings-collapse-button { min-height: 36px; padding: 4px 12px 4px 8px !important; white-space: nowrap; }
+.settings-bar .toggle span, .settings-bar #hud-logout-btn { white-space: nowrap; }
+.multiplayer-browser { position: fixed; top: calc(var(--hud-gap) * 2 + var(--hud-top-bar-h)); right: var(--hud-gap); }
+
+.quest-card {
+  position: fixed !important;
+  top: calc(var(--hud-gap) * 2 + var(--hud-top-bar-h)) !important;
+  left: var(--hud-gap) !important;
+  bottom: auto !important;
+  width: min(340px, calc(100% - 32px)) !important;
+  z-index: 98 !important;
+}
+
+.quest-compass {
+  top: var(--hud-gap) !important;
+  right: var(--hud-gap) !important;
+  width: var(--hud-compass) !important;
+  height: var(--hud-compass) !important;
+}
+
+.message-log {
+  top: calc(var(--hud-gap) * 2 + var(--hud-compass) + 18px) !important;
+  right: var(--hud-gap) !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: min(340px, calc(100% - 32px)) !important;
+  max-height: 168px;
+  overflow: hidden;
+}
+
+.stats-card,
+.inventory-panel {
+  position: fixed !important;
+  left: var(--hud-gap) !important;
+  top: auto !important;
+  bottom: 248px !important;
+  max-height: calc(100vh - 248px - 170px);
+  overflow-y: auto;
+  z-index: 1000 !important;
+}
+
+.combat-hud {
+  right: var(--hud-gap) !important;
+  bottom: var(--hud-gap) !important;
+  left: auto !important;
+  top: auto !important;
+  width: 248px !important;
+  max-width: calc(100vw - 32px);
+}
+
+.controls {
+  left: 50% !important;
+  bottom: var(--hud-gap) !important;
+  transform: translateX(-50%) !important;
+  width: min(620px, calc(100vw - 2 * 300px)) !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Narrower desktops: shrink side columns, drop the cheat sheet before it collides */
+@media (max-width: 1280px) {
+  #teleport-status, #multiplayer-status { display: none; }
+}
+@media (max-width: 1180px) {
+  .controls { display: none !important; }
+}
+@media (max-width: 1100px) {
+  .settings-bar .settings-collapse-button strong { display: none; }
+}
+@media (max-width: 900px) {
+  .settings-bar .home-label { display: none; }
+  .message-log { width: min(280px, calc(100% - 32px)) !important; }
+  .quest-card { width: min(280px, calc(100% - 32px)) !important; }
+}
+
+/* Phones: one compact top strip, quest + newest message stacked under it,
+   status bottom-left, slim combat card bottom-right. */
+@media (max-width: 640px) {
+  :root { --hud-gap: 10px; --hud-compass: 58px; --hud-top-bar-h: 48px; }
+  .top-left-menu-btn { width: 40px; height: 40px; }
+  .settings-bar { left: calc(var(--hud-gap) + 48px) !important; overflow: hidden; }
+  .settings-bar .toggle, #teleport-status, #multiplayer-status { display: none !important; }
+  .quest-card { width: calc(100% - 2 * var(--hud-gap)) !important; padding: 10px 14px !important; }
+  .quest-card strong { font-size: 14px; }
+  .quest-card p { font-size: 12px; }
+  .message-log {
+    top: calc(var(--hud-gap) * 3 + var(--hud-top-bar-h) + 78px) !important;
+    left: var(--hud-gap) !important;
+    right: var(--hud-gap) !important;
+    width: auto !important;
+    max-height: 44px;
+    font-size: 12px;
+  }
+  .message-log > *:not(:first-child) { display: none; }
+  .nav-grid { grid-template-columns: repeat(2, 78px); }
+  .combat-hud { width: 168px !important; }
+  .combat-skills-list, .combat-mastery-bar-wrap { display: none !important; }
+  .stats-card, .inventory-panel { left: var(--hud-gap) !important; right: var(--hud-gap) !important; width: auto !important; }
+}

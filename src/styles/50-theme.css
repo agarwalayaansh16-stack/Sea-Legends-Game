@@ -1,0 +1,273 @@
+/* ==========================================================================
+   Theme — gives every screen and HUD panel the same surfaces, borders and
+   accents from 00-tokens.css. Loaded last so it wins over the older layers.
+   ========================================================================== */
+
+body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(var(--gold-rgb), 0.12), transparent 30%),
+    linear-gradient(180deg, #0e3a4f 0%, #082636 55%, var(--surface-0) 100%);
+  color: var(--paper);
+  font-family: var(--font-display);
+}
+
+/* Softer vignette, gentle colour lift on the 3D view */
+#game-root::after { background: radial-gradient(ellipse at center, transparent 55%, rgba(2, 10, 16, 0.38) 100%); }
+#game { filter: saturate(1.04) contrast(1.02); }
+
+/* ---- Overlays & panels ---- */
+.overlay {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--sea-rgb), 0.18), transparent 55%),
+    linear-gradient(rgba(4, 16, 24, 0.55), rgba(3, 12, 18, 0.72));
+  backdrop-filter: blur(6px) saturate(1.05);
+}
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(160deg, rgba(18, 44, 60, 0.92), rgba(7, 20, 30, 0.94));
+  box-shadow: var(--shadow-panel);
+}
+.hero-panel::before { opacity: 0.55; }
+.eyebrow, .section-label { color: var(--gold) !important; letter-spacing: 0.16em; }
+h1 { color: var(--paper); }
+.intro { color: var(--text-muted); }
+
+/* All floating HUD cards share one glass surface */
+.quest-card,
+.stats-card,
+.inventory-panel,
+.message-log,
+.controls,
+.combat-hud,
+.settings-bar,
+.dialogue-panel,
+.boat-menu,
+.multiplayer-browser {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--glass) !important;
+  box-shadow: var(--shadow-panel) !important;
+  backdrop-filter: blur(14px) saturate(1.15);
+  color: var(--paper);
+}
+
+/* Quest card: gold accent rail, clear hierarchy */
+.quest-card { padding: 14px 18px !important; gap: 6px !important; border-left: 4px solid var(--gold) !important; }
+.quest-card strong { color: var(--gold-bright); font-size: 16px; letter-spacing: 0.01em; }
+.quest-card p { margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+
+/* Message log: newest line bright, older lines fade */
+.message-log { padding: 10px 14px !important; border-right: 3px solid var(--sea) !important; font-size: 13px; line-height: 1.45; }
+.message-log > * { color: var(--text-muted); }
+.message-log > *:first-child { color: var(--paper); }
+
+/* ---- Top-left menu button ---- */
+.top-left-menu-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--paper);
+  background: var(--glass);
+  font-size: 20px;
+  backdrop-filter: blur(10px);
+}
+.top-left-menu-btn:hover { color: var(--ink); background: var(--gold); border-color: var(--gold); }
+
+/* ---- Settings bar & toggles ---- */
+.settings-bar .toggle,
+.settings-collapse-button {
+  border: 1px solid var(--line) !important;
+  border-radius: 999px !important;
+  background: var(--surface-raised) !important;
+  box-shadow: none !important;
+}
+.settings-bar .toggle span { font-size: 12px; font-weight: 700; color: var(--paper); }
+#home-teleport-button {
+  border: 1px solid var(--gold-deep) !important;
+  border-radius: 999px !important;
+  color: var(--ink) !important;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold)) !important;
+}
+#home-teleport-button .home-label { font-weight: 800; }
+#home-teleport-button:disabled { filter: grayscale(0.6); opacity: 0.55; }
+#teleport-status { color: var(--text-muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+#multiplayer-status { font-size: 11px; white-space: nowrap; }
+.toggle input { width: 36px; height: 20px; background: rgba(var(--paper-rgb), 0.16); }
+.toggle input::after { width: 16px; height: 16px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+.toggle input:checked { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); }
+.toggle input:checked::after { transform: translateX(16px); }
+#multiplayer-open, #multiplayer-close { border-color: rgba(var(--gold-rgb), 0.5); color: var(--gold-bright); background: rgba(var(--gold-rgb), 0.12); }
+
+/* ---- Bottom-left HUD ---- */
+.nav-grid { grid-template-columns: repeat(2, 92px); gap: 6px; }
+.nav-btn {
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--paper);
+  background: var(--glass);
+  box-shadow: var(--shadow-chip);
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(10px);
+}
+.nav-btn:hover { color: var(--ink); background: var(--gold); border-color: var(--gold-deep); }
+.nav-btn.active {
+  color: var(--ink) !important;
+  background: var(--gold) !important;
+  border-color: var(--gold-deep) !important;
+  box-shadow: 0 0 0 2px rgba(var(--gold-rgb), 0.35), var(--shadow-chip) !important;
+}
+.nav-btn.active:hover { background: var(--gold-bright) !important; }
+#nav-btn-close { color: var(--text-muted); }
+
+.hud-money { color: var(--gold-bright) !important; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
+.hud-level { color: var(--paper) !important; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); }
+.hud-xp-bar { background: rgba(2, 10, 16, 0.6) !important; border: 1px solid var(--line); }
+.hud-xp-bar span, #xp-bar { background: linear-gradient(90deg, var(--violet), var(--sea-bright)) !important; }
+.hud-bar-container { border: 1px solid var(--line) !important; background: rgba(2, 10, 16, 0.65) !important; border-radius: var(--radius-sm) !important; }
+.hud-bar-container.health .hud-bar-fill { background: linear-gradient(90deg, #2fae7c, var(--mint)) !important; }
+.hud-bar-container.energy .hud-bar-fill { background: linear-gradient(90deg, #2a7fd4, var(--azure)) !important; }
+
+/* ---- Stats card ---- */
+.stats-card { padding: 14px 16px !important; }
+.stats-header strong { color: var(--gold-bright); }
+.stats-header span { color: var(--text-muted); }
+.stat-line button {
+  color: var(--ink);
+  background: var(--gold);
+  border: 1px solid var(--gold-deep);
+}
+.stat-line button:disabled { color: var(--text-dim); background: rgba(var(--paper-rgb), 0.08); border-color: var(--line); box-shadow: none; }
+
+/* ---- Inventory ---- */
+.inventory-tabs button { border: 1px solid var(--line); background: var(--surface-raised); color: var(--paper); }
+.inventory-tabs button.active { color: var(--ink); background: var(--gold); border-color: var(--gold-deep); }
+
+/* ---- Controls cheat sheet ---- */
+.controls {
+  gap: 6px 8px !important;
+  padding: 10px 14px !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+.controls strong { width: 100%; color: var(--gold); font-size: 11px; letter-spacing: 0.14em; text-align: center; text-transform: uppercase; }
+.controls span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: none !important;
+}
+
+/* ---- Combat HUD ---- */
+.combat-hud { padding: 0 !important; overflow: hidden; border-bottom: 3px solid var(--weapon) !important; }
+.combat-weapon-icon { border-color: var(--weapon) !important; }
+.combat-hud-title strong { color: var(--paper) !important; }
+.combat-mastery-bar { background: linear-gradient(90deg, var(--weapon), var(--gold-bright)) !important; }
+
+/* ---- Quest compass ---- */
+.compass-ring { border-color: rgba(var(--gold-rgb), 0.6) !important; background: radial-gradient(circle, rgba(15, 36, 50, 0.92), rgba(6, 17, 24, 0.95)) !important; }
+
+/* ---- Prompt & dialogue ---- */
+.prompt {
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 999px !important;
+  color: var(--paper) !important;
+  background: var(--glass) !important;
+}
+.dialogue-panel { border-top: 3px solid var(--gold) !important; }
+#dialogue-title { color: var(--gold-bright); }
+.quest-options button, .boat-option {
+  border: 1px solid var(--line-strong) !important;
+  color: var(--paper) !important;
+  background: rgba(var(--gold-rgb), 0.1) !important;
+}
+.quest-options button:hover, .boat-option:hover { color: var(--ink) !important; background: var(--gold) !important; }
+
+/* ---- Escape menu & studio modal ---- */
+.esc-btn.primary { color: var(--ink); background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
+.esc-btn.danger { background: var(--danger); }
+input[type="range"] { accent-color: var(--gold); }
+
+/* ---- Faction picker ---- */
+[data-faction] { border-color: var(--line) !important; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+[data-faction]:hover { transform: translateY(-3px); border-color: var(--line-strong) !important; box-shadow: 0 14px 34px rgba(2, 10, 16, 0.45); }
+[data-faction="Pirates"] { border-top: 3px solid var(--coral) !important; }
+[data-faction="Marines"] { border-top: 3px solid var(--azure) !important; }
+[data-faction="Neutral"] { border-top: 3px solid var(--mint) !important; }
+
+/* ---- Accessibility: calmer motion when requested ---- */
+@media (prefers-reduced-motion: reduce) {
+  .hero-panel::before, .avatar-preview { animation: none !important; }
+  .btn, .nav-btn, .profile-chip, [data-faction] { transition: none; }
+}
+
+/* ---- Day cycle chip (Day / Sunset / Night / Sunrise with time left) ---- */
+.day-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--paper);
+  background: var(--surface-raised);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.day-phase::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gold-bright);
+  box-shadow: 0 0 8px var(--gold);
+}
+.day-phase[data-phase="sunset"]::before { background: var(--coral); box-shadow: 0 0 8px var(--coral); }
+.day-phase[data-phase="night"]::before { background: #c9d6ff; box-shadow: 0 0 8px #8fa6ff; }
+.day-phase[data-phase="sunrise"]::before { background: #ffb3a1; box-shadow: 0 0 8px #ff9f7a; }
+@media (max-width: 640px) { .day-phase { display: none; } }
+
+/* ---- Studio: avatar code (copy / import a design) ---- */
+.avatar-code-box {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  text-align: left;
+}
+.avatar-code-box textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--paper);
+  background: var(--surface-input);
+  font: 12px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  word-break: break-all;
+}
+.avatar-code-box textarea:focus { outline: none; border-color: var(--gold); }
+.avatar-code-actions { display: flex; gap: 8px; }
+.avatar-code-actions button {
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--paper);
+  background: rgba(var(--gold-rgb), 0.12);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.avatar-code-actions button:hover { color: var(--ink); background: var(--gold); }
+.avatar-code-status { min-height: 16px; margin: 0; color: var(--text-muted); font-size: 12px; }
+.avatar-code-status.error { color: #ff9b90; }

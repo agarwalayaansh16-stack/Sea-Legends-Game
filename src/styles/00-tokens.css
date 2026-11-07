@@ -1,0 +1,63 @@
+/* ==========================================================================
+   Design tokens — the single source of truth for Sea Legends colours,
+   radii, shadows and type. Change the palette here, not in component files.
+   Palette: deep-sea navy surfaces, parchment text, treasure-gold primary,
+   lagoon-teal secondary, with sea-glass green / coral / azure for status.
+   ========================================================================== */
+:root {
+  /* Brand */
+  --gold: #f4b740;
+  --gold-bright: #ffd173;
+  --gold-deep: #c98a1b;
+  --gold-rgb: 244, 183, 64;
+  --sea: #1fa4b4;
+  --sea-bright: #63d8de;
+  --sea-rgb: 31, 164, 180;
+
+  /* Status */
+  --mint: #46d39a;            /* success, health */
+  --mint-rgb: 70, 211, 154;
+  --danger: #ef5a4c;          /* damage, destructive actions */
+  --danger-rgb: 239, 90, 76;
+  --coral: #ff8361;
+  --azure: #3d9df5;           /* energy */
+  --violet: #a78bfa;          /* special abilities */
+
+  /* Text */
+  --paper: #f5efe1;
+  --paper-rgb: 245, 239, 225;
+  --text-muted: #b4c5cb;
+  --text-dim: #7f959e;
+  --ink: #0d1b24;             /* text on gold / light surfaces */
+
+  /* Surfaces */
+  --surface-0: #061118;
+  --surface-1: rgba(8, 22, 32, 0.88);
+  --surface-2: rgba(15, 36, 50, 0.92);
+  --surface-raised: rgba(24, 52, 70, 0.75);
+  --surface-input: rgba(3, 13, 20, 0.7);
+  --glass: rgba(8, 24, 34, 0.74);
+  --line: rgba(170, 214, 226, 0.16);
+  --line-strong: rgba(var(--gold-rgb), 0.45);
+
+  /* Shape & depth */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --shadow: rgba(2, 10, 16, 0.4);
+  --shadow-panel: 0 24px 64px rgba(2, 10, 16, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-chip: 0 6px 18px rgba(2, 10, 16, 0.35);
+
+  /* Type */
+  --font-display: 'Outfit', 'Inter', "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-body: 'Inter', 'Outfit', "Segoe UI", sans-serif;
+
+  /* Weapon accent (switched by body[data-weapon]) */
+  --weapon: var(--gold);
+}
+
+body[data-weapon="melee"] { --weapon: var(--gold); }
+body[data-weapon="sword"] { --weapon: var(--sea-bright); }
+body[data-weapon="gun"] { --weapon: var(--coral); }
+body[data-weapon="special"] { --weapon: var(--violet); }
