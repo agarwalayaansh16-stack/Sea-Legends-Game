@@ -482,7 +482,76 @@ function createHumanAvatarModel(avatar, options = {}) {
   }
 
   group.scale.set(prop.width, prop.height, prop.width);
+  compactAvatarModel(group);
+  avatarModels.add(group);
   return group;
+}
+
+// Every character model (player, NPCs, enemies), for blinking and distance culling.
+const avatarModels = new Set();
+
+// Pieces that move together are merged into one mesh per material, so each
+// character costs ~25 draw calls instead of ~60. Moving parts (arms, legs, head,
+// torso, cape, halo, spectral hands, sword) stay separate, as do blinking eyes.
+function compactAvatarModel(group) {
+  const parts = group.userData.parts || {};
+  const boundaries = new Set([group]);
+  Object.values(parts).forEach((part) => part && boundaries.add(part));
+  if (parts.spectralHands) parts.spectralHands.children.forEach((ghost) => boundaries.add(ghost));
+  const sword = group.getObjectByName("swordGroup");
+  if (sword) boundaries.add(sword);
+  const keep = new Set(group.userData.eyesList || []);
+  group.updateMatrixWorld(true);
+
+  const buckets = new Map();
+  group.traverse((mesh) => {
+    if (!mesh.isMesh || boundaries.has(mesh) || keep.has(mesh) || Array.isArray(mesh.material)) return;
+    let owner = mesh.parent;
+    while (owner && !boundaries.has(owner)) owner = owner.parent;
+    if (!owner) return;
+    const key = `${owner.uuid}|${mesh.material.uuid}|${mesh.castShadow ? 1 : 0}`;
+    if (!buckets.has(key)) buckets.set(key, { owner, material: mesh.material, cast: mesh.castShadow, items: [] });
+    buckets.get(key).items.push(mesh);
+  });
+
+  const inverse = new THREE.Matrix4();
+  buckets.forEach(({ owner, material, cast, items }) => {
+    if (items.length < 2) return;
+    inverse.copy(owner.matrixWorld).invert();
+    const geometries = items.map((mesh) => {
+      const g = mesh.geometry.clone();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld));
+      return g;
+    });
+    const merged = new THREE.Mesh(mergeForBatch(geometries), material);
+    merged.castShadow = cast;
+    owner.add(merged);
+    items.forEach((mesh) => mesh.parent.remove(mesh));
+  });
+}
+
+// Hides characters too far away to see (they're a few pixels tall) and keeps
+// the rest visible. Runs a few times a second.
+const AVATAR_VISIBLE_RANGE = 650;
+let avatarLodTimer = 0;
+const avatarLodPos = new THREE.Vector3();
+function updateAvatarLod(dt) {
+  avatarLodTimer -= dt;
+  if (avatarLodTimer > 0 || !playerMesh) return;
+  avatarLodTimer = 0.3;
+  const px = playerMesh.position.x;
+  const pz = playerMesh.position.z;
+  avatarModels.forEach((model) => {
+    if (!model.parent) {
+      // Replaced (e.g. the player changed avatar): forget it once it's out of the scene.
+      if (!model.userData.lodSeen) avatarModels.delete(model);
+      model.userData.lodSeen = false;
+      return;
+    }
+    model.userData.lodSeen = true;
+    model.getWorldPosition(avatarLodPos);
+    model.visible = Math.hypot(avatarLodPos.x - px, avatarLodPos.z - pz) < AVATAR_VISIBLE_RANGE;
+  });
 }
 
 function addHair(group, style, material) {

@@ -123,6 +123,8 @@ function createWorld() {
 
   // Last: make sure everything that stands on an island actually touches it.
   islands.forEach((island) => settleIslandObjects(island));
+  // Prepare grass ground-cover maps now (during loading) rather than mid-game.
+  windGrassIslands.forEach((island) => prepareGrassCoverMask(island));
 }
 
 function createIsland(position, radius, index) {

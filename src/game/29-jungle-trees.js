@@ -277,8 +277,18 @@ function addJungleForest(group, radius, height, count = 180) {
   variants.forEach((shape, v) => {
     const list = placements[v];
     if (!list.length) return;
-    const bark = new THREE.InstancedMesh(shape.bark, materials.bark, list.length);
-    const leaves = new THREE.InstancedMesh(shape.leaves, materials.leaves, list.length);
+    // Bounds covering every instance of this shape, so the batch is culled when off-screen
+    // (and skipped by the shadow pass when the player is far away).
+    const bounds = new THREE.Box3();
+    list.forEach((p) => bounds.expandByPoint(new THREE.Vector3(p.x, p.y, p.z)));
+    bounds.expandByScalar(JUNGLE_TREE_HEIGHT * 1.6);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const barkGeo = shape.bark.clone();
+    const leafGeo = shape.leaves.clone();
+    barkGeo.boundingSphere = sphere;
+    leafGeo.boundingSphere = sphere.clone();
+    const bark = new THREE.InstancedMesh(barkGeo, materials.bark, list.length);
+    const leaves = new THREE.InstancedMesh(leafGeo, materials.leaves, list.length);
     list.forEach((p, i) => {
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
@@ -292,7 +302,7 @@ function addJungleForest(group, radius, height, count = 180) {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.frustumCulled = false; // instances cover the whole island
+      mesh.frustumCulled = true;
       mesh.userData.noSurface = true;
       mesh.userData.noSettle = true;
     });

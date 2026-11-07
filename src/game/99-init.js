@@ -6,6 +6,8 @@ renderInventory();
 renderAvatarChoices();
 createWorld();
 enhanceWorldSurfaces(scene, new Set([skyDome, cloudDeck, ocean, ...enemies.map((e) => e.mesh)]));
+// Merge static scenery into a few large meshes (far fewer draw calls).
+batchStaticWorld();
 createPlayer();
 initMultiplayerBrowser();
 applyAvatarToPlayer();

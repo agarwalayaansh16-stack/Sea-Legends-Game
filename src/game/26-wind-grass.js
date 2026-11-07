@@ -156,27 +156,74 @@ function collectGrassCovers(island) {
     const surface = obj.userData.surface;
     if (surface === "grass" || surface === "cliff" || surface === "rock") return;
     box.setFromObject(obj);
-    if (obj.userData.groundCover || (box.max.y - box.min.y < 3.5 && box.min.y < groundTop)) covers.push({ mesh: obj, box: box.clone() });
+    if (obj.userData.groundCover || (box.max.y - box.min.y < 3.5 && box.min.y < groundTop)) covers.push(obj);
   });
   return covers;
 }
 
-const grassRaycaster = new THREE.Raycaster();
-const grassDown = new THREE.Vector3(0, -1, 0);
-const grassOrigin = new THREE.Vector3();
+// Rasterises every ground cover's triangles (seen from above) into a byte grid once,
+// so "is this spot covered?" is a single lookup instead of a raycast per blade.
+function prepareGrassCoverMask(island) {
+  if (island.mask) return island.mask;
+  const covers = collectGrassCovers(island);
+  const size = island.radius * 2.1;
+  const cell = Math.max(1.25, island.radius / 650);
+  const n = Math.ceil(size / cell);
+  const grid = new Uint8Array(n * n);
+  const ox = island.group.position.x - size / 2;
+  const oz = island.group.position.z - size / 2;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const fillTriangle = () => {
+    const ax = (a.x - ox) / cell, az = (a.z - oz) / cell;
+    const bx = (b.x - ox) / cell, bz = (b.z - oz) / cell;
+    const cx = (c.x - ox) / cell, cz = (c.z - oz) / cell;
+    const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+    const maxX = Math.min(n - 1, Math.ceil(Math.max(ax, bx, cx)));
+    const minZ = Math.max(0, Math.floor(Math.min(az, bz, cz)));
+    const maxZ = Math.min(n - 1, Math.ceil(Math.max(az, bz, cz)));
+    const area = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+    if (Math.abs(area) < 1e-9) return;
+    for (let z = minZ; z <= maxZ; z += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const px = x + 0.5, pz = z + 0.5;
+        const w0 = (bx - px) * (cz - pz) - (bz - pz) * (cx - px);
+        const w1 = (cx - px) * (az - pz) - (cz - pz) * (ax - px);
+        const w2 = (ax - px) * (bz - pz) - (az - pz) * (bx - px);
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) grid[z * n + x] = 1;
+      }
+    }
+  };
+  covers.forEach((mesh) => {
+    const pos = mesh.geometry.attributes.position;
+    const idx = mesh.geometry.index;
+    const m = mesh.matrixWorld;
+    const tris = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < tris; t += 1) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(m);
+      b.fromBufferAttribute(pos, i1).applyMatrix4(m);
+      c.fromBufferAttribute(pos, i2).applyMatrix4(m);
+      fillTriangle();
+    }
+  });
+  island.mask = { grid, n, cell, ox, oz };
+  return island.mask;
+}
+
+function grassCellCovered(mask, wx, wz) {
+  const x = Math.floor((wx - mask.ox) / mask.cell);
+  const z = Math.floor((wz - mask.oz) / mask.cell);
+  if (x < 0 || z < 0 || x >= mask.n || z >= mask.n) return false;
+  return mask.grid[z * mask.n + x] === 1;
+}
+
 const grassProbe = new THREE.Vector3();
 const grassDummy = new THREE.Object3D();
-
-function grassCellCovered(covers, wx, wz, wy) {
-  for (const cover of covers) {
-    const b = cover.box;
-    if (wx < b.min.x || wx > b.max.x || wz < b.min.z || wz > b.max.z || b.max.y < wy - 0.5) continue;
-    grassOrigin.set(wx, wy + 10, wz);
-    grassRaycaster.set(grassOrigin, grassDown);
-    if (grassRaycaster.intersectObject(cover.mesh, false).length) return true;
-  }
-  return false;
-}
+const grassContact = { depth: 0, nx: 0, nz: 0 };
 
 function buildGrassCell(island, cx, cz) {
   if (!windGrassGeometry) {
@@ -185,7 +232,7 @@ function buildGrassCell(island, cx, cz) {
     // the shared bound lets each cell be frustum-culled on its own.
     windGrassGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), WIND_GRASS_CELL * 0.75 + 8);
   }
-  if (!island.covers) island.covers = collectGrassCovers(island);
+  const mask = prepareGrassCoverMask(island);
   const { radius, height, index, dry, group } = island;
   const seed = index + 9;
   const profileRadius = radius * 0.88;
@@ -208,6 +255,13 @@ function buildGrassCell(island, cx, cz) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   };
+  // Only obstacles that overlap this cell are worth testing against.
+  const wx0 = group.position.x + centerX;
+  const wz0 = group.position.z + centerZ;
+  const nearby = collisionVolumes.filter((v) => {
+    const reach = (v.shape === "segment" ? Math.hypot(v.end.x - v.center.x, v.end.z - v.center.z) + v.radius : v.bound) + half + 2;
+    return Math.abs(v.center.x - wx0) < reach && Math.abs(v.center.z - wz0) < reach;
+  });
   let placed = 0;
   for (let attempt = 0; attempt < target * 1.4 && placed < target; attempt += 1) {
     const lx = centerX + (rng() - 0.5) * WIND_GRASS_CELL;
@@ -222,9 +276,11 @@ function buildGrassCell(island, cx, cz) {
     const wx = group.position.x + lx;
     const wz = group.position.z + lz;
     const wy = group.position.y + ly;
+    if (grassCellCovered(mask, wx, wz)) continue;
     grassProbe.set(wx, wy, wz);
-    if (getWallCollision(grassProbe, 0.6)) continue;
-    if (grassCellCovered(island.covers, wx, wz, wy)) continue;
+    let blocked = false;
+    for (let k = 0; k < nearby.length && !blocked; k += 1) blocked = measureCollision(nearby[k], grassProbe, 0.6, grassContact);
+    if (blocked) continue;
 
     const bladeHeight = (dry ? 1.5 : 2.0) + rng() * (dry ? 1.5 : 2.6);
     grassDummy.position.set(lx - centerX, ly - 0.05, lz - centerZ);
@@ -249,6 +305,7 @@ function updateWindGrass(dt) {
   windGrassTimer -= dt;
   if (windGrassTimer > 0 || !playerMesh) return;
   windGrassTimer = 0.25;
+  const budgetEnd = performance.now() + 3; // ms of grass generation allowed per frame
   const px = playerMesh.position.x;
   const pz = playerMesh.position.z;
   let builtThisTick = 0;
@@ -290,7 +347,7 @@ function updateWindGrass(dt) {
     wanted.forEach(({ key, cx, cz, d }) => {
       let mesh = island.cells.get(key);
       if (!mesh) {
-        if (builtThisTick >= 2) return; // spread the work over several frames
+        if (builtThisTick >= 1 && performance.now() > budgetEnd) return; // finish next frame
         mesh = buildGrassCell(island, cx, cz);
         island.cells.set(key, mesh);
         builtThisTick += 1;
@@ -302,5 +359,5 @@ function updateWindGrass(dt) {
       mesh.visible = mesh.count > 0;
     });
   });
-  if (builtThisTick >= 2) windGrassTimer = 0; // keep building next frame
+  if (builtThisTick >= 1 && performance.now() > budgetEnd) windGrassTimer = 0; // more to build next frame
 }

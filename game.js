@@ -4006,6 +4006,8 @@ function createWorld() {
 
   // Last: make sure everything that stands on an island actually touches it.
   islands.forEach((island) => settleIslandObjects(island));
+  // Prepare grass ground-cover maps now (during loading) rather than mid-game.
+  windGrassIslands.forEach((island) => prepareGrassCoverMask(island));
 }
 
 function createIsland(position, radius, index) {
@@ -7735,7 +7737,76 @@ function createHumanAvatarModel(avatar, options = {}) {
   }
 
   group.scale.set(prop.width, prop.height, prop.width);
+  compactAvatarModel(group);
+  avatarModels.add(group);
   return group;
+}
+
+// Every character model (player, NPCs, enemies), for blinking and distance culling.
+const avatarModels = new Set();
+
+// Pieces that move together are merged into one mesh per material, so each
+// character costs ~25 draw calls instead of ~60. Moving parts (arms, legs, head,
+// torso, cape, halo, spectral hands, sword) stay separate, as do blinking eyes.
+function compactAvatarModel(group) {
+  const parts = group.userData.parts || {};
+  const boundaries = new Set([group]);
+  Object.values(parts).forEach((part) => part && boundaries.add(part));
+  if (parts.spectralHands) parts.spectralHands.children.forEach((ghost) => boundaries.add(ghost));
+  const sword = group.getObjectByName("swordGroup");
+  if (sword) boundaries.add(sword);
+  const keep = new Set(group.userData.eyesList || []);
+  group.updateMatrixWorld(true);
+
+  const buckets = new Map();
+  group.traverse((mesh) => {
+    if (!mesh.isMesh || boundaries.has(mesh) || keep.has(mesh) || Array.isArray(mesh.material)) return;
+    let owner = mesh.parent;
+    while (owner && !boundaries.has(owner)) owner = owner.parent;
+    if (!owner) return;
+    const key = `${owner.uuid}|${mesh.material.uuid}|${mesh.castShadow ? 1 : 0}`;
+    if (!buckets.has(key)) buckets.set(key, { owner, material: mesh.material, cast: mesh.castShadow, items: [] });
+    buckets.get(key).items.push(mesh);
+  });
+
+  const inverse = new THREE.Matrix4();
+  buckets.forEach(({ owner, material, cast, items }) => {
+    if (items.length < 2) return;
+    inverse.copy(owner.matrixWorld).invert();
+    const geometries = items.map((mesh) => {
+      const g = mesh.geometry.clone();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld));
+      return g;
+    });
+    const merged = new THREE.Mesh(mergeForBatch(geometries), material);
+    merged.castShadow = cast;
+    owner.add(merged);
+    items.forEach((mesh) => mesh.parent.remove(mesh));
+  });
+}
+
+// Hides characters too far away to see (they're a few pixels tall) and keeps
+// the rest visible. Runs a few times a second.
+const AVATAR_VISIBLE_RANGE = 650;
+let avatarLodTimer = 0;
+const avatarLodPos = new THREE.Vector3();
+function updateAvatarLod(dt) {
+  avatarLodTimer -= dt;
+  if (avatarLodTimer > 0 || !playerMesh) return;
+  avatarLodTimer = 0.3;
+  const px = playerMesh.position.x;
+  const pz = playerMesh.position.z;
+  avatarModels.forEach((model) => {
+    if (!model.parent) {
+      // Replaced (e.g. the player changed avatar): forget it once it's out of the scene.
+      if (!model.userData.lodSeen) avatarModels.delete(model);
+      model.userData.lodSeen = false;
+      return;
+    }
+    model.userData.lodSeen = true;
+    model.getWorldPosition(avatarLodPos);
+    model.visible = Math.hypot(avatarLodPos.x - px, avatarLodPos.z - pz) < AVATAR_VISIBLE_RANGE;
+  });
 }
 
 function addHair(group, style, material) {
@@ -7904,6 +7975,7 @@ function loop(time) {
     advanceDayCycle(stepDt);
     updateDayNightLighting(stepDt);
     updateWindGrass(stepDt);
+    updateAvatarLod(stepDt);
     updateWindmills(stepDt);
     updateWeather(stepDt);
 
@@ -8002,8 +8074,9 @@ function loop(time) {
 }
 
 function updateBlinking(dt) {
-  scene.traverse((node) => {
-    if (node.userData && node.userData.eyesList) {
+  // Only character models have eyes; no need to walk the whole scene.
+  avatarModels.forEach((node) => {
+    if (node.visible && node.userData.eyesList && node.userData.eyesList.length) {
       if (node.userData.blinkTimer === undefined) {
         node.userData.blinkTimer = 3.0 + Math.random() * 2.0;
         node.userData.isBlinking = false;
@@ -13526,27 +13599,74 @@ function collectGrassCovers(island) {
     const surface = obj.userData.surface;
     if (surface === "grass" || surface === "cliff" || surface === "rock") return;
     box.setFromObject(obj);
-    if (obj.userData.groundCover || (box.max.y - box.min.y < 3.5 && box.min.y < groundTop)) covers.push({ mesh: obj, box: box.clone() });
+    if (obj.userData.groundCover || (box.max.y - box.min.y < 3.5 && box.min.y < groundTop)) covers.push(obj);
   });
   return covers;
 }
 
-const grassRaycaster = new THREE.Raycaster();
-const grassDown = new THREE.Vector3(0, -1, 0);
-const grassOrigin = new THREE.Vector3();
+// Rasterises every ground cover's triangles (seen from above) into a byte grid once,
+// so "is this spot covered?" is a single lookup instead of a raycast per blade.
+function prepareGrassCoverMask(island) {
+  if (island.mask) return island.mask;
+  const covers = collectGrassCovers(island);
+  const size = island.radius * 2.1;
+  const cell = Math.max(1.25, island.radius / 650);
+  const n = Math.ceil(size / cell);
+  const grid = new Uint8Array(n * n);
+  const ox = island.group.position.x - size / 2;
+  const oz = island.group.position.z - size / 2;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const fillTriangle = () => {
+    const ax = (a.x - ox) / cell, az = (a.z - oz) / cell;
+    const bx = (b.x - ox) / cell, bz = (b.z - oz) / cell;
+    const cx = (c.x - ox) / cell, cz = (c.z - oz) / cell;
+    const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
+    const maxX = Math.min(n - 1, Math.ceil(Math.max(ax, bx, cx)));
+    const minZ = Math.max(0, Math.floor(Math.min(az, bz, cz)));
+    const maxZ = Math.min(n - 1, Math.ceil(Math.max(az, bz, cz)));
+    const area = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+    if (Math.abs(area) < 1e-9) return;
+    for (let z = minZ; z <= maxZ; z += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const px = x + 0.5, pz = z + 0.5;
+        const w0 = (bx - px) * (cz - pz) - (bz - pz) * (cx - px);
+        const w1 = (cx - px) * (az - pz) - (cz - pz) * (ax - px);
+        const w2 = (ax - px) * (bz - pz) - (az - pz) * (bx - px);
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) grid[z * n + x] = 1;
+      }
+    }
+  };
+  covers.forEach((mesh) => {
+    const pos = mesh.geometry.attributes.position;
+    const idx = mesh.geometry.index;
+    const m = mesh.matrixWorld;
+    const tris = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < tris; t += 1) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      a.fromBufferAttribute(pos, i0).applyMatrix4(m);
+      b.fromBufferAttribute(pos, i1).applyMatrix4(m);
+      c.fromBufferAttribute(pos, i2).applyMatrix4(m);
+      fillTriangle();
+    }
+  });
+  island.mask = { grid, n, cell, ox, oz };
+  return island.mask;
+}
+
+function grassCellCovered(mask, wx, wz) {
+  const x = Math.floor((wx - mask.ox) / mask.cell);
+  const z = Math.floor((wz - mask.oz) / mask.cell);
+  if (x < 0 || z < 0 || x >= mask.n || z >= mask.n) return false;
+  return mask.grid[z * mask.n + x] === 1;
+}
+
 const grassProbe = new THREE.Vector3();
 const grassDummy = new THREE.Object3D();
-
-function grassCellCovered(covers, wx, wz, wy) {
-  for (const cover of covers) {
-    const b = cover.box;
-    if (wx < b.min.x || wx > b.max.x || wz < b.min.z || wz > b.max.z || b.max.y < wy - 0.5) continue;
-    grassOrigin.set(wx, wy + 10, wz);
-    grassRaycaster.set(grassOrigin, grassDown);
-    if (grassRaycaster.intersectObject(cover.mesh, false).length) return true;
-  }
-  return false;
-}
+const grassContact = { depth: 0, nx: 0, nz: 0 };
 
 function buildGrassCell(island, cx, cz) {
   if (!windGrassGeometry) {
@@ -13555,7 +13675,7 @@ function buildGrassCell(island, cx, cz) {
     // the shared bound lets each cell be frustum-culled on its own.
     windGrassGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), WIND_GRASS_CELL * 0.75 + 8);
   }
-  if (!island.covers) island.covers = collectGrassCovers(island);
+  const mask = prepareGrassCoverMask(island);
   const { radius, height, index, dry, group } = island;
   const seed = index + 9;
   const profileRadius = radius * 0.88;
@@ -13578,6 +13698,13 @@ function buildGrassCell(island, cx, cz) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   };
+  // Only obstacles that overlap this cell are worth testing against.
+  const wx0 = group.position.x + centerX;
+  const wz0 = group.position.z + centerZ;
+  const nearby = collisionVolumes.filter((v) => {
+    const reach = (v.shape === "segment" ? Math.hypot(v.end.x - v.center.x, v.end.z - v.center.z) + v.radius : v.bound) + half + 2;
+    return Math.abs(v.center.x - wx0) < reach && Math.abs(v.center.z - wz0) < reach;
+  });
   let placed = 0;
   for (let attempt = 0; attempt < target * 1.4 && placed < target; attempt += 1) {
     const lx = centerX + (rng() - 0.5) * WIND_GRASS_CELL;
@@ -13592,9 +13719,11 @@ function buildGrassCell(island, cx, cz) {
     const wx = group.position.x + lx;
     const wz = group.position.z + lz;
     const wy = group.position.y + ly;
+    if (grassCellCovered(mask, wx, wz)) continue;
     grassProbe.set(wx, wy, wz);
-    if (getWallCollision(grassProbe, 0.6)) continue;
-    if (grassCellCovered(island.covers, wx, wz, wy)) continue;
+    let blocked = false;
+    for (let k = 0; k < nearby.length && !blocked; k += 1) blocked = measureCollision(nearby[k], grassProbe, 0.6, grassContact);
+    if (blocked) continue;
 
     const bladeHeight = (dry ? 1.5 : 2.0) + rng() * (dry ? 1.5 : 2.6);
     grassDummy.position.set(lx - centerX, ly - 0.05, lz - centerZ);
@@ -13619,6 +13748,7 @@ function updateWindGrass(dt) {
   windGrassTimer -= dt;
   if (windGrassTimer > 0 || !playerMesh) return;
   windGrassTimer = 0.25;
+  const budgetEnd = performance.now() + 3; // ms of grass generation allowed per frame
   const px = playerMesh.position.x;
   const pz = playerMesh.position.z;
   let builtThisTick = 0;
@@ -13660,7 +13790,7 @@ function updateWindGrass(dt) {
     wanted.forEach(({ key, cx, cz, d }) => {
       let mesh = island.cells.get(key);
       if (!mesh) {
-        if (builtThisTick >= 2) return; // spread the work over several frames
+        if (builtThisTick >= 1 && performance.now() > budgetEnd) return; // finish next frame
         mesh = buildGrassCell(island, cx, cz);
         island.cells.set(key, mesh);
         builtThisTick += 1;
@@ -13672,7 +13802,7 @@ function updateWindGrass(dt) {
       mesh.visible = mesh.count > 0;
     });
   });
-  if (builtThisTick >= 2) windGrassTimer = 0; // keep building next frame
+  if (builtThisTick >= 1 && performance.now() > budgetEnd) windGrassTimer = 0; // more to build next frame
 }
 
 // ── 27-windmills.js ─ Tower windmills, a wheat field and hay bales for the starter island.
@@ -14332,8 +14462,18 @@ function addJungleForest(group, radius, height, count = 180) {
   variants.forEach((shape, v) => {
     const list = placements[v];
     if (!list.length) return;
-    const bark = new THREE.InstancedMesh(shape.bark, materials.bark, list.length);
-    const leaves = new THREE.InstancedMesh(shape.leaves, materials.leaves, list.length);
+    // Bounds covering every instance of this shape, so the batch is culled when off-screen
+    // (and skipped by the shadow pass when the player is far away).
+    const bounds = new THREE.Box3();
+    list.forEach((p) => bounds.expandByPoint(new THREE.Vector3(p.x, p.y, p.z)));
+    bounds.expandByScalar(JUNGLE_TREE_HEIGHT * 1.6);
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const barkGeo = shape.bark.clone();
+    const leafGeo = shape.leaves.clone();
+    barkGeo.boundingSphere = sphere;
+    leafGeo.boundingSphere = sphere.clone();
+    const bark = new THREE.InstancedMesh(barkGeo, materials.bark, list.length);
+    const leaves = new THREE.InstancedMesh(leafGeo, materials.leaves, list.length);
     list.forEach((p, i) => {
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(0, p.rot, 0);
@@ -14347,13 +14487,160 @@ function addJungleForest(group, radius, height, count = 180) {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.frustumCulled = false; // instances cover the whole island
+      mesh.frustumCulled = true;
       mesh.userData.noSurface = true;
       mesh.userData.noSettle = true;
     });
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
     group.add(bark, leaves);
   });
+}
+
+// ── 30-static-batching.js ─ Merges static island scenery into a few large meshes at load time.
+//
+// The islands are built from thousands of small meshes (planks, flowers, window
+// frames...) with many identical-looking materials. Each one costs a draw call,
+// twice when it casts a shadow. This pass, run once after the world is built:
+//   1. reuses one material for meshes whose materials look identical, then
+//   2. merges static meshes that share a material into one mesh per area cell,
+//      so far-off areas are still culled.
+// Anything that moves or is looked up later (animated foliage, windmill sails,
+// water, glowing rings, named or tagged objects, instanced grass/trees) is left alone.
+
+const STATIC_BATCH_CELL = 320; // world units per merge cell
+
+const STATIC_SAFE_USERDATA = new Set(["surface", "noSettle", "groundCover", "surfaceScale", "noSurface", "settleOn"]);
+
+function materialSignature(mat) {
+  const customShader = mat.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile;
+  if (customShader || mat.transparent || mat.userData.unique) return `uuid:${mat.uuid}`;
+  const hex = (c) => (c ? c.getHexString() : "-");
+  return [
+    mat.type, hex(mat.color), hex(mat.emissive), (mat.emissiveIntensity ?? 0).toFixed(3),
+    (mat.roughness ?? 0).toFixed(3), (mat.metalness ?? 0).toFixed(3),
+    mat.map?.uuid, mat.bumpMap?.uuid, (mat.bumpScale ?? 0).toFixed(3), mat.aoMap?.uuid,
+    (mat.aoMapIntensity ?? 0).toFixed(2), mat.normalMap?.uuid, mat.side, mat.flatShading,
+    mat.vertexColors, mat.wireframe, mat.opacity,
+  ].join("|");
+}
+
+function collectDynamicObjects() {
+  const dynamic = new Set();
+  const addTree = (obj) => obj && obj.traverse((child) => dynamic.add(child));
+  animatedFoliage.forEach((item) => addTree(item.mesh));
+  animatedWorldObjects.forEach((item) => addTree(item.mesh));
+  windmillRotors.forEach((item) => addTree(item.mesh));
+  return dynamic;
+}
+
+function isBatchable(mesh, dynamic) {
+  if (!mesh.isMesh || mesh.isInstancedMesh || mesh.isSkinnedMesh || !mesh.visible) return false;
+  if (dynamic.has(mesh) || mesh.name || mesh.userData.isTerrain || mesh.userData.noBatch) return false;
+  if (Array.isArray(mesh.material) || mesh.material.transparent || mesh.material.opacity < 1) return false;
+  const geo = mesh.geometry;
+  if (!geo || !geo.attributes.position || Object.keys(geo.morphAttributes).length) return false;
+  // Box/cylinder geometries carry one group per face set; with a single material
+  // they're drawn whole anyway, so groups only matter if they skip part of it.
+  if (geo.drawRange.count !== Infinity || geo.drawRange.start !== 0) return false;
+  for (const key of Object.keys(mesh.userData)) {
+    if (!STATIC_SAFE_USERDATA.has(key)) return false;
+  }
+  // Something up the tree is tagged or animated: leave it be.
+  for (let p = mesh.parent; p && !p.userData.isIslandRoot; p = p.parent) {
+    if (dynamic.has(p) || p.name || p.userData.noBatch) return false;
+  }
+  return true;
+}
+
+// Concatenates geometries (already in the target space). Missing attributes are zero-filled.
+function mergeForBatch(geometries) {
+  const names = new Map();
+  geometries.forEach((g) => {
+    Object.keys(g.attributes).forEach((name) => {
+      if (!names.has(name)) names.set(name, g.attributes[name].itemSize);
+    });
+  });
+  const flat = geometries.map((g) => (g.index ? g.toNonIndexed() : g));
+  const total = flat.reduce((n, g) => n + g.attributes.position.count, 0);
+  const merged = new THREE.BufferGeometry();
+  names.forEach((itemSize, name) => {
+    const out = new Float32Array(total * itemSize);
+    let offset = 0;
+    flat.forEach((g) => {
+      const attr = g.attributes[name];
+      const count = g.attributes.position.count;
+      if (attr && attr.itemSize === itemSize) {
+        out.set(attr.array.length === count * itemSize ? attr.array : Float32Array.from(attr.array).subarray(0, count * itemSize), offset);
+      }
+      offset += count * itemSize;
+    });
+    merged.setAttribute(name, new THREE.BufferAttribute(out, itemSize));
+  });
+  merged.computeBoundingSphere();
+  merged.computeBoundingBox();
+  return merged;
+}
+
+function batchStaticWorld() {
+  const started = performance.now();
+  const dynamic = collectDynamicObjects();
+  const sharedMaterials = new Map();
+  let before = 0;
+  let after = 0;
+
+  islands.forEach((island) => {
+    const root = island.mesh;
+    if (!root) return;
+    root.userData.isIslandRoot = true;
+    root.updateMatrixWorld(true);
+    const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const buckets = new Map();
+    const victims = [];
+    const center = new THREE.Vector3();
+
+    root.traverse((mesh) => {
+      if (mesh === root || !isBatchable(mesh, dynamic)) return;
+      before += 1;
+      // 1. Share identical-looking materials.
+      const sig = materialSignature(mesh.material);
+      if (!sharedMaterials.has(sig)) sharedMaterials.set(sig, mesh.material);
+      const material = sharedMaterials.get(sig);
+      // 2. Bucket by material, shadow flags and area cell.
+      mesh.getWorldPosition(center);
+      const cx = Math.floor(center.x / STATIC_BATCH_CELL);
+      const cz = Math.floor(center.z / STATIC_BATCH_CELL);
+      const key = `${material.uuid}|${mesh.castShadow ? 1 : 0}${mesh.receiveShadow ? 1 : 0}|${cx},${cz}`;
+      if (!buckets.has(key)) buckets.set(key, { material, cast: mesh.castShadow, receive: mesh.receiveShadow, items: [] });
+      buckets.get(key).items.push(mesh);
+      victims.push(mesh);
+    });
+
+    buckets.forEach((bucket) => {
+      if (bucket.items.length === 1) {
+        // Nothing to merge with; just adopt the shared material.
+        bucket.items[0].material = bucket.material;
+        victims.splice(victims.indexOf(bucket.items[0]), 1);
+        after += 1;
+        return;
+      }
+      const geometries = bucket.items.map((mesh) => {
+        const g = mesh.geometry.clone();
+        g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(toRoot, mesh.matrixWorld));
+        return g;
+      });
+      const merged = new THREE.Mesh(mergeForBatch(geometries), bucket.material);
+      merged.castShadow = bucket.cast;
+      merged.receiveShadow = bucket.receive;
+      merged.userData.noSurface = true;
+      merged.userData.staticBatch = true;
+      root.add(merged);
+      after += 1;
+    });
+
+    victims.forEach((mesh) => mesh.parent && mesh.parent.remove(mesh));
+  });
+
+  console.info(`Static batching: ${before} meshes -> ${after} (${sharedMaterials.size} materials) in ${Math.round(performance.now() - started)} ms`);
 }
 
 // ── 99-init.js ─ Startup sequence and closes the game closure.
@@ -14363,6 +14650,8 @@ renderInventory();
 renderAvatarChoices();
 createWorld();
 enhanceWorldSurfaces(scene, new Set([skyDome, cloudDeck, ocean, ...enemies.map((e) => e.mesh)]));
+// Merge static scenery into a few large meshes (far fewer draw calls).
+batchStaticWorld();
 createPlayer();
 initMultiplayerBrowser();
 applyAvatarToPlayer();

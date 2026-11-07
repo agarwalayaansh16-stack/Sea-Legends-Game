@@ -12,6 +12,7 @@ function loop(time) {
     advanceDayCycle(stepDt);
     updateDayNightLighting(stepDt);
     updateWindGrass(stepDt);
+    updateAvatarLod(stepDt);
     updateWindmills(stepDt);
     updateWeather(stepDt);
 
@@ -110,8 +111,9 @@ function loop(time) {
 }
 
 function updateBlinking(dt) {
-  scene.traverse((node) => {
-    if (node.userData && node.userData.eyesList) {
+  // Only character models have eyes; no need to walk the whole scene.
+  avatarModels.forEach((node) => {
+    if (node.visible && node.userData.eyesList && node.userData.eyesList.length) {
       if (node.userData.blinkTimer === undefined) {
         node.userData.blinkTimer = 3.0 + Math.random() * 2.0;
         node.userData.isBlinking = false;
