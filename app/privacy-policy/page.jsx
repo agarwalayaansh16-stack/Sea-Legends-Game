@@ -10,11 +10,11 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return <ContentLayout eyebrow="PRIVACY">
-    <h1>Privacy policy</h1><p className="content-updated">Last updated: November 4, 2026</p>
+    <h1>Privacy policy</h1><p className="content-updated">Last updated: November 19, 2026</p>
     <p className="content-lead">This policy explains what information Sea Legends stores, what third-party services the site uses, and the choices you have.</p>
 
     <h2>Information stored in your browser</h2>
-    <p>The game uses your browser's local storage for profile names, the selected profile, avatar choices, game progress, and in-game marketplace data. This information stays on your device. It is not sent to a game account server and does not sync between devices. Clearing your browser's site data removes it. Please don't use your real name as a profile name.</p>
+    <p>The game uses your browser's local storage for profile names, the selected profile, avatar choices, game progress, in-game marketplace data, and your settings (language, music on or off, and whether you have finished the tutorial). This information stays on your device. It is not sent to a game account server and does not sync between devices. Clearing your browser's site data removes it. Please don't use your real name as a profile name.</p>
     <p>Profiles are not password-protected accounts. Earlier versions of the game stored password and recovery fields locally; the current game removes those fields automatically when it loads.</p>
 
     <h2>Multiplayer</h2>

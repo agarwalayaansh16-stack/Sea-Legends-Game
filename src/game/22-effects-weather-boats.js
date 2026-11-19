@@ -106,7 +106,7 @@ function updateDayPhaseHud(phase) {
   const chip = document.querySelector("#day-phase");
   if (!chip) return;
   const remaining = Math.max(0, Math.ceil(DAY_CYCLE.phaseSeconds - dayCycle.elapsed));
-  const text = `${phase.label} · ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+  const text = tr(`${phase.label} · ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`);
   if (chip.textContent !== text) chip.textContent = text;
   if (chip.dataset.phase !== phase.name) chip.dataset.phase = phase.name;
 }

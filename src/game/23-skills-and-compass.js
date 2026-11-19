@@ -1,6 +1,10 @@
 
 // ── 23-skills-and-compass.js ─ Weapon skills, quest unlocks, compass and combat HUD.
 function triggerSwordQ() {
+  playPlayerAction("cyclone", { impact: performSwordQ });
+}
+
+function performSwordQ() {
   audio.playSlash();
   createSpecialBurst({ mesh: playerMesh });
   
@@ -13,13 +17,19 @@ function triggerSwordQ() {
 }
 
 function triggerGunQ() {
+  const aim = getMouseGunAim(90);
+  const dir = aim.point.clone().sub(playerMesh.position).setY(0);
+  if (dir.lengthSq() > 1) {
+    playerMesh.rotation.y = Math.atan2(dir.x, dir.z);
+    faceAttackDirection(dir.normalize(), 0.6);
+  }
+  playPlayerAction("shoot-heavy", { fire: performGunQ });
+}
+
+function performGunQ() {
   audio.playShot();
   const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
-  
-  createGunShot();
-  setTimeout(() => {
-    createGunShot();
-  }, 40);
+  fireSpreadShot(6);
   
   let hits = 0;
   enemies.forEach((enemy) => {
@@ -40,6 +50,11 @@ function triggerGunQ() {
 }
 
 function triggerSpecialQ() {
+  playPlayerAction("sky-cast", { release: performSpecialQ });
+}
+
+function performSpecialQ() {
+  createHandRelease(0x7ce0b4, 1.6);
   audio.playQuestComplete();
   sun.intensity = 6.0;
   scene.background.setHex(0xffffff);
@@ -208,21 +223,68 @@ function triggerCombatFlash() {
   }
 }
 
+// Which animation each skill plays, and the event that fires its effects.
+const SKILL_ACTIONS = {
+  "falcon-punch": ["power-punch", "impact"],
+  "ground-slam": ["slam-down", "impact"],
+  "gatling-flurry": ["flurry", null],
+  "piercing-thrust": ["thrust", "impact"],
+  "cyclone-spin": ["cyclone", "impact"],
+  "dimensional-slash": ["dimension-cut", "impact"],
+  "double-tap": ["shoot", "fire"],
+  "buckshot-cone": ["shoot-heavy", "fire"],
+  "mortar-blast": ["shoot-heavy", "fire"],
+  "pulse-bubble": ["burst-out", "release"],
+  "storm-call": ["sky-cast", "release"],
+  "celestial-beam": ["beam", "release"],
+  "grand-awakening": ["sky-cast", "release"],
+  "gods-judgment": ["sky-cast", "release"],
+  "flambage-shot": ["flying-kick", null],
+  "diable-jambe": ["spin-kick", "impact"],
+};
+
 function triggerActiveSkill(skillId) {
+  if (skillId === "spirit-bolt") {
+    // Same as a left click with the special weapon, aimed at the mouse.
+    if (attackCooldown <= 0) castSpiritBolt({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
+    return;
+  }
+  const entry = SKILL_ACTIONS[skillId];
+  if (!entry || !playerMesh?.userData?.animation) {
+    performActiveSkill(skillId);
+    return;
+  }
+  const [actionName, eventName] = entry;
+  if (skillId === "falcon-punch") playerMesh.rotation.y = cameraYaw + Math.PI;
+  if (/^(double-tap|buckshot-cone|mortar-blast)$/.test(skillId)) {
+    // Gun skills fire toward the cursor.
+    const aim = getMouseGunAim(skillId === "mortar-blast" ? 170 : 90);
+    const dir = aim.point.clone().sub(playerMesh.position).setY(0);
+    if (dir.lengthSq() > 1) playerMesh.rotation.y = Math.atan2(dir.x, dir.z);
+  }
+  faceAttackDirection(new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)), PLAYER_ACTIONS[actionName].dur);
+  if (!eventName) {
+    playPlayerAction(actionName);
+    performActiveSkill(skillId);
+    return;
+  }
+  playPlayerAction(actionName, {
+    [eventName]: () => {
+      if (!gameStarted || !playerMesh) return;
+      if (/^(pulse-bubble|storm-call|celestial-beam|grand-awakening|gods-judgment)$/.test(skillId)) {
+        createHandRelease(skillId === "grand-awakening" ? 0xa775ff : 0x7ce0b4, 1.4);
+      }
+      performActiveSkill(skillId);
+    },
+  });
+}
+
+function performActiveSkill(skillId) {
   const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
 
   if (skillId === "falcon-punch") {
-    // Immediately snap player mesh to face where the camera is looking
-    playerMesh.rotation.y = cameraYaw + Math.PI;
-
-    // Set procedural charging animation on the model
-    if (playerMesh?.userData?.animation) {
-      playerMesh.userData.animation.punchChargeTimer = 0.3;
-      playerMesh.userData.animation.punchChargeDuration = 0.3;
-    }
-
-    // Delay the punch release, damage, and audio by 300ms (charge time)
-    setTimeout(() => {
+    // The power-punch animation has already charged; this runs on the strike frame.
+    (() => {
       if (!gameStarted || !playerMesh) return;
 
       // Re-snap to camera yaw in case they turned camera during the 0.3s charge
@@ -258,17 +320,14 @@ function triggerActiveSkill(skillId) {
         playerMesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
         currentForward.copy(toTarget);
       }
+      faceAttackDirection(currentForward, 0.4);
 
       audio.playSlash();
       triggerCombatFlash();
-      createMeleeBurst(playerMesh);
 
-      // Play release punch strike animation
-      if (playerMesh.userData.animation) {
-        playerMesh.userData.animation.attackTimer = 0.22;
-        playerMesh.userData.animation.attackDuration = 0.22;
-        playerMesh.userData.animation.attackImpact = 1.0;
-      }
+      const fistAt = playerMesh.position.clone().add(new THREE.Vector3(0, 6.5, 0)).addScaledVector(currentForward, 5.5);
+      createFistImpact(fistAt, currentForward, 2.2);
+      createSpeedLines(fistAt, currentForward, 8);
 
       // Visual feedback: a series of shockwaves/bursts along the path, and ground rupture V-shaped rocks
       const maxDistance = t ? Math.max(4, t.mesh.position.distanceTo(playerMesh.position)) : 24;
@@ -363,7 +422,7 @@ function triggerActiveSkill(skillId) {
         const endPos = playerMesh.position.clone().addScaledVector(currentForward, 24);
         createWallHitEffect(endPos, false);
       }
-    }, 300);
+    })();
   } else if (skillId === "ground-slam") {
     createGroundSlam(playerMesh.position.clone(), { type: "player" });
     triggerCombatFlash();
@@ -380,8 +439,8 @@ function triggerActiveSkill(skillId) {
     const iv = setInterval(() => {
       if (count >= 10 || !gameStarted) { clearInterval(iv); return; }
       audio.playSlash();
-      const pos = playerMesh.position.clone().addScaledVector(forward, 6 + Math.random() * 8).add(new THREE.Vector3((Math.random() - 0.5) * 4, 3 + (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4));
-      createDustCloud(pos);
+      const fist = playerHandWorldPosition(count % 2 ? "left" : "right");
+      createFistImpact(fist.addScaledVector(forward, 1.5), forward, 0.7);
       enemies.forEach(e => {
         if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 30) {
           const dmg = Math.round(getDamage() * 0.38);
@@ -393,20 +452,34 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "piercing-thrust") {
     audio.playSlash();
-    playerMesh.position.addScaledVector(forward, 20);
-    createSwordSlash(playerMesh);
-    enemies.forEach(e => {
-      if (!e.alive) return;
-      const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
-      if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
-        const dmg = Math.round(getDamage() * 2.1);
-        damageEnemy(e, dmg, "Thrust", "#f6b73c");
+    createSlashArc(forward, 0, 1, true);
+    // Dash 20 units over a few frames (stopping at walls), then strike.
+    let dashStep = 0;
+    const dash = setInterval(() => {
+      if (!gameStarted || dashStep >= 4) {
+        clearInterval(dash);
+        enemies.forEach(e => {
+          if (!e.alive) return;
+          const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
+          if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
+            const dmg = Math.round(getDamage() * 2.1);
+            damageEnemy(e, dmg, "Thrust", "#f6b73c");
+            createSwordHitSparks(e.mesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward);
+          }
+        });
+        return;
       }
-    });
+      const before = playerMesh.position.clone();
+      playerMesh.position.addScaledVector(forward, 5);
+      resolveWallCollision(before);
+      createSpeedLines(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward, 3);
+      dashStep += 1;
+    }, 16);
 
   } else if (skillId === "cyclone-spin") {
     audio.playSlash();
-    createSpecialBurst(playerMesh);
+    createSlashArc(forward, 0, 1, true);
+    createSlashArc(forward.clone().negate(), 0, 1, true);
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 42) {
         const dmg = Math.round(getDamage() * 1.9);
@@ -416,25 +489,30 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "dimensional-slash") {
     audio.playSlash();
+    createSlashArc(forward, Math.PI / 2, 1, true);
+    cameraShake = Math.max(cameraShake, 1.2);
     createAirSlash(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward, { type: "player" });
 
   } else if (skillId === "double-tap") {
-    audio.playShot();
-    createGunShot();
+    // Two shots at the cursor; each hits whatever is under it or in its path.
     const shoot = () => {
-      const t = enemies.filter(e => e.alive && e.mesh.position.distanceTo(playerMesh.position) <= 130)
-        .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-      if (t) {
+      const aim = getMouseGunAim(130);
+      audio.playShot();
+      fireGunEffects(aim.target, aim.isHead, undefined, aim.point);
+      if (aim.target) {
         const dmg = Math.round(getDamage() * 1.4);
-        damageEnemy(t, dmg, "DoubleTap", "#9defff");
+        damageEnemy(aim.target, dmg, "DoubleTap", "#9defff", aim.isHead);
       }
     };
     shoot();
-    setTimeout(() => { audio.playShot(); createGunShot(); shoot(); }, 160);
+    setTimeout(() => {
+      playPlayerAction("shoot", { fire: shoot });
+    }, 120);
 
   } else if (skillId === "buckshot-cone") {
     audio.playShot();
-    createGunShot(); createGunShot();
+    fireSpreadShot(8);
+    cameraShake = Math.max(cameraShake, 0.6);
     let hits = 0;
     enemies.forEach(e => {
       if (!e.alive || hits >= 5) return;
@@ -452,7 +530,9 @@ function triggerActiveSkill(skillId) {
       new THREE.DodecahedronGeometry(2, 0),
       new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.9, emissive: 0xff4400, emissiveIntensity: 0.6 })
     );
-    shell.position.copy(playerMesh.position).add(new THREE.Vector3(0, 6, 0)).addScaledVector(forward, 8);
+    shell.position.copy(playerMuzzleWorldPosition()).addScaledVector(forward, 1.5);
+    createMuzzleFlash(playerMuzzleWorldPosition(), forward);
+    cameraShake = Math.max(cameraShake, 0.8);
     scene.add(shell);
     projectiles.push({ mesh: shell, direction: forward.clone(), speed: 68, damage: Math.round(getDamage() * 2.8), age: 0, duration: 2.0, owner: "player", isMortar: true });
 
@@ -488,9 +568,10 @@ function triggerActiveSkill(skillId) {
     beamGeo.rotateX(Math.PI / 2);
     const beamMat = new THREE.MeshBasicMaterial({ color: 0x7ce0b4, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    const beamCenter = playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)).addScaledVector(forward, 45);
+    const hands = playerHandWorldPosition("right").lerp(playerHandWorldPosition("left"), 0.5);
+    const beamCenter = hands.clone().addScaledVector(forward, 46);
     beam.position.copy(beamCenter);
-    beam.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)));
+    beam.lookAt(hands);
     scene.add(beam);
     let tick = 0;
     const biv = setInterval(() => {
@@ -549,6 +630,7 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "flambage-shot") {
     audio.playSlash();
+    createSpeedLines(playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)), forward, 6);
     const dashDir = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
     const dashDist = 25;
     const startPos = playerMesh.position.clone();
@@ -582,5 +664,21 @@ function triggerActiveSkill(skillId) {
     createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 3, 0)));
     createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "🔥 INFERNO KICK!", "#ff2200");
     log("🔥 Inferno Kick activated! Kicks are now infused with friction flames!");
+  }
+}
+
+// Shotgun-style spread: one muzzle flash, several tracers fanning out.
+function fireSpreadShot(pellets = 6) {
+  const muzzle = playerMuzzleWorldPosition();
+  const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y));
+  createMuzzleFlash(muzzle, forward);
+  createMuzzleFlash(muzzle, forward);
+  ejectShellCasing();
+  for (let i = 0; i < pellets; i += 1) {
+    const dir = forward.clone()
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() - 0.5) * 0.7)
+      .add(new THREE.Vector3(0, (Math.random() - 0.5) * 0.15, 0));
+    const end = muzzle.clone().addScaledVector(dir, 70 + Math.random() * 25);
+    createBulletTracer(muzzle, end, 0xffc27a, (at, d) => createBulletImpact(at, d));
   }
 }

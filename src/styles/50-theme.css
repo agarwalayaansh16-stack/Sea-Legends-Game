@@ -271,3 +271,442 @@ input[type="range"] { accent-color: var(--gold); }
 .avatar-code-actions button:hover { color: var(--ink); background: var(--gold); }
 .avatar-code-status { min-height: 16px; margin: 0; color: var(--text-muted); font-size: 12px; }
 .avatar-code-status.error { color: #ff9b90; }
+
+/* Gun equipped: aim with a crosshair cursor (click where you want to shoot). */
+body[data-weapon="gun"] #game {
+  cursor: crosshair;
+}
+
+/* Getting-started card (35-tutorial.js). */
+.tutorial-card {
+  position: absolute;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(440px, calc(100vw - 32px));
+  padding: 12px 16px 10px;
+  border-radius: 14px;
+  background: rgba(12, 28, 44, 0.86);
+  border: 1px solid rgba(255, 214, 122, 0.55);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: #f4f1e6;
+  text-align: center;
+  pointer-events: auto;
+  transition: border-color 0.2s, background 0.2s;
+}
+.tutorial-card .tutorial-count {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd67a;
+  margin-bottom: 4px;
+}
+.tutorial-card .tutorial-text {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.tutorial-card kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font: inherit;
+  font-size: 13px;
+}
+.tutorial-card .tutorial-skip {
+  background: none;
+  border: 0;
+  color: rgba(244, 241, 230, 0.6);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.tutorial-card.tutorial-done {
+  border-color: #6fdc8c;
+  background: rgba(20, 60, 40, 0.88);
+}
+
+/* Loading screen: the trailer plays behind the title while the game downloads,
+   then a Play button appears. Palette follows the trailer's sunset light. */
+.loading-screen {
+  --sun: #ffd27a;
+  --sun-deep: #ff9f43;
+  --cream: #fff4dc;
+  --sea: #0c3b52;
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden auto;
+  color: var(--cream);
+  background: #0c3b52 url("/media/sea-legends-trailer-poster.jpg") center / cover no-repeat;
+  transition: opacity 0.6s ease, visibility 0.6s;
+}
+.loading-screen[hidden] { display: none; }
+
+/* Background video, slow Ken Burns drift, and a shade for legible text. */
+.loading-media { position: absolute; inset: 0; pointer-events: none; }
+.loading-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: loading-kenburns 30s ease-in-out infinite alternate, loading-fade-in 1.2s ease both;
+}
+.loading-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 62% 58% at 50% 52%, rgba(6, 22, 34, 0.72), rgba(6, 22, 34, 0.25) 70%, rgba(6, 22, 34, 0.08)),
+    linear-gradient(180deg, rgba(6, 20, 32, 0.55) 0%, rgba(6, 20, 32, 0) 28%, rgba(6, 20, 32, 0) 62%, rgba(6, 20, 32, 0.78) 100%);
+}
+@keyframes loading-kenburns {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.1) translate3d(-1.5%, -1%, 0); }
+}
+@keyframes loading-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Golden glints drifting up like light off the water. */
+.loading-sparkles span {
+  position: absolute;
+  bottom: -12px;
+  left: var(--x);
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d6 0%, var(--sun) 45%, rgba(255, 159, 67, 0) 75%);
+  box-shadow: 0 0 10px 2px rgba(255, 210, 122, 0.55);
+  opacity: 0;
+  animation: loading-rise var(--t) linear var(--d) infinite;
+}
+@keyframes loading-rise {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  12% { opacity: 0.95; }
+  50% { transform: translate3d(18px, -45vh, 0) scale(1); }
+  85% { opacity: 0.7; }
+  100% { transform: translate3d(-12px, -92vh, 0) scale(0.4); opacity: 0; }
+}
+
+/* Content: each block fades up in turn. */
+.loading-card {
+  position: relative;
+  width: min(640px, 100%);
+  text-align: center;
+}
+.loading-card > * { animation: loading-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.loading-card > :nth-child(1) { animation-delay: 0.15s; }
+.loading-card > :nth-child(2) { animation: none; }
+.loading-card > :nth-child(3) { animation-delay: 1.05s; }
+.loading-card > :nth-child(4) { animation-delay: 1.25s; }
+.loading-card > :nth-child(5) { animation-delay: 0s; }
+.loading-card > :nth-child(6) { animation-delay: 1.45s; }
+.loading-card > :nth-child(7) { animation-delay: 1.6s; }
+@keyframes loading-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
+}
+
+.loading-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 0 10px;
+  font: 700 0.82rem/1 Outfit, Inter, system-ui, sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--sun);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+.loading-eyebrow-line {
+  width: 46px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--sun));
+}
+.loading-eyebrow-line:last-child { transform: scaleX(-1); }
+
+/* Title: letters drop in one by one, then a light sweep crosses the gold. */
+.loading-title {
+  margin: 0;
+  font-family: Outfit, Inter, system-ui, sans-serif;
+  font-size: clamp(3rem, 11vw, 6.2rem);
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  filter: drop-shadow(0 6px 0 rgba(120, 52, 8, 0.55)) drop-shadow(0 14px 26px rgba(0, 0, 0, 0.45));
+}
+.loading-title-inner {
+  display: inline-flex;
+  animation: loading-bob 6s ease-in-out 2s infinite;
+}
+.loading-title .ll,
+.loading-title .ll-gap { display: inline-block; }
+.loading-title .ll-gap { width: 0.28em; }
+.loading-title .ll {
+  background: linear-gradient(100deg, #fff8e6 0%, #ffe2a0 35%, #ffbf5a 60%, #fff3cf 64%, #ffbf5a 70%, #ff9f43 100%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 246, 220, 0.35);
+  opacity: 0;
+  animation:
+    loading-letter 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) calc(0.3s + var(--i) * 0.055s) both,
+    loading-shine 5s ease-in-out calc(1.6s + var(--i) * 0.06s) infinite;
+}
+@keyframes loading-letter {
+  from { opacity: 0; transform: translateY(-0.6em) rotate(-8deg) scale(1.2); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes loading-shine {
+  0%, 55% { background-position: 100% 0; }
+  80%, 100% { background-position: 0% 0; }
+}
+@keyframes loading-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.loading-tagline {
+  margin: 14px auto 28px;
+  max-width: 460px;
+  font-size: 1.06rem;
+  line-height: 1.55;
+  color: rgba(255, 244, 220, 0.92);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Progress: fills while loading, with a moving glint; swaps for Play when ready. */
+.loading-progress-wrap { transition: opacity 0.4s ease, transform 0.4s ease; }
+.loading-progress {
+  position: relative;
+  height: 10px;
+  margin: 0 auto;
+  width: min(380px, 100%);
+  border-radius: 999px;
+  background: rgba(6, 22, 34, 0.55);
+  border: 1px solid rgba(255, 210, 122, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.loading-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff9f43, #ffd27a 70%, #fff1c4);
+  box-shadow: 0 0 14px rgba(255, 196, 92, 0.75);
+  animation: loading-fill 9s cubic-bezier(0.15, 0.7, 0.2, 1) 0.6s forwards;
+}
+.loading-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%);
+  background-size: 60px 100%;
+  background-repeat: no-repeat;
+  animation: loading-glint 1.4s linear infinite;
+}
+@keyframes loading-fill { to { width: 88%; } }
+@keyframes loading-glint { from { background-position: -60px 0; } to { background-position: 420px 0; } }
+#game-load-status {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+  color: rgba(255, 244, 220, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  animation: loading-breathe 1.8s ease-in-out infinite;
+}
+@keyframes loading-breathe { 50% { opacity: 0.55; } }
+.loading-screen.is-ready .loading-progress-wrap { display: none; }
+
+/* Play button: pops in, glows, and catches the light. */
+.loading-play {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px auto 0;
+  padding: 16px 58px 16px 50px;
+  border: 0;
+  border-radius: 999px;
+  font: 900 1.3rem/1 Outfit, Inter, system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #3a1a02;
+  background: linear-gradient(180deg, #fff0b8 0%, #ffd27a 45%, #ff9f43 100%);
+  box-shadow:
+    0 6px 0 #c4621b,
+    0 14px 30px rgba(255, 159, 67, 0.45),
+    inset 0 2px 0 rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  animation: loading-pop 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) both, loading-glow 2.4s ease-in-out 0.7s infinite;
+}
+.loading-play[hidden] { display: none; }
+.loading-play::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.85) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: loading-sweep 3s ease-in-out 1s infinite;
+}
+.loading-play-icon { font-size: 0.9em; transition: transform 0.2s ease; }
+.loading-play:hover { transform: translateY(-3px) scale(1.04); filter: brightness(1.05); }
+.loading-play:hover .loading-play-icon { transform: translateX(3px) scale(1.15); }
+.loading-play:active { transform: translateY(4px) scale(0.98); box-shadow: 0 2px 0 #c4621b, 0 8px 18px rgba(255, 159, 67, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.7); }
+.loading-play:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+@keyframes loading-pop {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes loading-glow {
+  0%, 100% { box-shadow: 0 6px 0 #c4621b, 0 14px 30px rgba(255, 159, 67, 0.45), 0 0 0 0 rgba(255, 210, 122, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.7); }
+  50% { box-shadow: 0 6px 0 #c4621b, 0 14px 34px rgba(255, 159, 67, 0.6), 0 0 0 14px rgba(255, 210, 122, 0), inset 0 2px 0 rgba(255, 255, 255, 0.7); }
+}
+@keyframes loading-sweep {
+  0% { transform: translateX(-120%); }
+  45%, 100% { transform: translateX(120%); }
+}
+
+.loading-language {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 26px 0 0;
+  font-size: 0.92rem;
+  color: rgba(255, 244, 220, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.loading-language select,
+.language-select {
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 122, 0.45);
+  background: rgba(6, 22, 34, 0.65);
+  color: #fff4dc;
+  font: inherit;
+  backdrop-filter: blur(6px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.loading-language select:hover,
+.loading-language select:focus-visible { border-color: #ffd27a; box-shadow: 0 0 0 3px rgba(255, 210, 122, 0.25); outline: none; }
+
+/* Site links as glassy pills that lift on hover. */
+.loading-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+}
+.loading-links a {
+  padding: 8px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 244, 220, 0.22);
+  background: rgba(6, 22, 34, 0.48);
+  backdrop-filter: blur(8px);
+  color: #fff4dc;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.loading-links a:hover,
+.loading-links a:focus-visible {
+  transform: translateY(-3px);
+  color: #3a1a02;
+  background: linear-gradient(180deg, #ffe7a3, #ffc061);
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(255, 159, 67, 0.35);
+  outline: none;
+}
+
+/* Trailer sound toggle (top right). */
+.loading-sound {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 244, 220, 0.3);
+  background: rgba(6, 22, 34, 0.55);
+  backdrop-filter: blur(8px);
+  color: #fff4dc;
+  font: 600 0.85rem/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  animation: loading-fade-in 1s ease 1.8s both;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.loading-sound:hover { border-color: #ffd27a; }
+.loading-sound-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.loading-sound-bars i { width: 3px; height: 4px; border-radius: 2px; background: currentColor; opacity: 0.6; }
+.loading-sound[aria-pressed="true"] { border-color: #ffd27a; color: #ffd27a; }
+.loading-sound[aria-pressed="true"] .loading-sound-bars i { opacity: 1; animation: loading-eq 0.9s ease-in-out infinite; }
+.loading-sound[aria-pressed="true"] .loading-sound-bars i:nth-child(2) { animation-delay: 0.2s; }
+.loading-sound[aria-pressed="true"] .loading-sound-bars i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes loading-eq { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+
+/* Leaving: the menu lifts away and the scene fades into the game. */
+.loading-screen.is-leaving { opacity: 0; visibility: hidden; pointer-events: none; }
+.loading-screen.is-leaving .loading-card { transform: scale(1.08) translateY(-12px); filter: blur(4px); transition: transform 0.6s ease, filter 0.6s ease; }
+.loading-screen.is-leaving .loading-video { transform: scale(1.18); transition: transform 0.6s ease; }
+
+@media (max-width: 560px) {
+  .loading-eyebrow-line { width: 22px; }
+  .loading-tagline { font-size: 0.98rem; }
+  .loading-play { padding: 14px 44px 14px 38px; font-size: 1.15rem; }
+  .loading-links a { padding: 7px 12px; font-size: 0.82rem; }
+}
+
+/* People who prefer less motion get the still poster and no moving effects. */
+@media (prefers-reduced-motion: reduce) {
+  .loading-video, .loading-sparkles { display: none; }
+  .loading-screen *, .loading-screen *::before, .loading-screen *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Language menu in the top bar. */
+.language-toggle { gap: 6px; }
+.language-toggle .language-select { padding: 3px 6px; font-size: 0.85rem; }
+
+/* Home page (the game): the page itself never scrolls; the game fills the
+   screen. (The loading screen can still scroll on very short screens.) */
+html:has(#game-root),
+html:has(#game-root) body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html:has(#game-root),
+html:has(#game-root) body,
+.loading-screen {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html:has(#game-root)::-webkit-scrollbar,
+html:has(#game-root) body::-webkit-scrollbar,
+.loading-screen::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

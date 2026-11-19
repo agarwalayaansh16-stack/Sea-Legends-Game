@@ -17,7 +17,7 @@ function initAvatar3DPreview() {
 
   // Camera setup
   const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
-  camera.position.set(0, 7.5, 23); // Centered relative to mesh height
+  camera.position.set(0, 6.4, 25); // frames a full-height character standing on the platform
   avatarPreview3D.camera = camera;
 
   // Renderer setup
@@ -26,6 +26,9 @@ function initAvatar3DPreview() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Same colour pipeline as the game world, so studio colours match in-game.
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
   avatarPreview3D.renderer = renderer;
 
@@ -42,7 +45,7 @@ function initAvatar3DPreview() {
   dirLight.shadow.camera.far = 25;
   dirLight.shadow.camera.left = -6;
   dirLight.shadow.camera.right = 6;
-  dirLight.shadow.camera.top = 10;
+  dirLight.shadow.camera.top = 13;
   dirLight.shadow.camera.bottom = -4;
   dirLight.shadow.bias = -0.0005;
   scene.add(dirLight);
@@ -147,7 +150,7 @@ function updateAvatarPreview3D(avatar) {
 
   // Build new mesh model on the customizer platform
   const model = createHumanAvatarModel(avatar, { showName: false, showSword: true });
-  model.position.y = 0.05;
+  model.position.y = 1.62; // feet on the platform
   model.rotation.y = avatarPreview3D.rotationY;
   
   scene.add(model);

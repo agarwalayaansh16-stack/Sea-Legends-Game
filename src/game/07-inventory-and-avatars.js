@@ -23,8 +23,11 @@ function setWeapon(weapon) {
   if (weapon === "special" && !player.specialUnlocked) return;
   if (weapon === "sword" && !player.hasSword) return;
   if (weapon === "gun" && !player.hasGun) return;
+  const switched = player.weapon !== weapon;
   player.weapon = weapon;
   document.body.dataset.weapon = weapon;
+  // Draw the new weapon with a quick reach-and-ready motion.
+  if (switched && gameStarted && playerMesh?.userData?.animation) playPlayerAction("draw");
   if (ui.level) {
     ui.level.classList.remove("weapon-pop");
     void ui.level.offsetWidth;

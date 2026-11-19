@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 const links = [
-  ["About", "/about"], ["Game Guide", "/game-guide"],
-  ["Privacy Policy", "/privacy-policy"], ["Terms", "/terms"], ["Contact", "/contact"],
+  ["Home", "/"], ["About", "/about"], ["Game Guide", "/game-guide"], ["Islands", "/guides/islands"],
+  ["Enemies & Bosses", "/guides/enemies-and-bosses"], ["Weapons & Skills", "/guides/weapons-and-skills"],
+  ["Updates", "/updates"], ["Privacy Policy", "/privacy-policy"], ["Terms & Conditions", "/terms"],
+  ["Disclaimer", "/disclaimer"], ["Contact", "/contact"],
 ];
 
 export default function SiteFooter() {

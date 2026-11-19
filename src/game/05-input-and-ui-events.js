@@ -226,6 +226,7 @@ canvas.addEventListener("pointerdown", (event) => {
     isPointerDown = true;
     lastPointerX = event.clientX;
     lastPointerY = event.clientY;
+    touchTap = { x: event.clientX, y: event.clientY, time: performance.now() };
     return;
   }
 
@@ -243,6 +244,18 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+// A quick tap (not a drag) on the game view fires the gun at that spot.
+let touchTap = null;
+canvas.addEventListener("pointerup", (event) => {
+  if (event.pointerType !== "touch" || !touchTap) return;
+  const quick = performance.now() - touchTap.time < 320;
+  const still = Math.hypot(event.clientX - touchTap.x, event.clientY - touchTap.y) < 14;
+  touchTap = null;
+  if (quick && still && gameStarted && !escMenuOpen && player.weapon === "gun" && player.health > 0) {
+    attack({ clientX: event.clientX, clientY: event.clientY });
+  }
+});
 
 window.addEventListener("pointerup", (event) => {
   if (event.pointerType === "touch") {
@@ -294,7 +307,8 @@ document.querySelectorAll("#mobile-controls [data-touch-key]").forEach((button) 
 document.querySelectorAll("#mobile-controls [data-touch-action]").forEach((button) => {
   button.addEventListener("click", () => {
     if (!gameStarted || escMenuOpen || player.health <= 0) return;
-    if (button.dataset.touchAction === "attack") attack();
+    // With the gun, the button aims for you; tap the screen to pick a spot instead.
+    if (button.dataset.touchAction === "attack") attack(player.weapon === "gun" || player.weapon === "special" ? { autoAim: true } : null);
     if (button.dataset.touchAction === "jump") jump();
     if (button.dataset.touchAction === "interact") interact();
   });
@@ -313,11 +327,6 @@ homeTeleportButton?.addEventListener("click", () => {
   homeTeleportCountdown = 5;
   teleportStatus.textContent = "Teleporting in 5s...";
   homeTeleportButton.disabled = true;
-});
-
-shiftlockToggle?.addEventListener("change", () => {
-  shiftLockEnabled = shiftlockToggle.checked;
-  shiftlockToggle.nextElementSibling.textContent = "Shift lock";
 });
 
 controlsToggle?.addEventListener("change", () => {

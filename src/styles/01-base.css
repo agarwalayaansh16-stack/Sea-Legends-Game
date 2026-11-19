@@ -28,7 +28,7 @@ button {
 #game {
   display: block;
 }
-#game-load-status { position: fixed; z-index: 20000; top: 12px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; color: var(--paper); background: rgba(4,22,32,.92); font-weight: 700; box-shadow: 0 6px 24px rgba(0,0,0,.28); }
+#game-load-status { margin: 10px 0 0; color: rgba(244,241,230,.75); font-size: .95rem; }
 #game-load-status[hidden] { display: none; }
 #game-init-error[hidden] { display: none; }
 #game-init-error { position: fixed; z-index: 20001; inset: 0; display: grid; place-content: center; padding: 24px; color: var(--paper); text-align: center; background: rgba(3,12,18,.96); }

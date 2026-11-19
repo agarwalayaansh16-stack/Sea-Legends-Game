@@ -22,6 +22,7 @@ const masterySkills = {
     { key: "X", id: "buckshot-cone", name: "Buckshot Cone", req: 20, cd: 6, desc: "Active: Fire a wide cone of 5 bullets spreading outwards." }
   ],
   special: [
+    { key: "C", id: "spirit-bolt", name: "Spirit Bolt", req: 1, cd: 0.9, desc: "Active: Fire a bolt of spirit energy at the cursor. Left click casts it too." },
     { key: "Z", id: "pulse-bubble", name: "Pulse Bubble", req: 5, cd: 6, desc: "Active: Unleash an expanding shockwave pushing enemies away." },
     { key: "X", id: "gods-judgment", name: "God's Judgment", req: 20, cd: 40, desc: "Active: Summon a massive cosmic energy blast dealing colossal AOE damage." }
   ]
@@ -55,7 +56,6 @@ const multiplayerCloseButton = document.querySelector("#multiplayer-close");
 const multiplayerBrowserMessage = document.querySelector("#multiplayer-browser-message");
 const multiplayerQuickJoinButton = document.querySelector("#multiplayer-quick-join");
 const multiplayerServerList = document.querySelector("#multiplayer-server-list");
-const shiftlockToggle = document.querySelector("#shiftlock-toggle");
 const controlsToggle = document.querySelector("#controls-toggle");
 const questToggle = document.querySelector("#quest-toggle");
 const walkToggle = document.querySelector("#walk-toggle");

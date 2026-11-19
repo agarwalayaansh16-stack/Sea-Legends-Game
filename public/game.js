@@ -8,6 +8,8 @@ try {
     const errorPanel = document.querySelector("#game-init-error");
     const errorMessage = document.querySelector("#game-init-error-message");
     if (status) status.hidden = true;
+    const loadingScreen = document.querySelector("#loading-screen");
+    if (loadingScreen) loadingScreen.hidden = true;
     if (errorMessage) errorMessage.textContent = message;
     if (errorPanel) errorPanel.hidden = false;
   };
@@ -284,6 +286,7 @@ const masterySkills = {
     { key: "X", id: "buckshot-cone", name: "Buckshot Cone", req: 20, cd: 6, desc: "Active: Fire a wide cone of 5 bullets spreading outwards." }
   ],
   special: [
+    { key: "C", id: "spirit-bolt", name: "Spirit Bolt", req: 1, cd: 0.9, desc: "Active: Fire a bolt of spirit energy at the cursor. Left click casts it too." },
     { key: "Z", id: "pulse-bubble", name: "Pulse Bubble", req: 5, cd: 6, desc: "Active: Unleash an expanding shockwave pushing enemies away." },
     { key: "X", id: "gods-judgment", name: "God's Judgment", req: 20, cd: 40, desc: "Active: Summon a massive cosmic energy blast dealing colossal AOE damage." }
   ]
@@ -317,7 +320,6 @@ const multiplayerCloseButton = document.querySelector("#multiplayer-close");
 const multiplayerBrowserMessage = document.querySelector("#multiplayer-browser-message");
 const multiplayerQuickJoinButton = document.querySelector("#multiplayer-quick-join");
 const multiplayerServerList = document.querySelector("#multiplayer-server-list");
-const shiftlockToggle = document.querySelector("#shiftlock-toggle");
 const controlsToggle = document.querySelector("#controls-toggle");
 const questToggle = document.querySelector("#quest-toggle");
 const walkToggle = document.querySelector("#walk-toggle");
@@ -827,7 +829,6 @@ let nearbyInteractable = null;
 let playerMesh;
 let cameraYaw = 0.68;
 let cameraPitch = 0.38;
-let shiftLockEnabled = true;
 let homeTeleportCountdown = 0;
 let questGiverPosition = new THREE.Vector3();
 let activeBoat = null;
@@ -1526,6 +1527,7 @@ canvas.addEventListener("pointerdown", (event) => {
     isPointerDown = true;
     lastPointerX = event.clientX;
     lastPointerY = event.clientY;
+    touchTap = { x: event.clientX, y: event.clientY, time: performance.now() };
     return;
   }
 
@@ -1543,6 +1545,18 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+// A quick tap (not a drag) on the game view fires the gun at that spot.
+let touchTap = null;
+canvas.addEventListener("pointerup", (event) => {
+  if (event.pointerType !== "touch" || !touchTap) return;
+  const quick = performance.now() - touchTap.time < 320;
+  const still = Math.hypot(event.clientX - touchTap.x, event.clientY - touchTap.y) < 14;
+  touchTap = null;
+  if (quick && still && gameStarted && !escMenuOpen && player.weapon === "gun" && player.health > 0) {
+    attack({ clientX: event.clientX, clientY: event.clientY });
+  }
+});
 
 window.addEventListener("pointerup", (event) => {
   if (event.pointerType === "touch") {
@@ -1594,7 +1608,8 @@ document.querySelectorAll("#mobile-controls [data-touch-key]").forEach((button) 
 document.querySelectorAll("#mobile-controls [data-touch-action]").forEach((button) => {
   button.addEventListener("click", () => {
     if (!gameStarted || escMenuOpen || player.health <= 0) return;
-    if (button.dataset.touchAction === "attack") attack();
+    // With the gun, the button aims for you; tap the screen to pick a spot instead.
+    if (button.dataset.touchAction === "attack") attack(player.weapon === "gun" || player.weapon === "special" ? { autoAim: true } : null);
     if (button.dataset.touchAction === "jump") jump();
     if (button.dataset.touchAction === "interact") interact();
   });
@@ -1613,11 +1628,6 @@ homeTeleportButton?.addEventListener("click", () => {
   homeTeleportCountdown = 5;
   teleportStatus.textContent = "Teleporting in 5s...";
   homeTeleportButton.disabled = true;
-});
-
-shiftlockToggle?.addEventListener("change", () => {
-  shiftLockEnabled = shiftlockToggle.checked;
-  shiftlockToggle.nextElementSibling.textContent = "Shift lock";
 });
 
 controlsToggle?.addEventListener("change", () => {
@@ -1994,8 +2004,11 @@ function setWeapon(weapon) {
   if (weapon === "special" && !player.specialUnlocked) return;
   if (weapon === "sword" && !player.hasSword) return;
   if (weapon === "gun" && !player.hasGun) return;
+  const switched = player.weapon !== weapon;
   player.weapon = weapon;
   document.body.dataset.weapon = weapon;
+  // Draw the new weapon with a quick reach-and-ready motion.
+  if (switched && gameStarted && playerMesh?.userData?.animation) playPlayerAction("draw");
   if (ui.level) {
     ui.level.classList.remove("weapon-pop");
     void ui.level.offsetWidth;
@@ -2648,7 +2661,7 @@ function initAvatar3DPreview() {
 
   // Camera setup
   const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
-  camera.position.set(0, 7.5, 23); // Centered relative to mesh height
+  camera.position.set(0, 6.4, 25); // frames a full-height character standing on the platform
   avatarPreview3D.camera = camera;
 
   // Renderer setup
@@ -2657,6 +2670,9 @@ function initAvatar3DPreview() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Same colour pipeline as the game world, so studio colours match in-game.
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
   container.appendChild(renderer.domElement);
   avatarPreview3D.renderer = renderer;
 
@@ -2673,7 +2689,7 @@ function initAvatar3DPreview() {
   dirLight.shadow.camera.far = 25;
   dirLight.shadow.camera.left = -6;
   dirLight.shadow.camera.right = 6;
-  dirLight.shadow.camera.top = 10;
+  dirLight.shadow.camera.top = 13;
   dirLight.shadow.camera.bottom = -4;
   dirLight.shadow.bias = -0.0005;
   scene.add(dirLight);
@@ -2778,7 +2794,7 @@ function updateAvatarPreview3D(avatar) {
 
   // Build new mesh model on the customizer platform
   const model = createHumanAvatarModel(avatar, { showName: false, showSword: true });
-  model.position.y = 0.05;
+  model.position.y = 1.62; // feet on the platform
   model.rotation.y = avatarPreview3D.rotationY;
   
   scene.add(model);
@@ -7276,9 +7292,279 @@ function getAvatarProportions(avatar) {
   };
 }
 
-// Builds a character: rounded torso, jointed limbs and a proper face.
-// Part names and default joint positions (torso 5.7, head 8.65, shoulders 5.9,
-// hips 2.45) are kept so every animation, NPC and enemy still lines up.
+// ---- Character shaping helpers ----
+
+// Head size relative to the old chunky rig, giving roughly 5.5-heads-tall proportions.
+const AVATAR_HEAD_SCALE = 0.8;
+// Torso cross-section: radius (before x/z scaling) at heights -0.5..0.5 of the torso.
+const TORSO_PROFILE = [
+  [0.01, -0.5], [0.98, -0.5], [1.0, -0.42], [0.93, -0.22], [0.98, -0.02], [1.1, 0.16],
+  [1.2, 0.3], [1.2, 0.38], [1.06, 0.45], [0.6, 0.5], [0.01, 0.5],
+];
+const TORSO_SX = 1.22;
+const TORSO_SZ = 0.68;
+
+// Averages normals of vertices that share a position so seams (sphere/lathe
+// edges, sculpted surfaces) shade smoothly.
+function weldNormals(geo) {
+  geo.computeVertexNormals();
+  const pos = geo.attributes.position;
+  const nor = geo.attributes.normal;
+  const shared = new Map();
+  for (let i = 0; i < pos.count; i += 1) {
+    const key = `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+    const list = shared.get(key);
+    if (list) list.push(i);
+    else shared.set(key, [i]);
+  }
+  const n = new THREE.Vector3();
+  shared.forEach((list) => {
+    if (list.length < 2) return;
+    n.set(0, 0, 0);
+    list.forEach((i) => { n.x += nor.getX(i); n.y += nor.getY(i); n.z += nor.getZ(i); });
+    n.normalize();
+    list.forEach((i) => nor.setXYZ(i, n.x, n.y, n.z));
+  });
+  nor.needsUpdate = true;
+  return geo;
+}
+
+function sculptGeometry(geo, shape) {
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 1) {
+    v.fromBufferAttribute(pos, i);
+    shape(v, i);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  return weldNormals(geo);
+}
+
+// A limb segment hanging down from y = 0. profile: [radius, t] with t 0 (top) .. 1 (bottom).
+function limbLathe(profile, length, segments = 14) {
+  const full = [[0, profile[0][1]], ...profile, [0, profile[profile.length - 1][1]]];
+  const points = full.slice().reverse().map(([r, t]) => new THREE.Vector2(Math.max(r, 0.001), -t * length));
+  return weldNormals(new THREE.LatheGeometry(points, segments));
+}
+
+// Turns a point on a sphere of radius 1.25 into the matching point on the
+// sculpted head: longer face, narrow jaw, chin, cheekbones, brow and eye sockets.
+function sculptSkullPoint(v) {
+  const R = 1.25;
+  const nx = v.x / R;
+  const ny = v.y / R;
+  const nz = v.z / R;
+  let x = v.x * 0.9;
+  let y = v.y * 1.12;
+  let z = v.z * (nz < 0 ? 1.06 : 0.96);
+  if (ny < 0) {
+    const t = Math.min(1, -ny);
+    x *= 1 - 0.3 * t * t;
+    z *= nz > 0 ? 1 + 0.06 * t : 1 - 0.3 * t * t;
+  }
+  const g = (cx, cy, s) => Math.exp(-((nx - cx) ** 2 + (ny - cy) ** 2) / (s * s));
+  const front = Math.max(0, nz);
+  let push = 0;
+  push -= 0.09 * front * (g(-0.36, 0.02, 0.17) + g(0.36, 0.02, 0.17)); // eye sockets
+  push += 0.05 * front * (g(-0.35, 0.2, 0.16) + g(0.35, 0.2, 0.16));   // brow ridge
+  push += 0.06 * front * (g(-0.52, -0.22, 0.2) + g(0.52, -0.22, 0.2)); // cheekbones
+  push += 0.05 * front * g(0, -0.48, 0.25);                             // mouth area
+  push += 0.07 * front * g(0, -0.8, 0.18);                              // chin
+  push -= 0.04 * (g(-0.85, 0.35, 0.2) + g(0.85, 0.35, 0.2));            // temples
+  const len = Math.hypot(x, y, z) || 1;
+  const k = 1 + (push * R) / len;
+  return v.set(x * k, y * k, z * k);
+}
+
+// Point on the sculpted face for a front-facing direction (nx, ny), lifted off the skin.
+function skullPoint(nx, ny, lift = 0) {
+  const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+  const p = sculptSkullPoint(new THREE.Vector3(nx, ny, nz).multiplyScalar(1.25));
+  return p.add(new THREE.Vector3(nx, ny, nz).multiplyScalar(lift));
+}
+
+function torsoRadiusAt(yn) {
+  for (let i = 1; i < TORSO_PROFILE.length - 2; i += 1) {
+    const [r0, y0] = TORSO_PROFILE[i];
+    const [r1, y1] = TORSO_PROFILE[i + 1];
+    if (yn >= y0 && yn <= y1) return r0 + ((r1 - r0) * (yn - y0)) / (y1 - y0 || 1);
+  }
+  return yn < 0 ? TORSO_PROFILE[1][0] : TORSO_PROFILE[TORSO_PROFILE.length - 2][0];
+}
+
+// How far the torso surface sticks out (front or back) at x, height y from its centre.
+function torsoSurfaceZ(x, y, torsoH, face = 1) {
+  const yn = THREE.MathUtils.clamp(y / torsoH, -0.5, 0.5);
+  const r = torsoRadiusAt(yn);
+  const lx = x / TORSO_SX; // lathe-space x
+  let z = r * Math.sqrt(Math.max(0, 1 - (lx / r) ** 2)) + torsoChestOffset(lx, yn, face);
+  return z * TORSO_SZ;
+}
+
+// Chest (front) and shoulder blades (back), in lathe space.
+function torsoChestOffset(lx, yn, face) {
+  const band = Math.exp(-(((yn - 0.24) / 0.14) ** 2));
+  const side = Math.exp(-((lx / 0.55) ** 2));
+  return face > 0 ? 0.09 * band * (1 - side * 0.55) : 0.05 * band;
+}
+
+// A flat band (strap) that hugs the torso surface, front (1) or back (-1).
+function torsoStripGeometry(x, halfWidth, y0, y1, torsoH, face, lift = 0.035) {
+  const rows = 10;
+  const positions = [];
+  const indices = [];
+  for (let i = 0; i <= rows; i += 1) {
+    const y = y0 + ((y1 - y0) * i) / rows;
+    [-1, 1].forEach((j) => {
+      const xx = x + j * halfWidth;
+      positions.push(xx, y, face * (torsoSurfaceZ(xx, y, torsoH, face) + lift));
+    });
+  }
+  for (let i = 0; i < rows; i += 1) {
+    const a = i * 2;
+    if (face > 0) indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    else indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Eyeball texture: white with a shaded iris, pupil and a catch-light, centred on +z.
+const avatarEyeMaterials = new Map();
+function avatarEyeMaterial(irisColor) {
+  const key = String(irisColor || "#3b2a1e");
+  if (avatarEyeMaterials.has(key)) return avatarEyeMaterials.get(key);
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  const sclera = ctx.createLinearGradient(0, 0, 0, 128);
+  sclera.addColorStop(0, "#d9d2c8");
+  sclera.addColorStop(0.5, "#f7f4ee");
+  sclera.addColorStop(1, "#d9d2c8");
+  ctx.fillStyle = sclera;
+  ctx.fillRect(0, 0, 256, 128);
+  const cx = 64;
+  const cy = 64;
+  const base = new THREE.Color(key);
+  const css = (c) => `#${c.getHexString()}`;
+  const iris = ctx.createRadialGradient(cx, cy, 4, cx, cy, 23);
+  iris.addColorStop(0, css(base.clone().lerp(new THREE.Color("#ffe9b0"), 0.35)));
+  iris.addColorStop(0.55, css(base));
+  iris.addColorStop(0.9, css(base.clone().multiplyScalar(0.55)));
+  iris.addColorStop(1, "#1a1410");
+  ctx.fillStyle = iris;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 23, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 28; i += 1) {
+    const a = (i / 28) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9);
+    ctx.lineTo(cx + Math.cos(a) * 21, cy + Math.sin(a) * 21);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#050505";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(cx - 7, cy - 7, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.encoding = THREE.sRGBEncoding;
+  const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.18 });
+  avatarEyeMaterials.set(key, material);
+  return material;
+}
+
+// Fine weave used as a bump map on clothes.
+let avatarClothBump;
+function getAvatarClothBump() {
+  if (avatarClothBump) return avatarClothBump;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(size, size);
+  let seed = 7;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const weave = ((x >> 1) + (y >> 1)) % 2 ? 22 : -22;
+      const v = Math.max(0, Math.min(255, 128 + weave + (rand() - 0.5) * 40));
+      const i = (y * size + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  avatarClothBump = new THREE.CanvasTexture(canvas);
+  avatarClothBump.wrapS = avatarClothBump.wrapT = THREE.RepeatWrapping;
+  avatarClothBump.repeat.set(10, 10);
+  return avatarClothBump;
+}
+
+function shoeGeometry() {
+  return sculptGeometry(new THREE.SphereGeometry(0.5, 20, 14), (v) => {
+    const nz = v.z / 0.5;
+    v.x *= 0.82 * (nz > 0.4 ? 1 - (nz - 0.4) * 0.3 : 1);
+    v.z *= 1.55;
+    v.y *= 0.62;
+    if (v.y > 0) v.y -= Math.max(0, v.z) * 0.12; // instep slopes down to the toe
+    if (v.y < -0.12) v.y = -0.12 + (v.y + 0.12) * 0.12; // flat underside
+  });
+}
+
+// A relaxed hand hanging from the wrist (y = 0), fingers gently curled toward the body.
+function buildAvatarHand(side, material, bony) {
+  const hand = new THREE.Group();
+  const inward = -side;
+  const add = (geo, x, y, z, parent = hand) => {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    parent.add(mesh);
+    return mesh;
+  };
+  const palm = add(new THREE.SphereGeometry(0.25, 14, 10), 0, -0.22, 0);
+  palm.scale.set(bony ? 0.25 : 0.36, 0.95, bony ? 0.7 : 0.82);
+  const fr = bony ? 0.034 : 0.052;
+  const finger = (z, length, curl) => {
+    const root = new THREE.Group();
+    root.position.set(inward * 0.01, -0.42, z);
+    root.rotation.set(-z * 0.5, 0, inward * curl);
+    hand.add(root);
+    add(new THREE.SphereGeometry(fr * 1.1, 8, 6), 0, 0, 0, root);
+    add(new THREE.CylinderGeometry(fr, fr * 0.95, length * 0.55, 7), 0, -length * 0.275, 0, root);
+    const mid = new THREE.Group();
+    mid.position.y = -length * 0.55;
+    mid.rotation.z = inward * curl * 1.6;
+    root.add(mid);
+    add(new THREE.CylinderGeometry(fr * 0.95, fr * 0.82, length * 0.45, 7), 0, -length * 0.225, 0, mid);
+    add(new THREE.SphereGeometry(fr * 0.85, 8, 6), 0, -length * 0.45, 0, mid);
+    return root;
+  };
+  finger(0.15, 0.36, 0.2);
+  finger(0.05, 0.4, 0.22);
+  finger(-0.05, 0.37, 0.25);
+  finger(-0.15, 0.29, 0.28);
+  const thumb = finger(0.2, 0.34, 0.3);
+  thumb.position.set(inward * 0.07, -0.14, 0.17);
+  thumb.rotation.set(-0.65, 0, inward * 0.4);
+  return hand;
+}
+
+// Builds a character: sculpted head and face, shaped torso, and arms/legs with
+// working elbows, knees, hands and boots. Part names are shared with the
+// animation code; joints are separate groups so they can bend.
 function createHumanAvatarModel(avatar, options = {}) {
   const showSword = options.showSword !== false;
   const showName = options.showName !== false;
@@ -7290,113 +7576,150 @@ function createHumanAvatarModel(avatar, options = {}) {
   const headStyle = avatar.headStyle || "normal";
   const accessory = avatar.accessory || (avatar.outfit !== "adventurer" ? "halo" : "none");
   const skeleton = bodyType === "skeleton";
+  const adventurer = !skeleton && avatar.outfit === "adventurer";
 
-  const std = (color, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, ...extra });
+  // Studio colours are sRGB; the renderer works in linear light like the rest of the world.
+  const lin = (c) => (c instanceof THREE.Color ? c.clone() : new THREE.Color(c)).convertSRGBToLinear();
+  const std = (color, roughness = 0.8, extra = {}) => new THREE.MeshStandardMaterial({
+    roughness, ...extra, color: lin(color), ...(extra.emissive !== undefined ? { emissive: lin(extra.emissive) } : {}),
+  });
+  const cloth = (color, roughness = 0.86) => std(color, roughness, { bumpMap: getAvatarClothBump(), bumpScale: 0.035 });
+  const skinColor = new THREE.Color(avatar.skin || "#e0ac69");
   const bone = std("#ece4cf", 0.65);
-  const skin = skeleton ? bone : std(avatar.skin, 0.62);
-  const hair = std(avatar.hair, 0.9);
-  const torsoMat = std(avatar.torsoColor || avatar.shirt || "#1b85aa", 0.84);
-  const shirt = torsoMat;
-  const leftArmMat = std(avatar.leftArmColor || avatar.shirt || "#1b85aa", 0.84);
-  const rightArmMat = std(avatar.rightArmColor || avatar.shirt || "#1b85aa", 0.84);
-  const leftLegMat = std(avatar.leftLegColor || avatar.pants || "#26364f", 0.86);
-  const rightLegMat = std(avatar.rightLegColor || avatar.pants || "#26364f", 0.86);
-  const beltMat = std(avatar.beltColor || avatar.boots || "#23170f", 0.9);
-  const bootsMat = std(avatar.boots || "#23170f", 0.75);
+  const skin = skeleton ? bone : std(skinColor, 0.55, { emissive: skinColor.clone().multiplyScalar(0.05) });
+  const skinShade = std(skinColor.clone().multiplyScalar(0.6), 0.7);
+  const lips = std(skinColor.clone().lerp(new THREE.Color("#a3474f"), 0.5), 0.42);
+  const lash = std("#1c1512", 0.8);
+  const hair = std(avatar.hair, 0.62);
+  const torsoMat = cloth(avatar.torsoColor || avatar.shirt || "#1b85aa");
+  const leftArmMat = cloth(avatar.leftArmColor || avatar.shirt || "#1b85aa");
+  const rightArmMat = cloth(avatar.rightArmColor || avatar.shirt || "#1b85aa");
+  const leftLegMat = cloth(avatar.leftLegColor || avatar.pants || "#26364f", 0.88);
+  const rightLegMat = cloth(avatar.rightLegColor || avatar.pants || "#26364f", 0.88);
+  const pantsMat = cloth(avatar.pants || "#26364f", 0.88);
+  const beltMat = std(avatar.beltColor || avatar.boots || "#23170f", 0.7);
+  const bootsMat = std(avatar.boots || "#23170f", 0.55);
   const metal = std(0xc8d7df, 0.25, { metalness: 0.7 });
-  const trim = std(avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", 0.65);
-  const leather = std("#5c3d21", 0.82);
-  const darkLeather = std("#362a22", 0.88);
+  const trim = std(avatar.outfit === "armor" ? 0xb8c1c7 : avatar.boots || "#23170f", 0.6, avatar.outfit === "armor" ? { metalness: 0.6 } : {});
+  const leather = std("#5c3d21", 0.75);
+  const darkLeather = std("#362a22", 0.8);
   const shade = (mesh) => { mesh.castShadow = true; return mesh; };
+  const mesh = (geo, mat, parent, x = 0, y = 0, z = 0) => {
+    const m = shade(new THREE.Mesh(geo, mat));
+    m.position.set(x, y, z);
+    if (parent) parent.add(m);
+    return m;
+  };
 
-  // ---- Layout (all heights in model units; defaults reproduce the classic rig) ----
+  // ---- Layout (model units; feet rest on y = -1.6) ----
   const FOOT_Y = -1.56;
-  const legLen = 3.8 * prop.leg;
-  const hipY = FOOT_Y + legLen + 0.21;               // 2.45 at default
-  const torsoH = 4.1 * prop.torso;
-  const torsoY = hipY + 3.25 + (torsoH - 4.1) / 2;   // 5.7 at default
-  const torsoTop = torsoY + torsoH / 2;              // 7.75 at default
-  const shoulderY = torsoTop - 1.85;                 // 5.9 at default
-  const headR = 1.25 * prop.head;
-  const headY = torsoTop + 0.9 + (headR - 1.25) * 0.85; // 8.65 at default
-  const armLen = 2.5 * prop.arm;
-  // Torso-relative heights for things strapped to the body.
-  const onTorso = (absoluteDefaultY) => (absoluteDefaultY - 5.7) * prop.torso;
+  const legLen = 4.6 * prop.leg;
+  const hipY = FOOT_Y + legLen + 0.21;               // 3.25 at default
+  const torsoH = 3.7 * prop.torso;
+  const torsoY = hipY + 1.0 + torsoH / 2;            // 6.1 at default
+  const torsoTop = torsoY + torsoH / 2;              // 7.95 at default
+  const shoulderY = torsoTop - 0.55;
+  const shoulderX = 1.72;
+  const headK = prop.head * AVATAR_HEAD_SCALE;
+  const headY = torsoTop + 0.2 + 1.0 * prop.head;    // 9.15 at default
+  const armLen = 4.5 * prop.arm;
+  const upperLen = armLen * 0.5;
+  const forearmLen = armLen * 0.5 - 0.12;
+  const thighLen = legLen * 0.5;
+  const shinLen = legLen * 0.5;
+  // Torso-relative heights for things strapped to the body (authored for the old 4.1-tall torso at 5.7).
+  const onTorso = (absoluteDefaultY) => (absoluteDefaultY - 5.7) * (torsoH / 4.1);
 
-  // ---- Torso: tapered chest with rounded shoulders (or a ribcage) ----
+  // ---- Torso ----
   let torso;
   if (skeleton) {
     torso = new THREE.Group();
-    const spine = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, torsoH, 8), bone));
-    torso.add(spine);
+    mesh(new THREE.CylinderGeometry(0.2, 0.24, torsoH, 8), bone, torso);
     for (let i = 0; i < 5; i += 1) {
-      const rib = shade(new THREE.Mesh(new THREE.TorusGeometry(1.05 - i * 0.06, 0.11, 6, 20, Math.PI * 1.6), bone));
+      const rib = mesh(new THREE.TorusGeometry(0.95 - i * 0.06, 0.1, 6, 20, Math.PI * 1.6), bone, torso, 0, torsoH * 0.3 - i * 0.42 * prop.torso);
       rib.rotation.x = Math.PI / 2;
       rib.rotation.z = Math.PI * 0.7;
       rib.scale.set(1.25, 0.75, 1);
-      rib.position.y = torsoH * 0.32 - i * 0.48 * prop.torso;
-      torso.add(rib);
     }
-    const collarbone = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 6), bone));
+    const collarbone = mesh(new THREE.CylinderGeometry(0.11, 0.11, 3.0, 6), bone, torso, 0, torsoH / 2 - 0.25);
     collarbone.rotation.z = Math.PI / 2;
-    collarbone.position.y = torsoH / 2 - 0.25;
-    torso.add(collarbone);
   } else {
-    const profile = [
-      [0.01, -0.5], [0.98, -0.5], [1.02, -0.36], [0.92, -0.12], [1.12, 0.12],
-      [1.32, 0.3], [1.36, 0.4], [1.22, 0.47], [0.62, 0.5], [0.01, 0.5],
-    ].map(([r, y]) => new THREE.Vector2(r, y * torsoH));
-    torso = shade(new THREE.Mesh(new THREE.LatheGeometry(profile, 22), torsoMat));
-    torso.scale.set(1.18, 1, 0.66);
+    const profile = TORSO_PROFILE.map(([r, y]) => new THREE.Vector2(r, y * torsoH));
+    const geo = sculptGeometry(new THREE.LatheGeometry(profile, 28), (v) => {
+      // Chest and shoulder blades.
+      const off = torsoChestOffset(v.x, v.y / torsoH, v.z > 0 ? 1 : -1);
+      v.z += v.z > 0 ? off : -off;
+    });
+    torso = shade(new THREE.Mesh(geo, torsoMat));
+    torso.scale.set(TORSO_SX, 1, TORSO_SZ);
     torso.userData.surfaceScale = true;
   }
   torso.position.y = torsoY;
   group.add(torso);
   // Children of the torso move with it (and aren't stretched by its x/z scale).
   const torsoAnchor = new THREE.Group();
-  if (!skeleton) torsoAnchor.scale.set(1 / 1.18, 1, 1 / 0.66);
+  if (!skeleton) torsoAnchor.scale.set(1 / TORSO_SX, 1, 1 / TORSO_SZ);
   torso.add(torsoAnchor);
 
-  // Hips / pelvis
-  const pelvis = shade(new THREE.Mesh(new THREE.SphereGeometry(1.0, 18, 12), skeleton ? bone : std(avatar.pants || "#26364f", 0.86)));
-  pelvis.scale.set(skeleton ? 1.2 : 1.55, skeleton ? 0.55 : 0.62, skeleton ? 0.8 : 0.95);
-  pelvis.position.y = hipY + 0.55;
-  group.add(pelvis);
+  // Hips
+  const pelvis = mesh(new THREE.SphereGeometry(1.0, 20, 14), skeleton ? bone : pantsMat, group, 0, hipY + 0.45);
+  pelvis.scale.set(skeleton ? 1.1 : 1.38, skeleton ? 0.5 : 0.78, skeleton ? 0.7 : 0.8);
+
+  if (!skeleton && avatar.outfit !== "armor") {
+    // Shirt collar and buttons.
+    const collar = mesh(new THREE.TorusGeometry(0.6, 0.1, 8, 22), adventurer ? leather : torsoMat, torsoAnchor, 0, torsoH / 2 - 0.08);
+    collar.rotation.x = Math.PI / 2;
+    collar.scale.set(1.05, 0.85, 1);
+    if (!adventurer) {
+      for (let i = 0; i < 4; i += 1) {
+        const y = torsoH * (0.32 - i * 0.17);
+        mesh(new THREE.SphereGeometry(0.065, 8, 6), trim, torsoAnchor, 0, y, torsoSurfaceZ(0, y, torsoH) + 0.07);
+      }
+    }
+  }
 
   if (!skeleton && avatar.outfit === "coat") {
-    const coatProfile = [[1.0, 0.5], [1.12, 0.1], [1.28, -0.4], [1.42, -0.62]].map(([r, y]) => new THREE.Vector2(r, y * 5.4));
-    const coat = shade(new THREE.Mesh(new THREE.LatheGeometry(coatProfile, 22, 0, Math.PI * 2), std(avatar.torsoColor || avatar.shirt || "#1b85aa", 0.84, { side: THREE.DoubleSide })));
-    coat.scale.set(1.2, 1, 0.72);
-    coat.position.y = onTorso(5.0) - 0.1;
-    torsoAnchor.add(coat);
+    const top = torsoH * 0.42;
+    const hem = -(torsoY - hipY) - 1.9;
+    const coatProfile = [
+      [1.42, hem], [1.28, hem + 0.9], [1.12, -(torsoY - hipY) + 0.6], [1.02, -torsoH * 0.22],
+      [1.13, torsoH * 0.18], [1.12, top], [0.7, top + 0.2],
+    ].map(([r, y]) => new THREE.Vector2(r, y));
+    const coat = mesh(new THREE.LatheGeometry(coatProfile, 26, Math.PI * 0.1, Math.PI * 1.8),
+      std(avatar.torsoColor || avatar.shirt || "#1b85aa", 0.84, { side: THREE.DoubleSide, bumpMap: getAvatarClothBump(), bumpScale: 0.035 }), torsoAnchor);
+    coat.geometry = weldNormals(coat.geometry);
+    coat.scale.set(1.22, 1, 0.74);
   }
   if (!skeleton && avatar.outfit === "armor") {
-    const plate = shade(new THREE.Mesh(new THREE.SphereGeometry(1.0, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), trim));
-    plate.scale.set(1.55, 1.25, 0.6);
+    const plate = mesh(new THREE.SphereGeometry(1.0, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), trim, torsoAnchor, 0, torsoH * 0.12, 0.35);
+    plate.scale.set(1.42, 1.15, 0.6);
     plate.rotation.x = -Math.PI / 2;
-    plate.position.set(0, onTorso(6.15), 0.62);
-    torsoAnchor.add(plate);
+    const gorget = mesh(new THREE.TorusGeometry(0.62, 0.16, 8, 22), trim, torsoAnchor, 0, torsoH / 2 - 0.1);
+    gorget.rotation.x = Math.PI / 2;
   }
 
   // ---- Neck & head ----
-  const neck = shade(new THREE.Mesh(new THREE.CylinderGeometry(skeleton ? 0.2 : 0.42, skeleton ? 0.22 : 0.5, 0.7, 12), skin));
-  neck.position.y = torsoTop + 0.2;
-  group.add(neck);
+  const neckBottom = torsoTop - 0.35;
+  const neckTop = headY - 0.55 * prop.head;
+  if (skeleton) {
+    const spine = mesh(new THREE.CylinderGeometry(0.17, 0.2, neckTop - neckBottom, 8), bone, group, 0, (neckTop + neckBottom) / 2);
+    spine.castShadow = true;
+  } else {
+    const neckGeo = limbLathe([[0.47, 0], [0.43, 0.45], [0.5, 0.85], [0.56, 1]], neckTop - neckBottom, 16);
+    mesh(neckGeo, skin, group, 0, neckTop, -0.05);
+  }
 
   const head = new THREE.Group(); // pivot at the head centre; scaled by head size
   head.position.y = headY;
-  head.scale.setScalar(prop.head);
+  head.scale.setScalar(headK);
   head.userData = { isHead: true };
   group.add(head);
   const eyesList = [];
 
   if (skeleton) {
-    const skull = shade(new THREE.Mesh(new THREE.SphereGeometry(1.2, 22, 16), bone));
-    skull.scale.set(0.95, 1.0, 1.02);
-    head.add(skull);
-    const jaw = shade(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.45, 1.1), bone));
-    jaw.position.set(0, -0.95, 0.35);
-    head.add(jaw);
+    const skull = mesh(new THREE.SphereGeometry(1.2, 24, 18), bone, head);
+    skull.scale.set(0.95, 1.05, 1.02);
+    mesh(new THREE.BoxGeometry(1.3, 0.42, 1.0), bone, head, 0, -1.0, 0.35);
     const socketMat = std("#14110e", 0.9);
     [-0.42, 0.42].forEach((x) => {
       const socket = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), socketMat);
@@ -7405,244 +7728,209 @@ function createHumanAvatarModel(avatar, options = {}) {
       head.add(socket);
       eyesList.push(socket);
     });
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 3), socketMat);
+    const nose = mesh(new THREE.ConeGeometry(0.14, 0.28, 3), socketMat, head, 0, -0.3, 1.12);
     nose.rotation.x = Math.PI;
-    nose.position.set(0, -0.3, 1.12);
-    head.add(nose);
-    for (let i = -2; i <= 2; i += 1) {
-      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.06), bone);
-      tooth.position.set(i * 0.17, -0.68, 1.08);
-      head.add(tooth);
-    }
+    for (let i = -2; i <= 2; i += 1) mesh(new THREE.BoxGeometry(0.14, 0.2, 0.06), bone, head, i * 0.17, -0.7, 1.06);
   } else {
-    const face = shade(new THREE.Mesh(new THREE.SphereGeometry(1.25, 28, 20), skin));
-    face.scale.set(0.93, 1.08, 0.98);
-    head.add(face);
-    const jaw = shade(new THREE.Mesh(new THREE.SphereGeometry(0.85, 18, 12), skin));
-    jaw.scale.set(1.05, 0.7, 0.95);
-    jaw.position.set(0, -0.68, 0.2);
-    head.add(jaw);
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), skin);
-    nose.scale.set(0.8, 1, 1.15);
-    nose.position.set(0, -0.3, 1.2);
-    head.add(nose);
-    [-1, 1].forEach((side) => {
-      const ear = shade(new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), skin));
-      ear.scale.set(0.45, 1, 0.7);
-      ear.position.set(side * 1.15, -0.15, 0);
-      head.add(ear);
-    });
-    const white = std("#f6f3ec", 0.35);
-    const iris = std(avatar.eyes || "#101820", 0.3);
-    [-0.42, 0.42].forEach((x) => {
-      const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), white);
-      eyeWhite.scale.set(1, 0.8, 0.6);
-      eyeWhite.position.set(x, -0.06, 1.05);
-      head.add(eyeWhite);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), iris);
-      pupil.position.set(x, -0.06, 1.15);
-      head.add(pupil);
-      eyesList.push(eyeWhite);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.12), hair);
-      brow.position.set(x, 0.17, 1.15);
-      brow.rotation.z = x < 0 ? -0.1 : 0.1;
-      head.add(brow);
-    });
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.05, 8, 16, Math.PI * 0.75), std("#7a2f34", 0.6));
-    mouth.position.set(0, -0.68, 1.08);
-    mouth.rotation.set(0.15, 0, Math.PI * 1.12);
-    head.add(mouth);
+    // Sculpted skull and face.
+    mesh(sculptGeometry(new THREE.SphereGeometry(1.25, 44, 32), sculptSkullPoint), skin, head);
 
-    // Hair is authored around a head centred at y = 8.65, so offset it into head space.
-    const hairGroup = new THREE.Group();
-    hairGroup.position.y = -8.65;
-    addHair(hairGroup, avatar.hairStyle || "short", hair);
-    head.add(hairGroup);
+    // Ears.
+    [-1, 1].forEach((side) => {
+      const ear = mesh(new THREE.SphereGeometry(0.28, 14, 10), skin, head, side * 1.09, -0.1, -0.12);
+      ear.scale.set(0.24, 1, 0.58);
+      ear.rotation.y = -side * 0.3;
+      const inner = mesh(new THREE.SphereGeometry(0.15, 10, 8), skinShade, head, side * 1.135, -0.1, -0.09);
+      inner.scale.set(0.2, 0.85, 0.55);
+      inner.rotation.y = -side * 0.35;
+    });
+
+    // Eyes: textured eyeballs (they blink) under skin-coloured lids, with lashes and brows.
+    const eyeMat = avatarEyeMaterial(avatar.eyes);
+    [-1, 1].forEach((side) => {
+      const p = skullPoint(side * 0.36, 0.02);
+      p.z -= 0.075;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 14), eyeMat);
+      eye.position.copy(p);
+      eye.rotation.y = side * 0.06;
+      head.add(eye);
+      eyesList.push(eye);
+      mesh(new THREE.SphereGeometry(0.185, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.38), skin, head, p.x, p.y, p.z);
+      mesh(new THREE.SphereGeometry(0.182, 18, 6, 0, Math.PI * 2, Math.PI * 0.68, Math.PI * 0.32), skin, head, p.x, p.y, p.z);
+      const lashes = mesh(new THREE.TorusGeometry(0.172, 0.02, 4, 16, Math.PI), lash, head, p.x, p.y + 0.066, p.z);
+      lashes.rotation.x = Math.PI / 2;
+      const brow = new THREE.QuadraticBezierCurve3(
+        skullPoint(side * 0.13, 0.24, 0.03), skullPoint(side * 0.36, 0.31, 0.04), skullPoint(side * 0.6, 0.23, 0.02),
+      );
+      const browMesh = mesh(new THREE.TubeGeometry(brow, 10, 0.05, 5, false), hair, head);
+      browMesh.scale.y = 0.9;
+    });
+
+    // Nose: bridge, tip and nostril wings.
+    const bridgeTop = skullPoint(0, 0.08, 0.01);
+    const tip = skullPoint(0, -0.29, 0.1);
+    const bridgeDir = new THREE.Vector3().subVectors(bridgeTop, tip);
+    const bridge = mesh(new THREE.CylinderGeometry(0.06, 0.1, bridgeDir.length(), 10), skin, head);
+    bridge.position.copy(bridgeTop).add(tip).multiplyScalar(0.5);
+    bridge.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bridgeDir.normalize());
+    const noseTip = mesh(new THREE.SphereGeometry(0.105, 12, 10), skin, head);
+    noseTip.position.copy(tip);
+    noseTip.scale.set(1, 0.9, 0.95);
+    [-1, 1].forEach((side) => {
+      const wing = mesh(new THREE.SphereGeometry(0.07, 10, 8), skin, head);
+      wing.position.copy(skullPoint(side * 0.1, -0.31, 0.03));
+      const nostril = mesh(new THREE.SphereGeometry(0.035, 8, 6), skinShade, head);
+      nostril.position.copy(tip).add(new THREE.Vector3(side * 0.05, -0.075, -0.03));
+      nostril.scale.set(1, 0.55, 1.2);
+    });
+
+    // Lips.
+    const upperLip = mesh(new THREE.SphereGeometry(0.19, 16, 10), lips, head);
+    upperLip.position.copy(skullPoint(0, -0.5, -0.06));
+    upperLip.scale.set(1.1, 0.3, 0.4);
+    const lowerLip = mesh(new THREE.SphereGeometry(0.17, 16, 10), lips, head);
+    lowerLip.position.copy(skullPoint(0, -0.59, -0.065));
+    lowerLip.scale.set(1.0, 0.4, 0.4);
+    const mouthLine = mesh(new THREE.BoxGeometry(0.36, 0.02, 0.05), skinShade, head);
+    mouthLine.position.copy(skullPoint(0, -0.545, -0.025));
+
+    addHair(head, avatar.hairStyle || "short", hair, torsoMat);
   }
 
   if (options.bandanaColor) {
-    const bandana = new THREE.Mesh(new THREE.TorusGeometry(1.32, 0.26, 12, 28), std(options.bandanaColor, 0.74));
-    bandana.position.y = 0.4;
+    const bandana = mesh(new THREE.TorusGeometry(1.18, 0.2, 10, 30), std(options.bandanaColor, 0.74), head, 0, 0.5, -0.05);
     bandana.rotation.x = Math.PI / 2;
-    head.add(bandana);
+    bandana.scale.set(0.95, 1.12, 1);
   }
 
   // Headless: hide the head entirely, cap the neck.
   if (headStyle === "headless") {
     head.visible = false;
-    const cap = new THREE.Mesh(new THREE.CircleGeometry(skeleton ? 0.2 : 0.42, 14), std("#5a1a1e", 0.7));
+    const cap = new THREE.Mesh(new THREE.CircleGeometry(skeleton ? 0.17 : 0.5, 16), std("#5a1a1e", 0.7));
     cap.rotation.x = -Math.PI / 2;
-    cap.position.y = torsoTop + 0.56;
+    cap.position.set(0, neckTop + 0.01, -0.05);
     group.add(cap);
   }
 
-  if (!skeleton) {
-    const collar = shade(new THREE.Mesh(
-      avatar.outfit === "adventurer" ? new THREE.CylinderGeometry(0.62, 0.68, 0.45, 14, 1, true) : new THREE.TorusGeometry(0.6, 0.13, 8, 18),
-      avatar.outfit === "adventurer" ? leather : shirt,
-    ));
-    if (avatar.outfit !== "adventurer") collar.rotation.x = Math.PI / 2;
-    collar.position.y = torsoTop + (avatar.outfit === "adventurer" ? 0.05 : -0.05);
-    group.add(collar);
-  }
-
-  // ---- Limbs: shoulder/hip pivot groups, with elbow/knee joints ----
+  // ---- Arms: shoulder group -> forearm group (elbow) -> hand ----
   const makeArm = (side, sleeveMat) => {
     const arm = new THREE.Group();
-    arm.position.set(side * 2.25, shoulderY, 0);
-    arm.rotation.z = side * 0.15;
-    const r = skeleton ? 0.16 : 0.45;
-    const upperLen = armLen * 0.55;
-    const lowerLen = armLen * 0.45;
-    const shoulder = shade(new THREE.Mesh(new THREE.SphereGeometry(skeleton ? 0.3 : 0.52, 14, 10), skeleton ? bone : sleeveMat));
-    shoulder.scale.set(1, 0.85, 1);
-    shoulder.position.set(-side * 0.12, -0.05, 0);
-    arm.add(shoulder);
-    const upper = shade(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.88, upperLen, 12), skeleton ? bone : sleeveMat));
-    upper.position.y = -upperLen / 2;
-    arm.add(upper);
-    const elbow = shade(new THREE.Mesh(new THREE.SphereGeometry(r * (skeleton ? 1.5 : 0.9), 12, 8), skeleton ? bone : skin));
-    elbow.position.y = -upperLen;
-    arm.add(elbow);
-    const lower = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.85, r * 0.7, lowerLen, 12), skin));
-    lower.position.y = -upperLen - lowerLen / 2;
-    arm.add(lower);
-    // Hand: palm with fingers and a thumb (pivot at the wrist like before).
-    const hand = new THREE.Group();
-    hand.position.y = -armLen - 0.25 * prop.arm;
-    const palm = shade(new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.4 : 0.5, 0.55, 0.26), skin));
-    hand.add(palm);
-    const fingers = shade(new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.36 : 0.46, 0.34, 0.22), skin));
-    fingers.position.set(0, -0.42, 0.04);
-    fingers.rotation.x = 0.35;
-    hand.add(fingers);
-    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.32, 6), skin);
-    thumb.position.set(-side * 0.28, -0.1, 0.12);
-    thumb.rotation.z = side * 0.6;
-    hand.add(thumb);
-    arm.add(hand);
+    arm.position.set(side * shoulderX, shoulderY, 0);
+    arm.rotation.z = side * 0.07;
+    if (skeleton) {
+      mesh(new THREE.SphereGeometry(0.26, 12, 8), bone, arm);
+      mesh(new THREE.CylinderGeometry(0.12, 0.1, upperLen, 8), bone, arm, 0, -upperLen / 2);
+    } else {
+      const deltoid = mesh(new THREE.SphereGeometry(0.44, 16, 12), sleeveMat, arm, -side * 0.1, -0.08, 0);
+      deltoid.scale.set(0.95, 0.82, 1.0);
+      mesh(limbLathe([[0.43, 0], [0.43, 0.15], [0.4, 0.45], [0.36, 0.82], [0.345, 1]], upperLen), sleeveMat, arm);
+      const hem = mesh(new THREE.TorusGeometry(0.35, 0.055, 6, 18), sleeveMat, arm, 0, -upperLen * 0.95);
+      hem.rotation.x = Math.PI / 2;
+    }
+    const forearm = new THREE.Group();
+    forearm.position.y = -upperLen;
+    forearm.rotation.x = -0.2;
+    arm.add(forearm);
+    if (skeleton) {
+      mesh(new THREE.SphereGeometry(0.17, 10, 8), bone, forearm);
+      [-0.07, 0.07].forEach((z) => mesh(new THREE.CylinderGeometry(0.06, 0.05, forearmLen, 6), bone, forearm, 0, -forearmLen / 2, z));
+    } else {
+      mesh(new THREE.SphereGeometry(0.32, 12, 10), skin, forearm);
+      mesh(limbLathe([[0.32, 0], [0.35, 0.2], [0.3, 0.55], [0.225, 0.93], [0.215, 1]], forearmLen), skin, forearm);
+    }
+    const hand = buildAvatarHand(side, adventurer ? darkLeather : skin, skeleton);
+    hand.position.y = -forearmLen;
+    forearm.add(hand);
     group.add(arm);
-    return { arm, hand };
+    return { arm, forearm, hand };
   };
+
+  // ---- Legs: hip group -> shin group (knee) -> boot ----
   const makeLeg = (side, legMat) => {
     const leg = new THREE.Group();
-    leg.position.set(side * 0.85, hipY, 0);
-    leg.rotation.z = -side * 0.04;
-    const r = skeleton ? 0.2 : 0.58;
-    const thighLen = legLen * 0.52;
-    const shinLen = legLen * 0.48;
-    const thigh = shade(new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.82, thighLen, 12), skeleton ? bone : legMat));
-    thigh.position.y = -thighLen / 2;
-    leg.add(thigh);
-    const knee = shade(new THREE.Mesh(new THREE.SphereGeometry(r * (skeleton ? 1.5 : 0.86), 12, 8), skeleton ? bone : legMat));
-    knee.position.y = -thighLen;
-    leg.add(knee);
-    const shin = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.66, shinLen, 12), skeleton ? bone : legMat));
-    shin.position.y = -thighLen - shinLen / 2;
+    leg.position.set(side * 0.78, hipY, 0);
+    leg.rotation.z = -side * 0.03;
+    if (skeleton) {
+      mesh(new THREE.SphereGeometry(0.24, 10, 8), bone, leg);
+      mesh(new THREE.CylinderGeometry(0.15, 0.13, thighLen, 8), bone, leg, 0, -thighLen / 2);
+    } else {
+      mesh(limbLathe([[0.64, 0], [0.66, 0.1], [0.58, 0.55], [0.47, 0.93], [0.45, 1]], thighLen), legMat, leg);
+    }
+    const shin = new THREE.Group();
+    shin.position.y = -thighLen;
+    shin.rotation.x = 0.04;
     leg.add(shin);
-    // Rounded boot (or a bony foot).
-    const foot = shade(new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), skeleton ? bone : bootsMat));
-    foot.scale.set(skeleton ? 0.7 : 0.92, 0.75, 1.3);
-    foot.position.set(0, -legLen - 0.2, 0.2);
-    leg.add(foot);
-    const sole = new THREE.Mesh(new THREE.BoxGeometry(skeleton ? 0.75 : 1.05, 0.16, 1.55), skeleton ? bone : darkLeather);
-    sole.position.set(0, -legLen - 0.17, 0.2);
-    leg.add(sole);
-    if (!skeleton) {
-      const cuff = shade(new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, 0.32, 12), trim));
-      cuff.position.y = -legLen + 0.25;
-      leg.add(cuff);
+    if (skeleton) {
+      mesh(new THREE.SphereGeometry(0.22, 10, 8), bone, shin);
+      [-0.06, 0.08].forEach((z) => mesh(new THREE.CylinderGeometry(0.08, 0.07, shinLen, 6), bone, shin, 0, -shinLen / 2, z));
+      const foot = mesh(shoeGeometry(), bone, shin, 0, -shinLen + 0.03, 0.28);
+      foot.scale.set(0.7, 0.6, 0.9);
+    } else {
+      const kneeCap = mesh(new THREE.SphereGeometry(0.49, 20, 14), legMat, shin);
+      kneeCap.scale.set(1, 0.85, 1.06);
+      mesh(limbLathe([[0.45, 0], [0.49, 0.22], [0.42, 0.55], [0.35, 0.88], [0.34, 1]], shinLen), legMat, shin);
+      const bootH = 1.15;
+      mesh(limbLathe([[0.5, 0], [0.45, 0.45], [0.41, 1]], bootH, 16), bootsMat, shin, 0, -shinLen + bootH);
+      mesh(new THREE.CylinderGeometry(0.55, 0.52, 0.22, 16), trim, shin, 0, -shinLen + bootH);
+      mesh(shoeGeometry(), bootsMat, shin, 0, -shinLen + 0.03, 0.28);
+      const sole = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.14, 20), darkLeather, shin, 0, -shinLen - 0.18, 0.28);
+      sole.scale.set(0.86, 1, 1.62);
+      if (adventurer) {
+        const pad = mesh(new THREE.SphereGeometry(0.42, 12, 8), darkLeather, shin, 0, 0, 0.3);
+        pad.scale.set(1, 1.1, 0.55);
+      }
     }
     group.add(leg);
-    return leg;
+    return { leg, shin };
   };
-  const { arm: leftArm, hand: leftHand } = makeArm(-1, leftArmMat);
-  const { arm: rightArm, hand: rightHand } = makeArm(1, rightArmMat);
-  const leftLeg = makeLeg(-1, leftLegMat);
-  const rightLeg = makeLeg(1, rightLegMat);
+  const { arm: leftArm, forearm: leftForearm, hand: leftHand } = makeArm(-1, leftArmMat);
+  const { arm: rightArm, forearm: rightForearm, hand: rightHand } = makeArm(1, rightArmMat);
+  const { leg: leftLeg, shin: leftShin } = makeLeg(-1, leftLegMat);
+  const { leg: rightLeg, shin: rightShin } = makeLeg(1, rightLegMat);
 
   if (!skeleton && avatar.outfit === "armor") {
-    [leftArm, rightArm].forEach((arm) => {
-      const pad = shade(new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), trim));
-      pad.position.y = 0.15;
-      arm.add(pad);
-      const gauntlet = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.95, 12), trim));
-      gauntlet.position.y = -armLen * 0.78;
-      arm.add(gauntlet);
+    [[leftArm, leftForearm], [rightArm, rightForearm]].forEach(([arm, forearm]) => {
+      mesh(new THREE.SphereGeometry(0.72, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), trim, arm, 0, 0.12);
+      mesh(new THREE.CylinderGeometry(0.4, 0.33, forearmLen * 0.55, 14), trim, forearm, 0, -forearmLen * 0.62);
     });
   }
 
   // Belt sits on the hips.
   if (!skeleton) {
-    const belt = shade(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.38, 20), beltMat));
-    belt.scale.set(1.3, 1, 0.78);
-    belt.position.y = hipY + 1.25;
-    group.add(belt);
-    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.1), metal);
-    buckle.position.set(0, hipY + 1.25, 0.95);
-    group.add(buckle);
+    const belt = mesh(new THREE.CylinderGeometry(1, 1, 0.34, 26), beltMat, group, 0, hipY + 1.18);
+    belt.scale.set(1.24, 1, 0.74);
+    mesh(new THREE.BoxGeometry(0.46, 0.32, 0.1), metal, group, 0, hipY + 1.18, 0.76);
   }
 
-  if (!skeleton && avatar.outfit === "adventurer") {
-    const strap = (x) => {
-      const s2 = shade(new THREE.Mesh(new THREE.BoxGeometry(0.34, torsoH, 0.06), leather));
-      s2.position.set(x, 0, 0.98);
-      torsoAnchor.add(s2);
-      const back = s2.clone();
-      back.position.z = -0.98;
-      torsoAnchor.add(back);
-    };
-    strap(-0.82);
-    strap(0.82);
-    [-0.82, 0.82].forEach((x) => {
-      const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.24, 0.1), metal);
-      buckle.position.set(x, onTorso(6.8), 1.02);
-      torsoAnchor.add(buckle);
+  let staffGroup;
+  if (adventurer) {
+    [-0.62, 0.62].forEach((x) => {
+      [1, -1].forEach((face) => mesh(torsoStripGeometry(x, 0.16, -torsoH / 2 + 0.05, torsoH / 2 - 0.12, torsoH, face), leather, torsoAnchor));
+      const y = torsoH * 0.2;
+      mesh(new THREE.BoxGeometry(0.4, 0.22, 0.08), metal, torsoAnchor, x, y, torsoSurfaceZ(x, y, torsoH) + 0.08);
     });
-    const backpack = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 3.2, 12), leather));
-    backpack.position.set(0, onTorso(5.9), -1.35);
+    const backpack = mesh(new THREE.CylinderGeometry(0.6, 0.6, 2.7, 14), leather, torsoAnchor, 0, torsoH * 0.08, -(torsoSurfaceZ(0, torsoH * 0.08, torsoH, -1) + 0.55));
     backpack.rotation.z = Math.PI / 2;
-    torsoAnchor.add(backpack);
-    const pouch = shade(new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.9, 0.5), leather));
-    pouch.position.set(1.62, hipY + 1.05, 0.38);
-    pouch.rotation.y = 0.25;
-    group.add(pouch);
-    const satchel = shade(new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.6), leather));
-    satchel.position.set(-1.62, hipY + 0.95, 0.22);
-    satchel.rotation.y = -0.25;
-    group.add(satchel);
-    [leftHand, rightHand].forEach((hand) => {
-      const glove = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.42, 12), darkLeather));
-      glove.position.y = 0.32;
-      hand.add(glove);
-    });
-    [leftLeg, rightLeg].forEach((leg) => {
-      const pad = shade(new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), darkLeather));
-      pad.scale.set(1, 1, 0.55);
-      pad.position.set(0, -legLen * 0.52, 0.45);
-      leg.add(pad);
-    });
-    // Wooden staff with glowing runes, held in the left hand.
-    const staff = shade(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 7.8, 8), leather));
-    staff.position.set(0, armLen * 0.72 - 2.2, 0.45);
-    leftArm.add(staff);
-    const horn = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.11, 8, 16, Math.PI * 0.72), leather);
-    horn.position.set(0, 4.0, 0.15);
+    const pouch = mesh(new THREE.BoxGeometry(0.62, 0.8, 0.45), leather, group, 1.48, hipY + 0.95, 0.3);
+    pouch.rotation.y = 0.3;
+    const satchel = mesh(new THREE.BoxGeometry(0.8, 1.0, 0.55), leather, group, -1.48, hipY + 0.85, 0.15);
+    satchel.rotation.y = -0.3;
+    [leftHand, rightHand].forEach((hand) => mesh(new THREE.CylinderGeometry(0.27, 0.25, 0.3, 12), darkLeather, hand, 0, 0.02));
+    // Wooden staff with glowing runes, gripped in the left hand.
+    staffGroup = new THREE.Group(); // its own part so it can be stowed in a fight
+    leftHand.add(staffGroup);
+    const staff = mesh(new THREE.CylinderGeometry(0.12, 0.13, 7.8, 8), leather, staffGroup, 0.1, -0.35, 0.05);
+    const horn = mesh(new THREE.TorusGeometry(0.38, 0.11, 8, 16, Math.PI * 0.72), leather, staff, 0, 4.0, 0.15);
     horn.rotation.x = Math.PI / 2;
-    staff.add(horn);
     const runeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-    [3.0, 2.6, 2.2].forEach((y) => {
-      const rune = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat);
-      rune.position.set(0, y, 0.16);
-      staff.add(rune);
-    });
+    [3.0, 2.6, 2.2].forEach((y) => mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), runeMat, staff, 0, y, 0.14));
   }
 
   // ---- Accessories ----
   let halo;
   if (accessory === "halo") {
-    halo = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.12, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffd700 }));
-    halo.position.set(0, headY + 1.95 * prop.head, 0);
+    halo = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.1, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffd700 }));
+    halo.position.set(0, headY + 1.65 * prop.head, 0);
     halo.rotation.x = Math.PI / 2;
     group.add(halo);
   }
@@ -7664,7 +7952,7 @@ function createHumanAvatarModel(avatar, options = {}) {
       thumb.position.set(side * -0.68, 0.2, 0);
       thumb.rotation.z = side * 0.9;
       ghost.add(thumb);
-      ghost.position.set(side * 3.6, shoulderY + 1.6, -0.6);
+      ghost.position.set(side * 3.6, shoulderY + 1.4, -0.6);
       ghost.rotation.z = side * -0.25;
       ghost.userData.side = side;
       spectralHands.add(ghost);
@@ -7676,22 +7964,23 @@ function createHumanAvatarModel(avatar, options = {}) {
   let cape;
   const capeStyle = avatar.capeStyle || (avatar.outfit !== "adventurer" ? "normal" : "none");
   if (capeStyle !== "none") {
-    const capeMat = std(avatar.capeColor || avatar.shirt || "#a82020", 0.85, { metalness: 0.1, side: THREE.DoubleSide });
-    const len = capeStyle === "long" ? 6.2 : capeStyle === "torn" ? 4.8 : 5.0;
-    const capeGeo = new THREE.PlaneGeometry(capeStyle === "long" ? 3.0 : 2.8, len, 6, 8);
-    // Gentle curve around the back.
+    const capeMat = std(avatar.capeColor || avatar.shirt || "#a82020", 0.85, { metalness: 0.1, side: THREE.DoubleSide, bumpMap: getAvatarClothBump(), bumpScale: 0.035 });
+    const len = capeStyle === "long" ? 6.6 : capeStyle === "torn" ? 5.0 : 5.4;
+    const capeGeo = new THREE.PlaneGeometry(capeStyle === "long" ? 3.0 : 2.8, len, 8, 12);
     const pos = capeGeo.attributes.position;
     for (let i = 0; i < pos.count; i += 1) {
       const x = pos.getX(i);
-      pos.setZ(i, -Math.pow(x / 1.5, 2) * 0.35);
-      if (capeStyle === "torn" && pos.getY(i) < -len * 0.3) pos.setY(i, pos.getY(i) + Math.abs(Math.sin(x * 4)) * 0.9);
+      const y = pos.getY(i);
+      // Curves around the back and falls in soft folds.
+      pos.setZ(i, -Math.pow(x / 1.5, 2) * 0.35 + Math.sin(x * 4.2) * 0.06 * (0.5 - y / len));
+      if (capeStyle === "torn" && y < -len * 0.3) pos.setY(i, y + Math.abs(Math.sin(x * 4)) * 0.9);
     }
     capeGeo.computeVertexNormals();
     const capeCloth = shade(new THREE.Mesh(capeGeo, capeMat));
     capeCloth.position.y = -len / 2;
-    // Pivot at the shoulders so the animation swings it from the top.
     cape = new THREE.Group();
-    cape.position.set(0, torsoH / 2 - 0.25, -0.95);
+    const capeTop = torsoH / 2 - 0.25;
+    cape.position.set(0, capeTop, -(torsoSurfaceZ(0, capeTop, torsoH, -1) + 0.12));
     cape.rotation.x = 0.12;
     cape.add(capeCloth);
     torsoAnchor.add(cape);
@@ -7699,8 +7988,12 @@ function createHumanAvatarModel(avatar, options = {}) {
 
   avatarParts.leftArm = leftArm;
   avatarParts.rightArm = rightArm;
+  avatarParts.leftForearm = leftForearm;
+  avatarParts.rightForearm = rightForearm;
   avatarParts.leftLeg = leftLeg;
   avatarParts.rightLeg = rightLeg;
+  avatarParts.leftShin = leftShin;
+  avatarParts.rightShin = rightShin;
   avatarParts.leftHand = leftHand;
   avatarParts.rightHand = rightHand;
   avatarParts.torso = torso;
@@ -7708,6 +8001,8 @@ function createHumanAvatarModel(avatar, options = {}) {
   if (halo) avatarParts.halo = halo;
   if (cape) avatarParts.cape = cape;
   if (spectralHands) avatarParts.spectralHands = spectralHands;
+  if (staffGroup) avatarParts.staff = staffGroup;
+  Object.values(avatarParts).forEach((part) => { part.userData.restPos = part.position.clone(); });
   group.userData.parts = avatarParts;
   group.userData.eyesList = eyesList;
   // Resting heights the animation system bobs around.
@@ -7716,23 +8011,20 @@ function createHumanAvatarModel(avatar, options = {}) {
   if (showSword) {
     const swordGroup = new THREE.Group();
     swordGroup.name = "swordGroup";
-    const sword = shade(new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.6, 0.22), metal));
-    sword.position.set(2.55, onTorso(4.7), -1.05);
+    const backZ = -(torsoSurfaceZ(0, 0, torsoH, -1) + 0.25);
+    const sword = mesh(new THREE.BoxGeometry(0.22, 4.6, 0.12), metal, swordGroup, 1.9, onTorso(4.7), backZ);
     sword.rotation.z = -0.62;
-    swordGroup.add(sword);
-    const swordHandle = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.22, 0.22), std(0x5b351e, 0.75));
-    swordHandle.position.set(1.35, onTorso(6.1), -1.05);
+    const swordHandle = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.9, 8), std(0x5b351e, 0.75), swordGroup, 0.75, onTorso(6.3), backZ);
     swordHandle.rotation.z = -0.62;
-    swordGroup.add(swordHandle);
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), metal);
-    pommel.position.set(1.1, onTorso(5.2), -1.05);
-    swordGroup.add(pommel);
+    const guard = mesh(new THREE.BoxGeometry(0.9, 0.16, 0.2), metal, swordGroup, 1.05, onTorso(5.9), backZ);
+    guard.rotation.z = -0.62;
+    mesh(new THREE.SphereGeometry(0.15, 10, 8), metal, swordGroup, 0.5, onTorso(6.65), backZ);
     torsoAnchor.add(swordGroup);
   }
 
   if (showName) {
     const nameLabel = makeLabel(avatar.name, 0.95);
-    nameLabel.position.y = headY + 2.55 * prop.head;
+    nameLabel.position.y = headY + 2.3 * prop.head;
     group.add(nameLabel);
   }
 
@@ -7809,92 +8101,117 @@ function updateAvatarLod(dt) {
   });
 }
 
-function addHair(group, style, material) {
+// Hair is a shell that follows the sculpted skull, cut along a natural hairline
+// (forehead, around the ears, nape), plus style-specific locks. Head space.
+function hairShellGeometry(lift, topVolume, sideburns = true) {
+  const geo = new THREE.SphereGeometry(1.25, 44, 30);
+  const pos = geo.attributes.position;
+  const coverage = new Float32Array(pos.count);
+  const n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 1) {
+    n.fromBufferAttribute(pos, i).normalize();
+    // Hairline height: forehead in front, above the ears at the sides, low at the nape.
+    let line = n.z > 0 ? 0.03 + 0.42 * n.z * n.z : 0.03 + 0.62 * n.z;
+    if (sideburns) {
+      const burn = Math.exp(-(((n.z - 0.2) / 0.12) ** 2)) * Math.max(0, Math.abs(n.x) - 0.75) * 4;
+      line -= 0.45 * Math.min(1, burn);
+    }
+    coverage[i] = THREE.MathUtils.smoothstep(n.y, line - 0.03, line + 0.06);
+  }
+  // Below the hairline the shell sinks just under the skin, so the edge blends in
+  // smoothly instead of ending in a jagged cut.
+  const index = geo.index.array;
+  sculptGeometry(geo, (v, i) => {
+    sculptSkullPoint(v);
+    const c = coverage[i];
+    const up = Math.max(0, v.y);
+    v.multiplyScalar(1 + THREE.MathUtils.lerp(-0.03, lift, c));
+    v.y += up * topVolume * c;
+  });
+  const kept = [];
+  for (let i = 0; i < index.length; i += 3) {
+    if (coverage[index[i]] + coverage[index[i + 1]] + coverage[index[i + 2]] > 0) kept.push(index[i], index[i + 1], index[i + 2]);
+  }
+  geo.setIndex(kept);
+  return geo;
+}
+
+function addHair(head, style, material, capMaterial = material) {
+  const add = (geo, x = 0, y = 0, z = 0) => {
+    const m = new THREE.Mesh(geo, material);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    head.add(m);
+    return m;
+  };
+  // A tapered lock of hair rooted on the scalp at direction (theta, phi), pointing outward.
+  let seed = 11;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const lock = (dir, length, radius, tilt) => {
+    const d = dir.clone().normalize();
+    const root = sculptSkullPoint(d.clone().multiplyScalar(1.25)).multiplyScalar(1.03);
+    const outward = d.clone().add(tilt).normalize();
+    const m = add(new THREE.ConeGeometry(radius, length, 7));
+    m.position.copy(root).addScaledVector(outward, length * 0.4);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
+    return m;
+  };
+
   if (style === "spiky") {
-    for (let i = 0; i < 7; i += 1) {
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.05, 8), material);
-      spike.position.set(-0.9 + i * 0.3, 9.45 + Math.sin(i) * 0.1, -0.05 + Math.cos(i) * 0.18);
-      spike.rotation.z = -0.45 + i * 0.15;
-      spike.castShadow = true;
-      group.add(spike);
+    add(hairShellGeometry(0.035, 0.04));
+    for (let i = 0; i < 16; i += 1) {
+      const a = (i / 16) * Math.PI * 2 + rand() * 0.3;
+      const ring = i % 2 ? 0.45 : 0.7;
+      const dir = new THREE.Vector3(Math.cos(a) * ring, 0.75 + rand() * 0.2, Math.sin(a) * ring - 0.1);
+      lock(dir, 0.7 + rand() * 0.35, 0.22, new THREE.Vector3(0, 0.6, -0.5));
     }
     return;
   }
 
   if (style === "cap") {
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(1.34, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), material);
-    cap.position.y = 9.05;
-    cap.castShadow = true;
-    group.add(cap);
-
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 0.7), material);
-    brim.position.set(0, 8.92, 1.2);
+    add(hairShellGeometry(0.03, 0.0));
+    const crown = new THREE.Mesh(sculptGeometry(new THREE.SphereGeometry(1.25, 32, 14, 0, Math.PI * 2, 0, Math.PI * 0.46), (v) => {
+      sculptSkullPoint(v);
+      v.multiplyScalar(1.09);
+    }), capMaterial);
+    crown.position.y = 0.04;
+    crown.castShadow = true;
+    head.add(crown);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.06, 24, 1, false, -Math.PI / 2, Math.PI), capMaterial);
+    brim.position.set(0, 0.5, 0.95);
+    brim.rotation.x = 0.16;
+    brim.scale.set(1, 1, 1.15);
     brim.castShadow = true;
-    group.add(brim);
+    head.add(brim);
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), capMaterial);
+    button.position.set(0, 1.55, 0);
+    head.add(button);
     return;
   }
 
   if (style === "messy") {
-    // Base hair cap covering top/back of head
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(1.35, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), material);
-    hairCap.position.set(0, 9.0, -0.05);
-    hairCap.castShadow = true;
-    group.add(hairCap);
-
-    // Front messy bangs hanging over face (fringe)
-    const fringeCount = 5;
-    for (let i = 0; i < fringeCount; i++) {
-      const angle = -0.5 + (i / (fringeCount - 1)) * 1.0;
-      const bang = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.95, 6), material);
-      const px = Math.sin(angle) * 0.95;
-      const py = 9.15 - Math.abs(angle) * 0.15 + (i % 2 === 0 ? 0.05 : -0.05);
-      const pz = 1.02 - Math.abs(angle) * 0.2;
-      bang.position.set(px, py, pz);
-      bang.rotation.x = Math.PI * 0.58;
-      bang.rotation.y = -angle * 0.5;
-      bang.rotation.z = -angle * 0.8 + 0.1 * Math.sin(i);
-      bang.castShadow = true;
-      group.add(bang);
+    add(hairShellGeometry(0.06, 0.1));
+    // Tufts over the crown.
+    for (let i = 0; i < 14; i += 1) {
+      const a = rand() * Math.PI * 2;
+      const r = 0.25 + rand() * 0.55;
+      const dir = new THREE.Vector3(Math.cos(a) * r, 0.8, Math.sin(a) * r - 0.15);
+      lock(dir, 0.55 + rand() * 0.3, 0.24, new THREE.Vector3(Math.cos(a) * 0.6, 0.2, Math.sin(a) * 0.6 - 0.3));
     }
-
-    // Top messy/wavy tufts pointing up/back/sides
-    const tuftCount = 8;
-    for (let i = 0; i < tuftCount; i++) {
-      const theta = (i / tuftCount) * Math.PI * 2;
-      const r = 0.5 + Math.random() * 0.3;
-      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.15, 6), material);
-      const px = Math.cos(theta) * r;
-      const py = 9.7 + Math.random() * 0.25;
-      const pz = Math.sin(theta) * r - 0.1;
-      tuft.position.set(px, py, pz);
-      tuft.rotation.x = (pz / 1.35) * 0.8 + 0.2;
-      tuft.rotation.z = -(px / 1.35) * 0.8;
-      tuft.rotation.y = Math.random() * Math.PI;
-      tuft.castShadow = true;
-      group.add(tuft);
+    // Fringe falling over the forehead.
+    for (let i = 0; i < 6; i += 1) {
+      const x = -0.5 + i * 0.2;
+      lock(new THREE.Vector3(x, 0.55, 0.8), 0.6 + rand() * 0.2, 0.17, new THREE.Vector3(x * 0.3, -2.2, 0.9));
     }
-
-    // Sideburns
-    const leftSide = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), material);
-    leftSide.position.set(-1.18, 8.4, 0.45);
-    leftSide.rotation.x = 0.1;
-    leftSide.rotation.z = 0.18;
-    leftSide.castShadow = true;
-    group.add(leftSide);
-
-    const rightSide = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.9, 6), material);
-    rightSide.position.set(1.18, 8.4, 0.45);
-    rightSide.rotation.x = 0.1;
-    rightSide.rotation.z = -0.18;
-    rightSide.castShadow = true;
-    group.add(rightSide);
     return;
   }
 
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(1.32, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), material);
-  hairCap.position.y = 9.0;
-  hairCap.castShadow = true;
-  group.add(hairCap);
+  // Short: a neat cut with a little volume on top and a soft side part.
+  add(hairShellGeometry(0.04, 0.06));
+  for (let i = 0; i < 5; i += 1) {
+    const x = -0.15 + i * 0.13;
+    lock(new THREE.Vector3(x, 0.62, 0.75), 0.5, 0.16, new THREE.Vector3(1.4, 0.6, -0.6));
+  }
 }
 
 function addLimb(group, x, y, z, radius, height, material, lean, sleeveMaterial = null) {
@@ -7988,6 +8305,8 @@ function loop(time) {
     updateInteractionPrompt();
     updateTeleport(stepDt);
     updateCamera();
+    updateMusic(dt);
+    updateTutorial(dt);
     updateMultiplayer(stepDt, time);
     updateBossHud();
 
@@ -8293,9 +8612,7 @@ function updatePlayer(dt) {
 
   // Continuous attacks when holding Left Mouse Button or KeyR
   if ((isLeftMouseDown || keys.has("KeyR")) && attackCooldown <= 0) {
-    if (player.weapon === "melee" || player.weapon === "sword") {
-      attack({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
-    }
+    attack({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
   }
 
   // Active parry Iron Bastion heal
@@ -8341,12 +8658,15 @@ function updatePlayer(dt) {
     const targetYaw = Math.atan2(moveVelocity.x, moveVelocity.z);
     let turn = targetYaw - playerMesh.rotation.y;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    playerMesh.rotation.y += turn * (1 - Math.exp(-16 * dt));
+    if (attackFacing.timer <= 0) playerMesh.rotation.y += turn * (1 - Math.exp(-16 * dt));
   } else {
     const decel = grounded ? 14 : 2.5;
     moveVelocity.multiplyScalar(Math.exp(-decel * dt));
     if (moveVelocity.lengthSq() < 0.5) moveVelocity.set(0, 0, 0);
   }
+
+  // While attacking, face the target instead of the movement direction.
+  updateAttackFacing(dt);
 
   if (moveVelocity.lengthSq() > 0) {
     playerMesh.position.addScaledVector(moveVelocity, dt);
@@ -8723,6 +9043,55 @@ function updateTeleport(dt) {
   }
 }
 
+// Elbows and knees: bend with the stride, tuck in the air, absorb landings.
+// Also twists the shoulders against the stride and lets the head look around when idle.
+function applyLimbBends(model, anim, moving, groundSpeed) {
+  const parts = model.userData.parts;
+  if (!parts.leftShin || !parts.leftForearm) return;
+  // A footstep sound each time a foot comes down.
+  const stepSide = Math.sin(anim.walkPhase) > 0;
+  if (stepSide !== anim.stepSide && moving && isGrounded && !player.isSwimming) audio.playFootstep(groundSpeed);
+  anim.stepSide = stepSide;
+  const intensity = moving ? THREE.MathUtils.clamp(groundSpeed / 75, 0.3, 1.15) : 0;
+  const air = player.isSwimming ? 0 : anim.air || 0;
+  let dip = 0;
+  if (!player.isSwimming && jumpState.landingTimer > 0) {
+    dip = Math.sin((1 - jumpState.landingTimer / 0.24) * Math.PI) * jumpState.landingStrength;
+  }
+  const knee = (leg, phase) => {
+    let bend;
+    if (player.isSwimming) {
+      bend = 0.2 + Math.max(0, Math.sin(phase * 2)) * 0.25;
+    } else {
+      // The leg swinging forward lifts its foot; the planted leg stays nearly straight.
+      bend = 0.06 + Math.max(0, -Math.cos(phase)) * 1.05 * intensity + Math.max(0, -leg.rotation.x) * 0.2 * intensity;
+      bend = THREE.MathUtils.lerp(bend, 0.35 + Math.max(0, -leg.rotation.x) * 1.25, air);
+      bend += dip * 1.1;
+    }
+    return THREE.MathUtils.clamp(bend, 0, 2.3);
+  };
+  parts.leftShin.rotation.x = knee(parts.leftLeg, anim.walkPhase);
+  parts.rightShin.rotation.x = knee(parts.rightLeg, anim.walkPhase + Math.PI);
+
+  const elbow = (arm) => {
+    if (player.isSwimming) return 0.35;
+    const bend = 0.2 + Math.max(0, -arm.rotation.x - 0.1) * 0.35 + intensity * 0.55 + air * 0.25 + dip * 0.3;
+    return THREE.MathUtils.clamp(bend, 0.05, 2.0);
+  };
+  parts.leftForearm.rotation.x = -elbow(parts.leftArm);
+  // The striking arm straightens out during an attack.
+  parts.rightForearm.rotation.x = anim.attackTimer > 0 || anim.punchChargeTimer > 0 ? -0.1 : -elbow(parts.rightArm);
+
+  if (!player.isSwimming && anim.punchChargeTimer <= 0 && anim.slamTimer <= 0) {
+    const t = performance.now() * 0.001;
+    const twist = Math.sin(anim.walkPhase) * 0.1 * intensity;
+    parts.torso.rotation.y = twist;
+    const idle = 1 - Math.min(1, intensity * 3);
+    parts.head.rotation.y = -twist * 0.7 + Math.sin(t * 0.37) * 0.22 * idle;
+    parts.head.rotation.x = Math.sin(t * 0.23 + 1.3) * 0.05 * idle;
+  }
+}
+
 function updatePlayerAnimation(dt) {
   const model = playerMesh.children[0];
   if (!model?.userData?.parts) return;
@@ -8819,9 +9188,9 @@ function updatePlayerAnimation(dt) {
 
     // Reset arm and leg Y/Z rotations that swim modified
     model.userData.parts.leftArm.rotation.y = 0;
-    model.userData.parts.leftArm.rotation.z = -0.15;
+    model.userData.parts.leftArm.rotation.z = -0.07;
     model.userData.parts.rightArm.rotation.y = 0;
-    model.userData.parts.rightArm.rotation.z = 0.15;
+    model.userData.parts.rightArm.rotation.z = 0.07;
     model.userData.parts.leftLeg.rotation.z = 0.04;
     model.userData.parts.rightLeg.rotation.z = -0.04;
 
@@ -8901,6 +9270,11 @@ function updatePlayerAnimation(dt) {
     }
   }
 
+  applyLimbBends(model, anim, moving, groundSpeed);
+  // Held weapons, combat stance and keyframed attacks/skills (31-combat-animations.js).
+  updateHeldWeapons(model);
+  applyPlayerActions(model, anim, dt);
+
   // Squash & stretch: stretch on take-off, squash on landing.
   if (!model.userData.baseScale) model.userData.baseScale = model.scale.clone();
   const base = model.userData.baseScale;
@@ -8935,21 +9309,6 @@ function updatePlayerAnimation(dt) {
     model.userData.parts.cape.rotation.x = 0.12 + (speed / 35) * 0.35 + wave;
     model.userData.parts.cape.rotation.y = Math.cos(performance.now() * 0.006) * 0.03 * (speed / 35);
     model.userData.parts.cape.rotation.z = Math.sin(performance.now() * 0.006) * 0.02 * (speed / 35);
-  }
-
-  if (anim.attackTimer > 0) {
-    const attackProgress = 1 - anim.attackTimer / anim.attackDuration;
-    const impact = Math.max(0, anim.attackImpact || 0);
-    const baseStrike = player.weapon === "melee" ? 1.6 : 0.9;
-    const strike = Math.sin(attackProgress * Math.PI) * (baseStrike + impact * 0.7);
-    model.userData.parts.rightArm.rotation.x -= strike;
-    model.userData.parts.leftArm.rotation.x += strike * 0.28;
-    model.userData.parts.torso.rotation.z = Math.sin(attackProgress * Math.PI) * (0.08 + impact * 0.05);
-    if (anim.attackTimer <= 0.001) {
-      anim.attackImpact = 0;
-    }
-  } else {
-    model.userData.parts.torso.rotation.z = 0;
   }
 
   if (anim.wallHitTimer > 0) {
@@ -9291,6 +9650,7 @@ function setEnemyWeaponVisuals(enemy, weapon) {
 function updateEnemies(dt) {
   updateSurgeRocks(dt);
   enemies.forEach((enemy) => {
+    enemyUpdateContext = enemy;
     if (!enemy.alive) {
       enemy.respawnTimer -= dt;
       if (enemy.respawnTimer <= 0) {
@@ -9308,29 +9668,30 @@ function updateEnemies(dt) {
     if (enemy.type === "buggy" && enemy.parts) {
       const parts = enemy.parts;
       const t = performance.now() * 0.015;
+      const rest = { head: parts.head.userData.restPos, leftArm: parts.leftArm.userData.restPos, rightArm: parts.rightArm.userData.restPos, leftLeg: parts.leftLeg.userData.restPos, rightLeg: parts.rightLeg.userData.restPos };
       
       const isAttacking = enemy.ai.rush > 1.2 || enemy.ai.slash > 1.6;
       const isDamaged = enemy.hitTimer > 0;
       
       if (isAttacking) {
-        parts.leftArm.position.set(-6 + Math.sin(t) * 8, 5.9, Math.cos(t) * 8);
-        parts.rightArm.position.set(6 + Math.cos(t) * 8, 5.9, Math.sin(t) * 8);
-        parts.leftLeg.position.set(-2, 2.45 + Math.sin(t * 2) * 3, 0);
-        parts.rightLeg.position.set(2, 2.45 + Math.cos(t * 2) * 3, 0);
-        parts.head.position.y = 8.65 + Math.sin(t) * 4;
+        parts.leftArm.position.set(-6 + Math.sin(t) * 8, rest.leftArm.y, Math.cos(t) * 8);
+        parts.rightArm.position.set(6 + Math.cos(t) * 8, rest.rightArm.y, Math.sin(t) * 8);
+        parts.leftLeg.position.set(-2, rest.leftLeg.y + Math.sin(t * 2) * 3, 0);
+        parts.rightLeg.position.set(2, rest.rightLeg.y + Math.cos(t * 2) * 3, 0);
+        parts.head.position.y = rest.head.y + Math.sin(t) * 4;
       } else if (isDamaged) {
-        parts.head.position.y = 14 + Math.sin(t) * 3;
+        parts.head.position.y = rest.head.y + 5.4 + Math.sin(t) * 3;
         parts.head.rotation.y += 0.5;
-        parts.leftArm.position.set(-2.25, 5.9, 0);
-        parts.rightArm.position.set(2.25, 5.9, 0);
-        parts.leftLeg.position.set(-0.85, 2.45, 0);
-        parts.rightLeg.position.set(0.85, 2.45, 0);
+        parts.leftArm.position.copy(rest.leftArm);
+        parts.rightArm.position.copy(rest.rightArm);
+        parts.leftLeg.position.copy(rest.leftLeg);
+        parts.rightLeg.position.copy(rest.rightLeg);
       } else {
-        parts.head.position.y = 8.65 + Math.sin(t * 0.4) * 0.7;
-        parts.leftArm.position.set(-2.25, 5.9, 0);
-        parts.rightArm.position.set(2.25, 5.9, 0);
-        parts.leftLeg.position.set(-0.85, 2.45, 0);
-        parts.rightLeg.position.set(0.85, 2.45, 0);
+        parts.head.position.y = rest.head.y + Math.sin(t * 0.4) * 0.7;
+        parts.leftArm.position.copy(rest.leftArm);
+        parts.rightArm.position.copy(rest.rightArm);
+        parts.leftLeg.position.copy(rest.leftLeg);
+        parts.rightLeg.position.copy(rest.rightLeg);
       }
     }
 
@@ -9821,9 +10182,13 @@ function updateEnemies(dt) {
       enemy.mesh.position.y = OCEAN_SURFACE_Y;
     }
   });
+  enemyUpdateContext = null;
+  updateEnemyAnimations(dt);
 }
 
 function damagePlayer(amount, source) {
+  // Simple enemy strikes wind up first (32-enemy-animations.js) and land a moment later.
+  if (interceptEnemyStrike(amount, source)) return;
   if (player.isGodMode) return; // Admin Invulnerability!
   if (player.shieldTimer > 0) return; // Invulnerable shield active!
 
@@ -9973,6 +10338,8 @@ function damageEnemy(enemy, baseAmount, label = "Strike", color = "#ff7a3d", isF
 
   enemy.health = Math.max(0, enemy.health - finalDamage);
   triggerHitFlash(enemy.mesh);
+  reactEnemyHit(enemy, finalDamage);
+  audio.playWeaponHit(player.weapon);
 
   const pos = enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0));
   if (isHeadshot) {
@@ -10011,7 +10378,7 @@ function killPlayer(source) {
 
 // ── 18-camera-and-quests.js ─ Camera, interaction prompts and quest dialogue.
 function updateCamera() {
-  const targetYaw = isHelming ? boatYaw : (shiftLockEnabled ? playerMesh.rotation.y : cameraYaw);
+  const targetYaw = isHelming ? boatYaw : cameraYaw;
   const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
   const distance = isHelming ? 100 : (isSniper ? 98 : 58);
   const horizontalDistance = Math.cos(cameraPitch) * distance;
@@ -10026,7 +10393,15 @@ function updateCamera() {
     Math.cos(targetYaw) * horizontalDistance,
   );
   
-  camera.position.lerp(targetPos.clone().add(offset), 0.12);
+  if (!isHelming) {
+    // Walls between the camera and the player pull the camera in (34-world-queries.js).
+    const pivot = targetPos.clone().add(new THREE.Vector3(0, 7, 0));
+    const frac = updateCameraObstruction(pivot, targetPos.clone().add(offset));
+    if (frac < 0.999) {
+      offset.sub(new THREE.Vector3(0, 7, 0)).multiplyScalar(frac).add(new THREE.Vector3(0, 7, 0));
+    }
+  }
+  camera.position.lerp(targetPos.clone().add(offset), cameraClearFrac < 0.95 ? 0.3 : 0.12);
   if (camera.position.y < floorY) camera.position.y = floorY;
   
   if (cameraShake > 0) {
@@ -10036,9 +10411,6 @@ function updateCamera() {
     cameraShake = Math.max(0, cameraShake - 0.08);
   }
   camera.lookAt(targetPos.x, targetPos.y + (isHelming ? 4 : 7), targetPos.z);
-  if (shiftLockEnabled && !isHelming) {
-    cameraYaw = targetYaw;
-  }
 }
 
 function updateInteractionPrompt() {
@@ -10230,7 +10602,12 @@ function purchaseHaki() {
 
 // ── 19-combat-and-effects.js ─ Attacks, projectiles, hazards and combat visual effects.
 function attack(event = null) {
-  if (!gameStarted || attackCooldown > 0 || player.weapon === "special") return;
+  if (!gameStarted || attackCooldown > 0) return;
+  // The special weapon's basic attack is Spirit Bolt (31-combat-animations.js).
+  if (player.weapon === "special") {
+    castSpiritBolt(event);
+    return;
+  }
 
   // Melee Ground Slam in Air!
   if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 20) {
@@ -10238,6 +10615,7 @@ function attack(event = null) {
     verticalVelocity = -100; // Slam down!
     playerMesh.position.y = (getIslandUnderPlayer()?.surfaceY || STARTER_SURFACE_Y) + 0.15;
     isGrounded = true;
+    playPlayerAction("air-slam");
     createGroundSlam(playerMesh.position.clone(), { type: "player" });
     audio.playImpact();
 
@@ -10255,10 +10633,6 @@ function attack(event = null) {
   // Set attack cooldown
   const isGatling = player.weapon === "melee" && player.mastery.melee >= 50;
   attackCooldown = isGatling ? 0.11 : (player.weapon === "gun" ? 0.55 : 0.42);
-
-  if (playerMesh?.userData?.animation) {
-    playerMesh.userData.animation.attackTimer = playerMesh.userData.animation.attackDuration;
-  }
 
   // Procedural Sound triggers
   if (player.weapon === "sword") audio.playSlash();
@@ -10294,67 +10668,120 @@ function attack(event = null) {
 
   let target = null;
   let isGunHeadshot = false;
+  let aimPoint = null;
 
   if (player.weapon === "gun") {
-    // Raycast to find if we clicked or aimed directly at any enemy
-    const clientX = event?.clientX ?? mouseScreenPos.x;
-    const clientY = event?.clientY ?? mouseScreenPos.y;
-    const mouse = new THREE.Vector2();
-    mouse.x = (clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-    
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    
-    // Find all alive enemies in range
-    const candidateEnemies = enemies.filter(enemy => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range);
-    
-    let bestHit = null;
-    for (const enemy of candidateEnemies) {
-      const intersects = raycaster.intersectObject(enemy.mesh, true);
-      if (intersects.length > 0) {
-        const dist = intersects[0].distance;
-        if (bestHit === null || dist < bestHit.dist) {
-          let isHead = false;
-          for (let i = 0; i < intersects.length; i++) {
-            let obj = intersects[i].object;
-            while (obj) {
-              if (obj.userData && obj.userData.isHead) {
-                isHead = true;
-                break;
-              }
-              obj = obj.parent;
-            }
-            if (isHead) break;
-          }
-          bestHit = { enemy, dist, isHead };
-        }
-      }
-    }
-    
-    if (bestHit) {
-      target = bestHit.enemy;
-      isGunHeadshot = bestHit.isHead;
-    }
-  }
-
-  // Fallback to closest enemy if no direct mouse-hit target
-  if (!target) {
+    // The gun shoots exactly where the cursor is: an enemy, the ground, or open air.
+    const aim = event?.autoAim
+      ? getAutoGunAim(range)
+      : getGunAim(event?.clientX ?? mouseScreenPos.x, event?.clientY ?? mouseScreenPos.y, range);
+    target = aim.target;
+    isGunHeadshot = aim.isHead;
+    aimPoint = aim.point;
+  } else {
+    // Melee and sword: nearest enemy within reach.
     target = enemies
       .filter((enemy) => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range)
       .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-    isGunHeadshot = false;
   }
 
-  if (playerMesh?.userData?.animation) {
-    playerMesh.userData.animation.attackImpact = target ? 1 : 0.3;
+  // The attack animation decides when the blow lands; damage and effects happen then.
+  const weaponUsed = player.weapon;
+  startBasicAttackAnimation(target, () => {
+    if (weaponUsed === "gun") fireGunEffects(target, isGunHeadshot, undefined, aimPoint);
+    else if (weaponUsed === "special") createSpecialBurst(target);
+    resolveAttackHit(target, { damage, isFalcon, isDiableJambeActive, isGunHeadshot, weapon: weaponUsed, aimPoint });
+  }, aimPoint);
+}
+
+// Where a gun shot fired at screen position (clientX, clientY) goes.
+// Returns { point, target, isHead }: `point` is the 3D spot under the cursor
+// (an enemy, the ground, or a point `range` away when aiming at the sky);
+// `target` is the first enemy on the bullet's path from the gun to that spot.
+function getGunAim(clientX, clientY, range) {
+  const mouse = new THREE.Vector2((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const ray = raycaster.ray;
+  const gunPos = playerMesh.position.clone().add(new THREE.Vector3(0, 7.5, 0));
+
+  // 1. Clicked directly on an enemy?
+  let best = null;
+  enemies.forEach((enemy) => {
+    if (!enemy.alive || enemy.mesh.position.distanceTo(playerMesh.position) > range * 1.25) return;
+    const hits = raycaster.intersectObject(enemy.mesh, true);
+    if (!hits.length || (best && hits[0].distance >= best.dist)) return;
+    let isHead = false;
+    for (let obj = hits[0].object; obj; obj = obj.parent) {
+      if (obj.userData?.isHead) { isHead = true; break; }
+    }
+    best = { enemy, dist: hits[0].distance, point: hits[0].point, isHead };
+  });
+  if (best) {
+    // A wall between the gun and the enemy stops the bullet.
+    const wall = firstWallHit(gunPos, best.point);
+    if (wall) return { point: wall, target: null, isHead: false, wall: true };
+    return { point: best.point.clone(), target: best.enemy, isHead: best.isHead };
   }
-  
-  if (player.weapon === "gun") {
-    createGunShot(target, isGunHeadshot);
-  } else {
-    createCombatEffect(player.weapon, target);
+
+  // 2. Otherwise the ground under the cursor, following hills and slopes
+  //    (or far along the ray when aiming above the horizon).
+  let point = raycastTerrain(ray);
+  if (!point || point.distanceTo(gunPos) > range) {
+    // Aim along the cursor ray, capped at the gun's range from the player.
+    const flat = (point || ray.at(range * 2, new THREE.Vector3())).clone().sub(gunPos);
+    point = gunPos.clone().addScaledVector(flat.normalize(), range);
   }
+
+  // Walls, trees and rocks stop the bullet short.
+  const wallHit = firstWallHit(gunPos, point);
+  if (wallHit) point = wallHit;
+
+  // 3. Any enemy standing in the bullet's path still gets hit.
+  const shot = point.clone().sub(gunPos);
+  const shotLen = shot.length();
+  const shotDir = shot.clone().normalize();
+  let pathHit = null;
+  enemies.forEach((enemy) => {
+    if (!enemy.alive) return;
+    const centre = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+    const along = centre.clone().sub(gunPos).dot(shotDir);
+    if (along < 0 || along > shotLen + 4) return;
+    const miss = gunPos.clone().addScaledVector(shotDir, along).distanceTo(centre);
+    if (miss < 4.5 && (!pathHit || along < pathHit.along)) pathHit = { enemy, along };
+  });
+  if (pathHit) {
+    return { point: gunPos.clone().addScaledVector(shotDir, pathHit.along), target: pathHit.enemy, isHead: false };
+  }
+  return { point, target: null, isHead: false };
+}
+
+// Touch "Attack" button: aim at the nearest enemy with a clear line of fire,
+// or straight ahead when there is none.
+function getAutoGunAim(range) {
+  const gunPos = playerMesh.position.clone().add(new THREE.Vector3(0, 7.5, 0));
+  const inRange = enemies
+    .filter((e) => e.alive && e.mesh.position.distanceTo(playerMesh.position) <= range)
+    .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position));
+  for (const enemy of inRange) {
+    const chest = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6.1, 0));
+    if (!firstWallHit(gunPos, chest)) return { point: chest, target: enemy, isHead: false };
+  }
+  const ahead = gunPos.clone().add(new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).multiplyScalar(range));
+  return { point: firstWallHit(gunPos, ahead) || ahead, target: null, isHead: false };
+}
+
+// Gun aim at the current mouse position (used by gun skills).
+function getMouseGunAim(range = 85) {
+  return getGunAim(mouseScreenPos.x, mouseScreenPos.y, range);
+}
+
+// Second half of a basic attack, run on the animation's impact frame.
+function resolveAttackHit(target, hit) {
+  const { isFalcon, isDiableJambeActive, isGunHeadshot } = hit;
+  const damage = hit.damage;
+  if (player.weapon !== hit.weapon) return;
+  if (target && !target.alive) target = null;
 
   // Sword Dimensional Blade: Fires giant air slash forward!
   if (player.weapon === "sword" && player.mastery.sword >= 50) {
@@ -10365,15 +10792,19 @@ function attack(event = null) {
   // Gun Double Tap: Fires a second bullet quickly
   if (player.weapon === "gun" && player.mastery.gun >= 5) {
     setTimeout(() => {
-      if (player.weapon === "gun") {
-        audio.playShot();
-        createGunShot(target, isGunHeadshot);
-        if (target && target.alive) {
-          const dmgDouble = Math.round(getDamage() * 0.85);
-          damageEnemy(target, dmgDouble, "DoubleTap", "#9defff", isGunHeadshot);
-        }
-      }
-    }, 110);
+      if (player.weapon !== "gun") return;
+      playPlayerAction("shoot", {
+        fire: () => {
+          if (player.weapon !== "gun") return;
+          audio.playShot();
+          fireGunEffects(target && target.alive ? target : null, isGunHeadshot, undefined, hit.aimPoint);
+          if (target && target.alive) {
+            const dmgDouble = Math.round(getDamage() * 0.85);
+            damageEnemy(target, dmgDouble, "DoubleTap", "#9defff", isGunHeadshot);
+          }
+        },
+      });
+    }, 140);
   }
 
   // Pulse Bubble repel for Special Mastery 50
@@ -10583,7 +11014,7 @@ function createGunShot(target, isHeadshot = false) {
   const start = playerMesh.position.clone().add(direction.clone().multiplyScalar(5));
   start.y += 6;
   const end = target ? target.mesh.position.clone() : start.clone().add(direction.clone().multiplyScalar(80));
-  end.y += target ? (isHeadshot ? 8.65 : 5.7) : 0;
+  end.y += target ? (isHeadshot ? 9.15 : 6.1) : 0;
   const midpoint = start.clone().lerp(end, 0.5);
   const length = start.distanceTo(end);
 
@@ -10961,7 +11392,7 @@ function updateHazards(dt) {
 }
 
 function createFloatingText(position, text, color = "#fff7e6") {
-  const label = makeLabel(text, 0.72);
+  const label = makeLabel(tr(text), 0.72);
   label.position.copy(position);
   label.material.color = new THREE.Color(color);
   addTimedEffect(label, 0.75, (mesh, progress) => {
@@ -11078,7 +11509,7 @@ function defeatBandit(enemy) {
 
 function defeatEnemy(enemy) {
   enemy.alive = false;
-  enemy.mesh.visible = false;
+  startEnemyDeath(enemy); // falls over, then disappears
   enemy.respawnTimer = (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") ? 45 : 6;
   let xpReward = 18;
   let moneyReward = 12;
@@ -11735,7 +12166,7 @@ function updateDayPhaseHud(phase) {
   const chip = document.querySelector("#day-phase");
   if (!chip) return;
   const remaining = Math.max(0, Math.ceil(DAY_CYCLE.phaseSeconds - dayCycle.elapsed));
-  const text = `${phase.label} · ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+  const text = tr(`${phase.label} · ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`);
   if (chip.textContent !== text) chip.textContent = text;
   if (chip.dataset.phase !== phase.name) chip.dataset.phase = phase.name;
 }
@@ -11989,6 +12420,10 @@ function updateBoat(dt) {
 
 // ── 23-skills-and-compass.js ─ Weapon skills, quest unlocks, compass and combat HUD.
 function triggerSwordQ() {
+  playPlayerAction("cyclone", { impact: performSwordQ });
+}
+
+function performSwordQ() {
   audio.playSlash();
   createSpecialBurst({ mesh: playerMesh });
   
@@ -12001,13 +12436,19 @@ function triggerSwordQ() {
 }
 
 function triggerGunQ() {
+  const aim = getMouseGunAim(90);
+  const dir = aim.point.clone().sub(playerMesh.position).setY(0);
+  if (dir.lengthSq() > 1) {
+    playerMesh.rotation.y = Math.atan2(dir.x, dir.z);
+    faceAttackDirection(dir.normalize(), 0.6);
+  }
+  playPlayerAction("shoot-heavy", { fire: performGunQ });
+}
+
+function performGunQ() {
   audio.playShot();
   const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
-  
-  createGunShot();
-  setTimeout(() => {
-    createGunShot();
-  }, 40);
+  fireSpreadShot(6);
   
   let hits = 0;
   enemies.forEach((enemy) => {
@@ -12028,6 +12469,11 @@ function triggerGunQ() {
 }
 
 function triggerSpecialQ() {
+  playPlayerAction("sky-cast", { release: performSpecialQ });
+}
+
+function performSpecialQ() {
+  createHandRelease(0x7ce0b4, 1.6);
   audio.playQuestComplete();
   sun.intensity = 6.0;
   scene.background.setHex(0xffffff);
@@ -12196,21 +12642,68 @@ function triggerCombatFlash() {
   }
 }
 
+// Which animation each skill plays, and the event that fires its effects.
+const SKILL_ACTIONS = {
+  "falcon-punch": ["power-punch", "impact"],
+  "ground-slam": ["slam-down", "impact"],
+  "gatling-flurry": ["flurry", null],
+  "piercing-thrust": ["thrust", "impact"],
+  "cyclone-spin": ["cyclone", "impact"],
+  "dimensional-slash": ["dimension-cut", "impact"],
+  "double-tap": ["shoot", "fire"],
+  "buckshot-cone": ["shoot-heavy", "fire"],
+  "mortar-blast": ["shoot-heavy", "fire"],
+  "pulse-bubble": ["burst-out", "release"],
+  "storm-call": ["sky-cast", "release"],
+  "celestial-beam": ["beam", "release"],
+  "grand-awakening": ["sky-cast", "release"],
+  "gods-judgment": ["sky-cast", "release"],
+  "flambage-shot": ["flying-kick", null],
+  "diable-jambe": ["spin-kick", "impact"],
+};
+
 function triggerActiveSkill(skillId) {
+  if (skillId === "spirit-bolt") {
+    // Same as a left click with the special weapon, aimed at the mouse.
+    if (attackCooldown <= 0) castSpiritBolt({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
+    return;
+  }
+  const entry = SKILL_ACTIONS[skillId];
+  if (!entry || !playerMesh?.userData?.animation) {
+    performActiveSkill(skillId);
+    return;
+  }
+  const [actionName, eventName] = entry;
+  if (skillId === "falcon-punch") playerMesh.rotation.y = cameraYaw + Math.PI;
+  if (/^(double-tap|buckshot-cone|mortar-blast)$/.test(skillId)) {
+    // Gun skills fire toward the cursor.
+    const aim = getMouseGunAim(skillId === "mortar-blast" ? 170 : 90);
+    const dir = aim.point.clone().sub(playerMesh.position).setY(0);
+    if (dir.lengthSq() > 1) playerMesh.rotation.y = Math.atan2(dir.x, dir.z);
+  }
+  faceAttackDirection(new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)), PLAYER_ACTIONS[actionName].dur);
+  if (!eventName) {
+    playPlayerAction(actionName);
+    performActiveSkill(skillId);
+    return;
+  }
+  playPlayerAction(actionName, {
+    [eventName]: () => {
+      if (!gameStarted || !playerMesh) return;
+      if (/^(pulse-bubble|storm-call|celestial-beam|grand-awakening|gods-judgment)$/.test(skillId)) {
+        createHandRelease(skillId === "grand-awakening" ? 0xa775ff : 0x7ce0b4, 1.4);
+      }
+      performActiveSkill(skillId);
+    },
+  });
+}
+
+function performActiveSkill(skillId) {
   const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
 
   if (skillId === "falcon-punch") {
-    // Immediately snap player mesh to face where the camera is looking
-    playerMesh.rotation.y = cameraYaw + Math.PI;
-
-    // Set procedural charging animation on the model
-    if (playerMesh?.userData?.animation) {
-      playerMesh.userData.animation.punchChargeTimer = 0.3;
-      playerMesh.userData.animation.punchChargeDuration = 0.3;
-    }
-
-    // Delay the punch release, damage, and audio by 300ms (charge time)
-    setTimeout(() => {
+    // The power-punch animation has already charged; this runs on the strike frame.
+    (() => {
       if (!gameStarted || !playerMesh) return;
 
       // Re-snap to camera yaw in case they turned camera during the 0.3s charge
@@ -12246,17 +12739,14 @@ function triggerActiveSkill(skillId) {
         playerMesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
         currentForward.copy(toTarget);
       }
+      faceAttackDirection(currentForward, 0.4);
 
       audio.playSlash();
       triggerCombatFlash();
-      createMeleeBurst(playerMesh);
 
-      // Play release punch strike animation
-      if (playerMesh.userData.animation) {
-        playerMesh.userData.animation.attackTimer = 0.22;
-        playerMesh.userData.animation.attackDuration = 0.22;
-        playerMesh.userData.animation.attackImpact = 1.0;
-      }
+      const fistAt = playerMesh.position.clone().add(new THREE.Vector3(0, 6.5, 0)).addScaledVector(currentForward, 5.5);
+      createFistImpact(fistAt, currentForward, 2.2);
+      createSpeedLines(fistAt, currentForward, 8);
 
       // Visual feedback: a series of shockwaves/bursts along the path, and ground rupture V-shaped rocks
       const maxDistance = t ? Math.max(4, t.mesh.position.distanceTo(playerMesh.position)) : 24;
@@ -12351,7 +12841,7 @@ function triggerActiveSkill(skillId) {
         const endPos = playerMesh.position.clone().addScaledVector(currentForward, 24);
         createWallHitEffect(endPos, false);
       }
-    }, 300);
+    })();
   } else if (skillId === "ground-slam") {
     createGroundSlam(playerMesh.position.clone(), { type: "player" });
     triggerCombatFlash();
@@ -12368,8 +12858,8 @@ function triggerActiveSkill(skillId) {
     const iv = setInterval(() => {
       if (count >= 10 || !gameStarted) { clearInterval(iv); return; }
       audio.playSlash();
-      const pos = playerMesh.position.clone().addScaledVector(forward, 6 + Math.random() * 8).add(new THREE.Vector3((Math.random() - 0.5) * 4, 3 + (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4));
-      createDustCloud(pos);
+      const fist = playerHandWorldPosition(count % 2 ? "left" : "right");
+      createFistImpact(fist.addScaledVector(forward, 1.5), forward, 0.7);
       enemies.forEach(e => {
         if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 30) {
           const dmg = Math.round(getDamage() * 0.38);
@@ -12381,20 +12871,34 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "piercing-thrust") {
     audio.playSlash();
-    playerMesh.position.addScaledVector(forward, 20);
-    createSwordSlash(playerMesh);
-    enemies.forEach(e => {
-      if (!e.alive) return;
-      const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
-      if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
-        const dmg = Math.round(getDamage() * 2.1);
-        damageEnemy(e, dmg, "Thrust", "#f6b73c");
+    createSlashArc(forward, 0, 1, true);
+    // Dash 20 units over a few frames (stopping at walls), then strike.
+    let dashStep = 0;
+    const dash = setInterval(() => {
+      if (!gameStarted || dashStep >= 4) {
+        clearInterval(dash);
+        enemies.forEach(e => {
+          if (!e.alive) return;
+          const toE = e.mesh.position.clone().sub(playerMesh.position).normalize();
+          if (forward.angleTo(toE) < 0.5 && e.mesh.position.distanceTo(playerMesh.position) < 38) {
+            const dmg = Math.round(getDamage() * 2.1);
+            damageEnemy(e, dmg, "Thrust", "#f6b73c");
+            createSwordHitSparks(e.mesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward);
+          }
+        });
+        return;
       }
-    });
+      const before = playerMesh.position.clone();
+      playerMesh.position.addScaledVector(forward, 5);
+      resolveWallCollision(before);
+      createSpeedLines(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward, 3);
+      dashStep += 1;
+    }, 16);
 
   } else if (skillId === "cyclone-spin") {
     audio.playSlash();
-    createSpecialBurst(playerMesh);
+    createSlashArc(forward, 0, 1, true);
+    createSlashArc(forward.clone().negate(), 0, 1, true);
     enemies.forEach(e => {
       if (e.alive && e.mesh.position.distanceTo(playerMesh.position) < 42) {
         const dmg = Math.round(getDamage() * 1.9);
@@ -12404,25 +12908,30 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "dimensional-slash") {
     audio.playSlash();
+    createSlashArc(forward, Math.PI / 2, 1, true);
+    cameraShake = Math.max(cameraShake, 1.2);
     createAirSlash(playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0)), forward, { type: "player" });
 
   } else if (skillId === "double-tap") {
-    audio.playShot();
-    createGunShot();
+    // Two shots at the cursor; each hits whatever is under it or in its path.
     const shoot = () => {
-      const t = enemies.filter(e => e.alive && e.mesh.position.distanceTo(playerMesh.position) <= 130)
-        .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-      if (t) {
+      const aim = getMouseGunAim(130);
+      audio.playShot();
+      fireGunEffects(aim.target, aim.isHead, undefined, aim.point);
+      if (aim.target) {
         const dmg = Math.round(getDamage() * 1.4);
-        damageEnemy(t, dmg, "DoubleTap", "#9defff");
+        damageEnemy(aim.target, dmg, "DoubleTap", "#9defff", aim.isHead);
       }
     };
     shoot();
-    setTimeout(() => { audio.playShot(); createGunShot(); shoot(); }, 160);
+    setTimeout(() => {
+      playPlayerAction("shoot", { fire: shoot });
+    }, 120);
 
   } else if (skillId === "buckshot-cone") {
     audio.playShot();
-    createGunShot(); createGunShot();
+    fireSpreadShot(8);
+    cameraShake = Math.max(cameraShake, 0.6);
     let hits = 0;
     enemies.forEach(e => {
       if (!e.alive || hits >= 5) return;
@@ -12440,7 +12949,9 @@ function triggerActiveSkill(skillId) {
       new THREE.DodecahedronGeometry(2, 0),
       new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.9, emissive: 0xff4400, emissiveIntensity: 0.6 })
     );
-    shell.position.copy(playerMesh.position).add(new THREE.Vector3(0, 6, 0)).addScaledVector(forward, 8);
+    shell.position.copy(playerMuzzleWorldPosition()).addScaledVector(forward, 1.5);
+    createMuzzleFlash(playerMuzzleWorldPosition(), forward);
+    cameraShake = Math.max(cameraShake, 0.8);
     scene.add(shell);
     projectiles.push({ mesh: shell, direction: forward.clone(), speed: 68, damage: Math.round(getDamage() * 2.8), age: 0, duration: 2.0, owner: "player", isMortar: true });
 
@@ -12476,9 +12987,10 @@ function triggerActiveSkill(skillId) {
     beamGeo.rotateX(Math.PI / 2);
     const beamMat = new THREE.MeshBasicMaterial({ color: 0x7ce0b4, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    const beamCenter = playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)).addScaledVector(forward, 45);
+    const hands = playerHandWorldPosition("right").lerp(playerHandWorldPosition("left"), 0.5);
+    const beamCenter = hands.clone().addScaledVector(forward, 46);
     beam.position.copy(beamCenter);
-    beam.lookAt(playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)));
+    beam.lookAt(hands);
     scene.add(beam);
     let tick = 0;
     const biv = setInterval(() => {
@@ -12537,6 +13049,7 @@ function triggerActiveSkill(skillId) {
 
   } else if (skillId === "flambage-shot") {
     audio.playSlash();
+    createSpeedLines(playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)), forward, 6);
     const dashDir = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).normalize();
     const dashDist = 25;
     const startPos = playerMesh.position.clone();
@@ -12570,6 +13083,22 @@ function triggerActiveSkill(skillId) {
     createFireBurst(playerMesh.position.clone().add(new THREE.Vector3(0, 3, 0)));
     createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), "🔥 INFERNO KICK!", "#ff2200");
     log("🔥 Inferno Kick activated! Kicks are now infused with friction flames!");
+  }
+}
+
+// Shotgun-style spread: one muzzle flash, several tracers fanning out.
+function fireSpreadShot(pellets = 6) {
+  const muzzle = playerMuzzleWorldPosition();
+  const forward = new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y));
+  createMuzzleFlash(muzzle, forward);
+  createMuzzleFlash(muzzle, forward);
+  ejectShellCasing();
+  for (let i = 0; i < pellets; i += 1) {
+    const dir = forward.clone()
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() - 0.5) * 0.7)
+      .add(new THREE.Vector3(0, (Math.random() - 0.5) * 0.15, 0));
+    const end = muzzle.clone().addScaledVector(dir, 70 + Math.random() * 25);
+    createBulletTracer(muzzle, end, 0xffc27a, (at, d) => createBulletImpact(at, d));
   }
 }
 
@@ -14642,6 +15171,2470 @@ function batchStaticWorld() {
 
   console.info(`Static batching: ${before} meshes -> ${after} (${sharedMaterials.size} materials) in ${Math.round(performance.now() - started)} ms`);
 }
+// ── 31-combat-animations.js ─ Held weapons, keyframed attack/skill poses and impact effects.
+//
+// Poses are keyframes over a normalised 0..1 timeline. Each key sets any of the
+// channels below; channels a key leaves out keep whatever the walk/idle pose
+// had. Actions blend in and out smoothly and cross-fade into each other, so
+// combos chain without popping. Events (impact, release) fire on the frame the
+// pose reaches them, which is when effects and damage land.
+//
+// Channels (right = weapon hand at +x, left = off hand):
+//   rAx rAy rAz / lAx lAy lAz   shoulder rotation (x < 0 swings the arm forward/up)
+//   rF / lF                     elbow (negative bends)
+//   rH / lH                     wrist pitch
+//   rLx rLz / lLx lLz           hip rotation (x < 0 lifts the leg forward)
+//   rS / lS                     knee (positive bends)
+//   tX tY tZ                    torso lean / twist / tilt
+//   hX hY                       head pitch / turn
+//   yaw                         whole-body turn (carries the arms with it)
+//   lunge rise dip              step forward, lift off the ground, crouch (bends both knees)
+//   spin                        extra whole-body turns (radians, not blended so full spins land cleanly)
+
+const GUARD = { rAx: -0.78, rAz: -0.06, rF: -1.95, lAx: -0.9, lAz: 0.06, lF: -2.05, rH: 0.15, lH: 0.15 };
+const STANCES = {
+  melee: { ...GUARD, rS: 0.2, lS: 0.2, dip: 0.25 },
+  sword: { rAx: -0.55, rAz: 0.12, rF: -0.95, rH: 0.55, lAx: -0.35, lF: -0.7, dip: 0.15 },
+  gun: { rAx: -0.6, rAz: -0.05, rF: -0.65, rH: 0, lAx: -0.45, lF: -0.9 },
+  special: { rAx: -0.45, rAz: 0.25, rF: -1.1, rH: -0.4, lAx: -0.45, lAz: -0.25, lF: -1.1, lH: -0.4 },
+};
+
+const kick = (extra = {}) => ({ ...extra });
+
+const PLAYER_ACTIONS = {
+  // ---- Fists: jab, cross, hook, uppercut ----
+  jab: {
+    dur: 0.32, events: { impact: 0.42 }, hand: "left", blendIn: 0.08,
+    keys: [
+      { t: 0.18, ease: "smooth", ...GUARD, yaw: -0.15, dip: 0.3 },
+      { t: 0.42, ease: "out", lAx: -1.52, lAz: 0.14, lF: -0.06, lH: 0, rAx: -0.82, rF: -2.0, yaw: 0.34, tY: 0.12, lunge: 1.2, dip: 0.3, lLx: -0.3, rLx: 0.3, lS: 0.25, rS: 0.3 },
+      { t: 0.62, lAx: -1.42, lF: -0.35 },
+      { t: 1, ease: "smooth", ...GUARD },
+    ],
+  },
+  cross: {
+    dur: 0.34, events: { impact: 0.42 }, hand: "right", blendIn: 0.08,
+    keys: [
+      { t: 0.18, ease: "smooth", ...GUARD, yaw: 0.2, tY: 0.12, dip: 0.3 },
+      { t: 0.42, ease: "out", rAx: -1.52, rAz: -0.16, rF: -0.05, rH: 0, lAx: -0.85, lF: -2.05, yaw: -0.48, tY: -0.22, lunge: 1.6, dip: 0.35, lLx: -0.35, rLx: 0.35, lS: 0.3, rS: 0.35 },
+      { t: 0.62, rAx: -1.42, rF: -0.35 },
+      { t: 1, ease: "smooth", ...GUARD },
+    ],
+  },
+  hook: {
+    dur: 0.36, events: { impact: 0.45 }, hand: "right", blendIn: 0.08,
+    keys: [
+      { t: 0.2, ease: "smooth", ...GUARD, rAx: -1.25, rAz: 0.85, rAy: -1.3, rF: -1.5, yaw: 0.45, dip: 0.35 },
+      { t: 0.45, ease: "out", rAx: -1.5, rAz: -0.3, rAy: -1.5, rF: -1.45, yaw: -0.7, tY: -0.3, lunge: 1.0, dip: 0.4 },
+      { t: 0.65, rAz: -0.42, rAy: -1.5, yaw: -0.75 },
+      { t: 1, ease: "smooth", ...GUARD },
+    ],
+  },
+  uppercut: {
+    dur: 0.4, events: { impact: 0.45 }, hand: "left", blendIn: 0.08,
+    keys: [
+      { t: 0.22, ease: "smooth", ...GUARD, lAx: -0.1, lF: -2.2, yaw: -0.3, tX: 0.18, dip: 0.8 },
+      { t: 0.45, ease: "out", lAx: -2.55, lAz: 0.12, lF: -1.35, yaw: 0.38, tX: -0.2, dip: 0, rise: 0.45 },
+      { t: 0.65, lAx: -2.6, rise: 0.25 },
+      { t: 1, ease: "smooth", ...GUARD },
+    ],
+  },
+  "gatling-l": {
+    dur: 0.15, events: { impact: 0.4 }, hand: "left", blendIn: 0.05, blendOut: 0.2,
+    keys: [
+      { t: 0.15, ...GUARD, yaw: -0.1, dip: 0.3 },
+      { t: 0.4, ease: "out", lAx: -1.5, lF: -0.08, lH: 0, rAx: -0.85, rF: -2.0, yaw: 0.3, lunge: 0.6, dip: 0.3 },
+      { t: 1, ...GUARD, dip: 0.3 },
+    ],
+  },
+  "gatling-r": {
+    dur: 0.15, events: { impact: 0.4 }, hand: "right", blendIn: 0.05, blendOut: 0.2,
+    keys: [
+      { t: 0.15, ...GUARD, yaw: 0.1, dip: 0.3 },
+      { t: 0.4, ease: "out", rAx: -1.5, rF: -0.08, rH: 0, lAx: -0.85, lF: -2.0, yaw: -0.3, lunge: 0.6, dip: 0.3 },
+      { t: 1, ...GUARD, dip: 0.3 },
+    ],
+  },
+  // Inferno Kick: a snap front kick and a spinning roundhouse.
+  "front-kick": {
+    dur: 0.46, events: { impact: 0.46 }, foot: "right",
+    keys: [
+      { t: 0.22, ease: "smooth", ...GUARD, rLx: -1.5, rS: 2.0, lS: 0.25, tX: -0.15, yaw: 0.1 },
+      { t: 0.46, ease: "out", rLx: -1.62, rS: 0.06, tX: -0.32, lunge: 1.3, rise: 0.15 },
+      { t: 0.7, rLx: -1.3, rS: 1.6 },
+      { t: 1, ease: "smooth", rLx: 0.1, rS: 0.1 },
+    ],
+  },
+  "spin-kick": {
+    dur: 0.58, events: { impact: 0.52 }, foot: "right",
+    keys: [
+      { t: 0.12, ...GUARD, spin: 0, rS: 1.2, rLx: -0.6 },
+      { t: 0.38, ease: "smooth", rLx: -0.45, rLz: 1.35, rS: 0.15, tZ: -0.42, lAz: -0.9, lAx: -0.6, rAz: 0.6, rAx: -0.4, lF: -0.5, rF: -0.5, rise: 0.35 },
+      { t: 0.82, ease: "smooth", spin: -Math.PI * 2, rLz: 1.25 },
+      { t: 1, ease: "smooth", rLz: 0, rLx: 0.1, rS: 0.1, tZ: 0, rise: 0 },
+    ],
+  },
+
+  // ---- Sword: three-hit combo plus skills ----
+  "slash-1": {
+    dur: 0.4, events: { impact: 0.5 }, trail: [0.26, 0.72], slash: { roll: -0.25, sweep: -1 },
+    keys: [
+      { t: 0.26, ease: "smooth", rAx: -1.3, rAz: 1.15, rAy: -1.1, rF: -0.7, rH: 0.75, yaw: 0.48, tY: 0.15, dip: 0.35, lAx: -0.5, lAz: -0.45, lF: -1.0 },
+      { t: 0.5, ease: "out", rAx: -1.45, rAz: -0.65, rAy: -1.3, rF: -0.25, yaw: -0.62, tY: -0.25, lunge: 1.8, dip: 0.3, lLx: -0.4, rLx: 0.35, lS: 0.35 },
+      { t: 0.72, rAx: -1.2, rAz: -0.95, rF: -0.5, yaw: -0.72 },
+    ],
+  },
+  "slash-2": {
+    dur: 0.4, events: { impact: 0.48 }, trail: [0.24, 0.7], slash: { roll: 0.45, sweep: 1 },
+    keys: [
+      { t: 0.24, ease: "smooth", rAx: -0.7, rAz: -0.75, rAy: 1.1, rF: -1.0, rH: 0.6, yaw: -0.45, tY: -0.2, dip: 0.45 },
+      { t: 0.48, ease: "out", rAx: -2.15, rAz: 0.95, rAy: 1.2, rF: -0.2, yaw: 0.52, tY: 0.25, lunge: 1.4, rise: 0.15, dip: 0 },
+      { t: 0.7, rAx: -2.25, rAz: 1.15, yaw: 0.56 },
+    ],
+  },
+  "slash-3": {
+    dur: 0.52, events: { impact: 0.52 }, trail: [0.32, 0.74], slash: { roll: Math.PI / 2, sweep: 1, big: true },
+    keys: [
+      { t: 0.3, ease: "smooth", rAx: -2.95, rAz: 0.15, rF: -1.0, rH: 0.6, lAx: -2.6, lAz: -0.12, lF: -1.2, tX: -0.2, rise: 0.25, yaw: -0.1 },
+      { t: 0.52, ease: "out", rAx: -0.85, rAz: -0.05, rF: -0.15, lAx: -0.9, lF: -0.6, tX: 0.4, dip: 0.9, rise: 0, lunge: 2.4, lLx: -0.55, lS: 0.7, rLx: 0.45, rS: 0.4 },
+      { t: 0.75, rAx: -0.6, tX: 0.35 },
+    ],
+  },
+  thrust: {
+    dur: 0.45, events: { impact: 0.45 }, trail: [0.3, 0.6],
+    keys: [
+      { t: 0.25, ease: "smooth", rAx: -1.25, rF: -1.9, rAz: 0.25, rH: 1.2, yaw: 0.45, dip: 0.4 },
+      { t: 0.45, ease: "out", rAx: -1.55, rF: -0.02, rAz: -0.1, rH: 1.45, yaw: -0.45, lunge: 3.2, tX: 0.22, lLx: -0.5, lS: 0.6, rLx: 0.5, dip: 0.5 },
+      { t: 0.7, rAx: -1.5, lunge: 3.0 },
+    ],
+  },
+  cyclone: {
+    dur: 0.72, events: { impact: 0.45 }, trail: [0.12, 0.85],
+    keys: [
+      { t: 0.12, ease: "smooth", rAx: -1.5, rAz: 1.35, rAy: -1.3, rH: 0.9, rF: -0.1, lAz: -1.0, lAx: -0.6, spin: 0, dip: 0.3 },
+      { t: 0.85, ease: "smooth", spin: -Math.PI * 4, rise: 0.5, tZ: -0.15 },
+    ],
+  },
+  "dimension-cut": {
+    dur: 0.8, events: { impact: 0.62 }, trail: [0.48, 0.8], slash: { roll: Math.PI / 2, sweep: 1, big: true },
+    keys: [
+      { t: 0.38, ease: "smooth", rAx: -3.0, lAx: -2.85, rF: -0.7, lF: -0.9, rH: 0.9, tX: -0.32, rise: 0.4 },
+      { t: 0.5, rAx: -3.05, tX: -0.35 },
+      { t: 0.64, ease: "out", rAx: -0.6, lAx: -0.8, rF: -0.1, tX: 0.5, dip: 1.2, rise: 0, lunge: 2.5, lLx: -0.6, lS: 0.8, rLx: 0.5 },
+      { t: 0.85, rAx: -0.5 },
+    ],
+  },
+
+  // ---- Pistol ----
+  shoot: {
+    dur: 0.42, events: { fire: 0.18 }, blendIn: 0.1, blendOut: 0.3,
+    keys: [
+      { t: 0.18, ease: "out", rAx: -1.56, rAz: -0.18, rAy: 0, rF: -0.05, rH: 0, lAx: -1.32, lAz: 0.42, lF: -0.75, yaw: -0.28, tY: -0.1 },
+      { t: 0.3, ease: "out", rAx: -1.95, rF: -0.55, tX: -0.08, lunge: -0.45 },
+      { t: 0.55, ease: "smooth", rAx: -1.58, rF: -0.1, tX: 0, lunge: 0 },
+      { t: 1, rAx: -1.5 },
+    ],
+  },
+  "shoot-heavy": {
+    dur: 0.62, events: { fire: 0.22 }, blendIn: 0.1, blendOut: 0.3,
+    keys: [
+      { t: 0.22, ease: "out", rAx: -1.56, rAz: -0.22, rF: -0.05, rH: 0, lAx: -1.45, lAz: 0.5, lF: -0.5, yaw: -0.25, dip: 0.45, lLx: -0.35, rLx: 0.35 },
+      { t: 0.36, ease: "out", rAx: -2.45, rF: -0.9, lAx: -1.9, tX: -0.22, lunge: -1.5, dip: 0.6 },
+      { t: 0.7, ease: "smooth", rAx: -1.6, rF: -0.15, lAx: -1.45, tX: 0, lunge: -0.5 },
+    ],
+  },
+
+  // ---- Special / magic ----
+  cast: {
+    dur: 0.62, events: { release: 0.5 }, charge: [0.05, 0.48],
+    keys: [
+      { t: 0.36, ease: "smooth", rAx: 0.35, lAx: 0.35, rF: -1.7, lF: -1.7, rAz: 0.25, lAz: -0.25, dip: 0.6, tX: 0.12 },
+      { t: 0.5, ease: "out", rAx: -1.5, lAx: -1.5, rAz: -0.28, lAz: 0.28, rF: -0.08, lF: -0.08, rH: -1.2, lH: -1.2, lunge: 1.0, tX: -0.1, dip: 0 },
+      { t: 0.75, rAx: -1.42, lAx: -1.42 },
+    ],
+  },
+  "sky-cast": {
+    dur: 0.95, events: { release: 0.55 }, charge: [0.05, 0.52],
+    keys: [
+      { t: 0.35, ease: "smooth", rAx: -1.0, lAx: -1.0, rAz: -0.6, lAz: 0.6, rF: -1.8, lF: -1.8, dip: 0.7, tX: 0.2, hX: 0.2 },
+      { t: 0.55, ease: "out", rAx: -3.0, lAx: -3.0, rAz: 0.38, lAz: -0.38, rF: -0.1, lF: -0.1, rH: -0.6, lH: -0.6, hX: -0.42, tX: -0.18, dip: 0, rise: 0.6 },
+      { t: 0.85, rAx: -2.95, lAx: -2.95, rise: 0.45 },
+    ],
+  },
+  "burst-out": {
+    dur: 0.7, events: { release: 0.48 }, charge: [0.05, 0.45],
+    keys: [
+      { t: 0.32, ease: "smooth", rAx: -1.2, rAz: -0.7, lAx: -1.2, lAz: 0.7, rF: -1.6, lF: -1.6, dip: 0.55, tX: 0.15 },
+      { t: 0.48, ease: "out", rAx: -1.1, rAz: 1.5, lAx: -1.1, lAz: -1.5, rF: -0.1, lF: -0.1, rH: -0.8, lH: -0.8, dip: 0, rise: 0.25, tX: -0.12, hX: -0.15 },
+      { t: 0.8, rAz: 1.4, lAz: -1.4 },
+    ],
+  },
+  beam: {
+    dur: 1.45, events: { release: 0.18 }, charge: [0.0, 0.16],
+    keys: [
+      { t: 0.16, ease: "out", rAx: -1.52, lAx: -1.52, rAz: -0.3, lAz: 0.3, rF: -0.05, lF: -0.05, rH: -1.2, lH: -1.2, dip: 0.45, lLx: -0.4, rLx: 0.4, lunge: -0.6, tX: -0.08 },
+      { t: 0.85, rAx: -1.5, lAx: -1.5, lunge: -0.9 },
+    ],
+  },
+
+  // ---- Melee skills ----
+  "power-punch": {
+    dur: 0.78, events: { impact: 0.5 }, hand: "right", charge: [0.05, 0.4], chargeColor: 0xffb347,
+    keys: [
+      { t: 0.36, ease: "smooth", rAx: 0.55, rAz: 0.3, rF: -2.1, lAx: -1.3, lAz: 0.2, lF: -0.6, yaw: 0.62, tY: 0.3, dip: 0.85, lLx: -0.45, lS: 0.6, rLx: 0.45, rS: 0.5 },
+      { t: 0.42, rAx: 0.6, yaw: 0.64 },
+      { t: 0.5, ease: "out", rAx: -1.55, rAz: -0.1, rF: -0.02, rH: 0, lAx: -0.4, lF: -1.4, yaw: -0.78, tY: -0.35, tX: 0.25, lunge: 3.5, dip: 0.6, lLx: -0.6, lS: 0.5, rLx: 0.6, rS: 0.2 },
+      { t: 0.78, rAx: -1.5, lunge: 3.2 },
+    ],
+  },
+  "slam-down": {
+    dur: 0.68, events: { impact: 0.5 },
+    keys: [
+      { t: 0.28, ease: "out", rise: 3.0, rAx: -3.0, lAx: -3.0, rF: -0.4, lF: -0.4, tX: -0.25, lLx: -0.8, lS: 1.6, rLx: -0.6, rS: 1.4 },
+      { t: 0.5, ease: "in", rise: 0, dip: 1.4, rAx: -0.5, lAx: -0.5, rF: -0.2, lF: -0.2, tX: 0.6, lLx: -0.4, rLx: 0.4, lS: 0.4, rS: 0.4 },
+      { t: 0.78, dip: 1.2, tX: 0.5 },
+    ],
+  },
+  "air-slam": {
+    dur: 0.42, events: { impact: 0.3 },
+    keys: [
+      { t: 0.1, ease: "out", rAx: -3.0, lAx: -3.0, rF: -0.3, lF: -0.3, tX: -0.2, lS: 1.4, rS: 1.4 },
+      { t: 0.3, ease: "in", dip: 1.4, rAx: -0.5, lAx: -0.5, tX: 0.6, lLx: -0.4, rLx: 0.4 },
+      { t: 0.7, dip: 1.1, tX: 0.45 },
+    ],
+  },
+  "flying-kick": {
+    dur: 0.42, events: { impact: 0.2 }, foot: "right",
+    keys: [
+      { t: 0.15, ease: "out", rLx: -1.55, rS: 0.05, lLx: 0.5, lS: 1.9, tX: -0.35, rAx: 0.7, lAx: 0.7, rAz: 0.4, lAz: -0.4, rF: -0.4, lF: -0.4, rise: 1.6 },
+      { t: 0.8, rise: 1.4 },
+    ],
+  },
+};
+
+// Spirit Bolt: draw energy into the right hand, then thrust the palm forward.
+PLAYER_ACTIONS["spirit-bolt"] = {
+  dur: 0.5, events: { release: 0.46 }, charge: [0.05, 0.4], blendIn: 0.08,
+  keys: [
+    { t: 0.32, ease: "smooth", rAx: -0.55, rAz: 0.35, rF: -1.75, rH: -0.5, lAx: -0.6, lF: -1.3, yaw: 0.3, tY: 0.15, dip: 0.3 },
+    { t: 0.46, ease: "out", rAx: -1.55, rAz: -0.12, rF: -0.05, rH: -1.25, lAx: -0.45, lF: -1.1, yaw: -0.25, tY: -0.12, lunge: 0.8, dip: 0.2 },
+    { t: 0.7, rAx: -1.45, rF: -0.15 },
+  ],
+};
+
+// Switching weapons: reach back for it, then bring it up ready.
+PLAYER_ACTIONS.draw = {
+  dur: 0.4, blendIn: 0.15, blendOut: 0.35,
+  keys: [
+    { t: 0.4, ease: "smooth", rAx: 0.55, rAz: 0.4, rF: -1.7, tY: 0.3, hY: 0.25 },
+    { t: 0.75, ease: "out", rAx: -1.15, rAz: 0.1, rF: -0.9, tY: -0.1, hY: 0 },
+  ],
+};
+
+// Gatling flurry: ten alternating punches, built from the quick jabs.
+PLAYER_ACTIONS.flurry = (() => {
+  const keys = [];
+  const n = 10;
+  for (let i = 0; i < n; i += 1) {
+    const t0 = i / n;
+    const right = i % 2 === 0;
+    keys.push({ t: t0 + 0.02, ...GUARD, dip: 0.35, yaw: right ? 0.12 : -0.12 });
+    keys.push(right
+      ? { t: t0 + 0.06, ease: "out", rAx: -1.5, rF: -0.08, rH: 0, lAx: -0.85, lF: -2.0, yaw: -0.32, lunge: 0.8, dip: 0.35 }
+      : { t: t0 + 0.06, ease: "out", lAx: -1.5, lF: -0.08, lH: 0, rAx: -0.85, rF: -2.0, yaw: 0.32, lunge: 0.8, dip: 0.35 });
+  }
+  return { dur: 1.0, keys, blendIn: 0.04, blendOut: 0.1 };
+})();
+
+// ---- Playing actions ----
+
+const playerCombo = { melee: 0, sword: 0, last: 0, gatling: 0 };
+const attackFacing = { timer: 0, yaw: 0 };
+
+// Turn the player toward a direction for a moment (attacks shouldn't swing at thin air
+// just because the movement keys point elsewhere).
+function faceAttackDirection(direction, duration = 0.35) {
+  if (!direction || direction.lengthSq() < 1e-4) return;
+  attackFacing.yaw = Math.atan2(direction.x, direction.z);
+  attackFacing.timer = duration;
+}
+
+function updateAttackFacing(dt) {
+  if (attackFacing.timer <= 0 || !playerMesh) return;
+  attackFacing.timer -= dt;
+  let turn = attackFacing.yaw - playerMesh.rotation.y;
+  turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+  playerMesh.rotation.y += turn * (1 - Math.exp(-28 * dt));
+}
+
+function playPlayerAction(name, handlers = {}) {
+  const def = PLAYER_ACTIONS[name];
+  const anim = playerMesh?.userData?.animation;
+  if (!def || !anim) return null;
+  anim.actions = anim.actions || [];
+  anim.actions.forEach((action) => { action.fading = true; });
+  const action = { name, def, t: 0, fade: 1, fading: false, handlers, fired: {} };
+  anim.actions.push(action);
+  anim.stanceTimer = 4;
+  return action;
+}
+
+// Picks the next move of the basic-attack combo for the current weapon.
+function nextBasicAttackAction() {
+  const now = performance.now() / 1000;
+  const weapon = player.weapon;
+  const chained = now - playerCombo.last < 0.85;
+  playerCombo.last = now;
+  if (weapon === "melee") {
+    if (player.mastery.melee >= 50) {
+      playerCombo.gatling = (playerCombo.gatling + 1) % 2;
+      return playerCombo.gatling ? "gatling-r" : "gatling-l";
+    }
+    playerCombo.melee = chained ? (playerCombo.melee + 1) % 4 : 0;
+    if (player.diableJambeTimer > 0) return playerCombo.melee % 2 ? "spin-kick" : "front-kick";
+    return ["jab", "cross", "hook", "uppercut"][playerCombo.melee];
+  }
+  if (weapon === "sword") {
+    playerCombo.sword = chained ? (playerCombo.sword + 1) % 3 : 0;
+    return `slash-${playerCombo.sword + 1}`;
+  }
+  if (weapon === "gun") return "shoot";
+  return "cast";
+}
+
+// Seconds from the start of an action until its first event.
+function actionEventDelay(name) {
+  const def = PLAYER_ACTIONS[name];
+  if (!def || !def.events) return 0;
+  return Math.min(...Object.values(def.events)) * def.dur;
+}
+
+const easeFns = {
+  linear: (u) => u,
+  in: (u) => u * u,
+  out: (u) => 1 - (1 - u) ** 3,
+  smooth: (u) => u * u * (3 - 2 * u),
+};
+
+// Value of one channel at progress p; `base` is the pose underneath.
+function sampleActionChannel(keys, p, channel, base) {
+  let prev = null;
+  let next = null;
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (key[channel] === undefined) continue;
+    if (key.t <= p) prev = key;
+    else { next = key; break; }
+  }
+  if (!prev && !next) return undefined;
+  if (!next) return prev[channel];
+  const a = prev ? prev[channel] : base;
+  const t0 = prev ? prev.t : 0;
+  const u = THREE.MathUtils.clamp((p - t0) / Math.max(1e-4, next.t - t0), 0, 1);
+  return a + (next[channel] - a) * (easeFns[next.ease] || easeFns.smooth)(u);
+}
+
+function actionChannelRefs(model) {
+  if (model.userData.actionRefs) return model.userData.actionRefs;
+  const p = model.userData.parts;
+  const refs = {
+    rAx: [p.rightArm.rotation, "x"], rAy: [p.rightArm.rotation, "y"], rAz: [p.rightArm.rotation, "z"],
+    lAx: [p.leftArm.rotation, "x"], lAy: [p.leftArm.rotation, "y"], lAz: [p.leftArm.rotation, "z"],
+    rF: [p.rightForearm.rotation, "x"], lF: [p.leftForearm.rotation, "x"],
+    rH: [p.rightHand.rotation, "x"], lH: [p.leftHand.rotation, "x"],
+    rLx: [p.rightLeg.rotation, "x"], rLz: [p.rightLeg.rotation, "z"],
+    lLx: [p.leftLeg.rotation, "x"], lLz: [p.leftLeg.rotation, "z"],
+    rS: [p.rightShin.rotation, "x"], lS: [p.leftShin.rotation, "x"],
+    tX: [p.torso.rotation, "x"], tY: [p.torso.rotation, "y"], tZ: [p.torso.rotation, "z"],
+    hX: [p.head.rotation, "x"], hY: [p.head.rotation, "y"],
+    yaw: [model.rotation, "y"],
+  };
+  model.userData.actionRefs = refs;
+  return refs;
+}
+
+const ADDITIVE_CHANNELS = ["lunge", "rise", "dip"];
+
+function blendEnvelope(def, p) {
+  const inT = def.blendIn ?? 0.12;
+  const outT = def.blendOut ?? 0.25;
+  const a = inT > 0 ? THREE.MathUtils.smoothstep(p, 0, inT) : 1;
+  const b = outT > 0 ? 1 - THREE.MathUtils.smoothstep(p, 1 - outT, 1) : 1;
+  return a * b;
+}
+
+// Applies a set of channel values (a pose) on top of the current pose with weight w.
+function applyPoseChannels(model, values, w, additive, swimming) {
+  const refs = actionChannelRefs(model);
+  Object.keys(values).forEach((ch) => {
+    const ref = refs[ch];
+    if (!ref) return;
+    if (swimming && (ch[1] === "L" || ch.endsWith("S") || ch === "yaw")) return;
+    const [obj, key] = ref;
+    obj[key] += (values[ch] - obj[key]) * w;
+  });
+  if (swimming) return;
+  additive.lunge += (values.lunge || 0) * w;
+  additive.rise += (values.rise || 0) * w;
+  additive.dip += (values.dip || 0) * w;
+}
+
+// Runs the combat stance and every active action for this frame.
+function applyPlayerActions(model, anim, dt) {
+  const swimming = player.isSwimming;
+  const additive = { lunge: 0, rise: 0, dip: 0, spin: 0 };
+  const parts = model.userData.parts;
+  // Channels the walk/idle pose doesn't drive are reset here so poses never stick.
+  model.rotation.y = 0;
+  parts.rightHand.rotation.x = 0;
+  parts.leftHand.rotation.x = 0;
+  parts.torso.rotation.z = 0;
+
+  // Combat stance: after fighting, the player holds a ready pose for a few seconds.
+  anim.stanceTimer = Math.max(0, (anim.stanceTimer || 0) - dt);
+  const stanceTarget = anim.stanceTimer > 0 && !swimming && (anim.air || 0) < 0.5 ? 1 : 0;
+  anim.stanceW = THREE.MathUtils.lerp(anim.stanceW || 0, stanceTarget, 1 - Math.exp(-6 * dt));
+  const stance = STANCES[player.weapon];
+  if (stance && anim.stanceW > 0.01) {
+    const moving = playerMoveState.velocity.lengthSq() > 40;
+    applyPoseChannels(model, stance, anim.stanceW * (moving ? 0.75 : 1), additive, swimming);
+  }
+
+  const actions = anim.actions || [];
+  for (let i = 0; i < actions.length; i += 1) {
+    const action = actions[i];
+    const def = action.def;
+    action.t += dt;
+    const p = Math.min(1, action.t / def.dur);
+    if (action.fading) action.fade -= dt / 0.09;
+    // Events fire once, when the timeline passes them.
+    if (def.events) {
+      Object.entries(def.events).forEach(([name, at]) => {
+        if (!action.fired[name] && p >= at) {
+          action.fired[name] = true;
+          try { action.handlers[name]?.(action); } catch (err) { console.warn(err); }
+        }
+      });
+    }
+    const w = blendEnvelope(def, p) * Math.max(0, action.fade);
+    const values = {};
+    const refs = actionChannelRefs(model);
+    const channels = new Set();
+    def.keys.forEach((key) => Object.keys(key).forEach((ch) => { if (ch !== "t" && ch !== "ease") channels.add(ch); }));
+    channels.forEach((ch) => {
+      if (ch === "spin") return;
+      const base = refs[ch] ? refs[ch][0][refs[ch][1]] : 0;
+      const v = sampleActionChannel(def.keys, p, ch, base);
+      if (v !== undefined) values[ch] = v;
+    });
+    applyPoseChannels(model, values, w, additive, swimming);
+    if (channels.has("spin") && !swimming) additive.spin += sampleActionChannel(def.keys, p, "spin", 0) || 0;
+    action.progress = p;
+  }
+  anim.actions = actions.filter((a) => {
+    const keep = a.t < a.def.dur && a.fade > 0;
+    // An action cut short by the next one still lands its hit.
+    if (!keep && a.def.events) {
+      Object.keys(a.def.events).forEach((name) => {
+        if (!a.fired[name]) {
+          a.fired[name] = true;
+          try { a.handlers[name]?.(a); } catch (err) { console.warn(err); }
+        }
+      });
+    }
+    return keep;
+  });
+
+  // Root motion and crouch.
+  model.rotation.y += additive.spin;
+  if (!swimming) {
+    model.position.z = additive.lunge;
+    model.position.y = additive.rise;
+    additive.dip *= 0.55;
+    if (additive.dip > 0.001) {
+      // Crouch: hips drop by `dip`, thighs swing forward and knees bend twice as far,
+      // which keeps the feet planted under the body.
+      const L = Math.max(1, parts.rightShin.position.y * -1);
+      const a = Math.acos(THREE.MathUtils.clamp(1 - additive.dip / (2 * L), -1, 1));
+      model.position.y -= additive.dip;
+      parts.leftLeg.rotation.x -= a;
+      parts.rightLeg.rotation.x -= a;
+      parts.leftShin.rotation.x += 2 * a;
+      parts.rightShin.rotation.x += 2 * a;
+    }
+  }
+  // One matrix update per frame; hand/muzzle positions are read from this cache.
+  playerMesh.updateMatrixWorld(true);
+  const held = model.userData.held;
+  parts.rightHand.localToWorld(handCache.right.set(0, -0.45, 0.05));
+  parts.leftHand.localToWorld(handCache.left.set(0, -0.45, 0.05));
+  if (held?.gun) held.gun.userData.muzzle.getWorldPosition(handCache.muzzle);
+  handCache.valid = true;
+  updateSwordTrail(model, anim, dt);
+  updateActionCharge(anim);
+}
+
+const handCache = { right: new THREE.Vector3(), left: new THREE.Vector3(), muzzle: new THREE.Vector3(), valid: false };
+
+// ---- Held weapons ----
+
+function buildHeldSword() {
+  const group = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xd8e2ea).convertSRGBToLinear(), metalness: 0.85, roughness: 0.22 });
+  const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x3b2416).convertSRGBToLinear(), roughness: 0.7 });
+  const brass = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xc9a24a).convertSRGBToLinear(), metalness: 0.8, roughness: 0.3 });
+  // Blade along +z from the fist (thumb side), tapering to a point.
+  const shape = new THREE.Shape();
+  const L = 4.6;
+  shape.moveTo(-0.17, 0);
+  shape.lineTo(-0.15, L * 0.82);
+  shape.quadraticCurveTo(-0.12, L * 0.95, 0, L);
+  shape.quadraticCurveTo(0.1, L * 0.93, 0.15, L * 0.82);
+  shape.lineTo(0.17, 0);
+  shape.lineTo(-0.17, 0);
+  const bladeGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 1, steps: 1 });
+  bladeGeo.translate(0, 0, -0.025);
+  bladeGeo.rotateX(Math.PI / 2); // shape's +y becomes +z
+  const blade = new THREE.Mesh(bladeGeo, steel);
+  blade.position.z = 0.42;
+  blade.castShadow = true;
+  group.add(blade);
+  const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, L * 0.7), new THREE.MeshStandardMaterial({ color: 0x8a96a0, metalness: 0.9, roughness: 0.3 }));
+  fuller.position.set(0, 0, 0.42 + L * 0.38);
+  group.add(fuller);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 0.16), brass);
+  guard.position.z = 0.36;
+  group.add(guard);
+  [-1, 1].forEach((s) => {
+    const end = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), brass);
+    end.position.set(s * 0.5, 0, 0.36);
+    group.add(end);
+  });
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.78, 10), dark);
+  grip.rotation.x = Math.PI / 2;
+  grip.position.z = -0.02;
+  group.add(grip);
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), brass);
+  pommel.position.z = -0.45;
+  group.add(pommel);
+  const base = new THREE.Object3D();
+  base.position.z = 0.9;
+  const tip = new THREE.Object3D();
+  tip.position.z = 0.42 + L;
+  group.add(base, tip);
+  group.userData.trailBase = base;
+  group.userData.trailTip = tip;
+  return group;
+}
+
+// Flintlock pistol: grip in the fist, barrel along the fingers.
+function buildHeldPistol() {
+  const group = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x6b3f22).convertSRGBToLinear(), roughness: 0.6 });
+  const iron = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x4a4f55).convertSRGBToLinear(), metalness: 0.8, roughness: 0.35 });
+  const brass = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xc9a24a).convertSRGBToLinear(), metalness: 0.8, roughness: 0.3 });
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.75), wood);
+  grip.position.set(0, -0.28, 0.02);
+  grip.rotation.x = 0.25;
+  group.add(grip);
+  const butt = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), brass);
+  butt.position.set(0, -0.2, -0.36);
+  group.add(butt);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.2, 0.26), wood);
+  stock.position.set(0, -0.85, 0.38);
+  group.add(stock);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 1.6, 12), iron);
+  barrel.position.set(0, -1.15, 0.5);
+  group.add(barrel);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.03, 6, 12), brass);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, -1.9, 0.5);
+  group.add(ring);
+  const hammer = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.22), iron);
+  hammer.position.set(0, -0.32, 0.5);
+  hammer.rotation.x = -0.5;
+  group.add(hammer);
+  const guard = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.025, 6, 12, Math.PI), brass);
+  guard.rotation.y = Math.PI / 2;
+  guard.position.set(0, -0.48, 0.2);
+  group.add(guard);
+  group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, -2.0, 0.5);
+  group.add(muzzle);
+  const ejection = new THREE.Object3D();
+  ejection.position.set(0.15, -0.5, 0.55);
+  group.add(ejection);
+  group.userData.muzzle = muzzle;
+  group.userData.ejection = ejection;
+  return group;
+}
+
+function buildHandAura(color) {
+  const aura = new THREE.Mesh(
+    new THREE.SphereGeometry(0.55, 14, 10),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  aura.position.y = -0.4;
+  return aura;
+}
+
+// Creates the hand-held weapons on the player's model once; visibility follows the
+// equipped weapon every frame.
+function updateHeldWeapons(model) {
+  const parts = model.userData.parts;
+  if (!parts?.rightHand) return;
+  let held = model.userData.held;
+  if (!held) {
+    held = {
+      sword: buildHeldSword(),
+      gun: buildHeldPistol(),
+      auraR: buildHandAura(0xa775ff),
+      auraL: buildHandAura(0xa775ff),
+    };
+    held.sword.position.set(0.02, -0.33, 0);
+    held.gun.position.set(0.02, -0.12, -0.05);
+    parts.rightHand.add(held.sword, held.gun, held.auraR);
+    parts.leftHand.add(held.auraL);
+    model.userData.held = held;
+  }
+  const weapon = player.weapon;
+  if (parts.staff) {
+    const fighting = (model.userData.parts && (playerMesh.userData.animation?.stanceW || 0) > 0.05) || (playerMesh.userData.animation?.actions || []).length > 0;
+    parts.staff.visible = weapon === "special" || !fighting;
+  }
+  held.sword.visible = weapon === "sword";
+  held.gun.visible = weapon === "gun";
+  const magic = weapon === "special";
+  held.auraR.visible = magic;
+  held.auraL.visible = magic;
+  if (magic) {
+    const pulse = 0.85 + Math.sin(performance.now() * 0.008) * 0.15;
+    held.auraR.scale.setScalar(pulse);
+    held.auraL.scale.setScalar(1.8 - pulse);
+  }
+}
+
+// Hand and muzzle positions as of this frame's pose.
+function playerHandWorldPosition(side = "right") {
+  if (!handCache.valid) return playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0));
+  return (side === "left" ? handCache.left : handCache.right).clone();
+}
+
+function playerMuzzleWorldPosition() {
+  if (!handCache.valid || !playerMesh?.children[0]?.userData?.held?.gun?.visible) return playerHandWorldPosition("right");
+  return handCache.muzzle.clone();
+}
+
+// ---- Sword trail: a glowing ribbon traced by the blade ----
+
+const SWORD_TRAIL_SAMPLES = 26;
+const SWORD_TRAIL_LIFE = 0.16;
+let swordTrail = null;
+
+function getSwordTrail() {
+  if (swordTrail) return swordTrail;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(SWORD_TRAIL_SAMPLES * 2 * 3);
+  const colors = new Float32Array(SWORD_TRAIL_SAMPLES * 2 * 3);
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const index = [];
+  for (let i = 0; i < SWORD_TRAIL_SAMPLES - 1; i += 1) {
+    const a = i * 2;
+    index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  geo.setIndex(index);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 5;
+  swordTrail = { mesh, samples: [], color: new THREE.Color(0xbfe8ff) };
+  return swordTrail;
+}
+
+function updateSwordTrail(model, anim, dt) {
+  const trail = getSwordTrail();
+  if (!trail.mesh.parent) scene.add(trail.mesh);
+  trail.samples.forEach((s) => { s.age += dt; });
+  trail.samples = trail.samples.filter((s) => s.age < SWORD_TRAIL_LIFE);
+  const sword = model.userData.held?.sword;
+  const active = sword?.visible && (anim.actions || []).some((a) => {
+    const window = a.def.trail;
+    return window && !a.fading && a.progress >= window[0] && a.progress <= window[1];
+  });
+  if (active) {
+    const base = sword.userData.trailBase.getWorldPosition(new THREE.Vector3());
+    const tip = sword.userData.trailTip.getWorldPosition(new THREE.Vector3());
+    const last = trail.samples[trail.samples.length - 1];
+    // Fill fast swings with in-between samples so the ribbon stays smooth.
+    if (last) {
+      const steps = Math.min(4, Math.floor(last.tip.distanceTo(tip) / 1.2));
+      for (let i = 1; i <= steps; i += 1) {
+        const f = i / (steps + 1);
+        trail.samples.push({ base: last.base.clone().lerp(base, f), tip: last.tip.clone().lerp(tip, f), age: last.age * (1 - f) });
+      }
+    }
+    trail.samples.push({ base, tip, age: 0 });
+    while (trail.samples.length > SWORD_TRAIL_SAMPLES) trail.samples.shift();
+  }
+  const n = trail.samples.length;
+  const pos = trail.mesh.geometry.attributes.position;
+  const col = trail.mesh.geometry.attributes.color;
+  for (let i = 0; i < n; i += 1) {
+    const s = trail.samples[i];
+    const fade = (1 - s.age / SWORD_TRAIL_LIFE) * (i / Math.max(1, n - 1));
+    pos.setXYZ(i * 2, s.base.x, s.base.y, s.base.z);
+    pos.setXYZ(i * 2 + 1, s.tip.x, s.tip.y, s.tip.z);
+    col.setXYZ(i * 2, trail.color.r * fade * 0.25, trail.color.g * fade * 0.25, trail.color.b * fade * 0.25);
+    col.setXYZ(i * 2 + 1, trail.color.r * fade, trail.color.g * fade, trail.color.b * fade);
+  }
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
+  trail.mesh.geometry.setDrawRange(0, Math.max(0, n - 1) * 6);
+  trail.mesh.visible = n > 1;
+}
+
+// ---- Effect building blocks ----
+
+let glowTexture = null;
+function getGlowTexture() {
+  if (glowTexture) return glowTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.25, "rgba(255,255,255,0.75)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  glowTexture = new THREE.CanvasTexture(c);
+  return glowTexture;
+}
+
+let starTexture = null;
+function getStarTexture() {
+  if (starTexture) return starTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const ctx = c.getContext("2d");
+  ctx.translate(64, 64);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 64);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.3, "rgba(255,240,180,0.85)");
+  g.addColorStop(1, "rgba(255,160,40,0)");
+  ctx.fillStyle = g;
+  for (let i = 0; i < 7; i += 1) {
+    ctx.rotate((Math.PI * 2) / 7);
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(64 * (0.6 + (i % 2) * 0.4), 0);
+    ctx.lineTo(0, 9);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, 0, Math.PI * 2);
+  ctx.fill();
+  starTexture = new THREE.CanvasTexture(c);
+  return starTexture;
+}
+
+function glowSprite(color, size, opacity = 1, texture = getGlowTexture()) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  sprite.scale.setScalar(size);
+  return sprite;
+}
+
+const fxGeometries = {};
+function fxGeometry(name, make) {
+  if (!fxGeometries[name]) fxGeometries[name] = make();
+  return fxGeometries[name];
+}
+
+function facingVector() {
+  return new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y));
+}
+
+// A thin streak that flies outward and fades (sparks, speed lines).
+function spawnStreak(origin, direction, color, length, speed, life, width = 0.12) {
+  const geo = fxGeometry(`streak`, () => new THREE.BoxGeometry(1, 1, 1));
+  const streak = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+  streak.position.copy(origin);
+  streak.scale.set(width, width, length);
+  streak.lookAt(origin.clone().add(direction));
+  const dir = direction.clone().normalize();
+  addTimedEffect(streak, life, (mesh, p, dt) => {
+    mesh.position.addScaledVector(dir, speed * dt * (1 - p * 0.6));
+    mesh.scale.z = length * (1 - p * 0.7);
+    mesh.material.opacity = 1 - p;
+  });
+}
+
+// ---- Fist / kick impact ----
+
+function createFistImpact(position, direction, power = 1, color = 0xffd27a) {
+  const dir = direction.clone().normalize();
+  const flash = glowSprite(color, 4.5 * power, 1, getStarTexture());
+  flash.position.copy(position);
+  addTimedEffect(flash, 0.14, (mesh, p) => {
+    mesh.scale.setScalar(4.5 * power * (1 + p * 0.8));
+    mesh.material.opacity = 1 - p;
+    mesh.material.rotation = p * 0.6;
+  });
+  // Shock ring facing along the punch.
+  const ring = new THREE.Mesh(
+    fxGeometry("fistRing", () => new THREE.TorusGeometry(1, 0.08, 6, 36)),
+    new THREE.MeshBasicMaterial({ color: 0xfff3c8, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  ring.position.copy(position);
+  ring.lookAt(position.clone().add(dir));
+  addTimedEffect(ring, 0.26, (mesh, p, dt) => {
+    mesh.scale.setScalar((1.2 + p * 4.5) * power);
+    mesh.position.addScaledVector(dir, dt * 18);
+    mesh.material.opacity = 0.9 * (1 - p) ** 1.5;
+  });
+  // Sparks spraying forward in a cone.
+  const side = new THREE.Vector3(-dir.z, 0, dir.x);
+  for (let i = 0; i < Math.round(7 * power); i += 1) {
+    const spread = dir.clone()
+      .addScaledVector(side, (Math.random() - 0.5) * 1.4)
+      .add(new THREE.Vector3(0, (Math.random() - 0.3) * 1.0, 0));
+    spawnStreak(position, spread, i % 2 ? 0xffb347 : 0xfff0b0, 1.4 + Math.random(), 45 + Math.random() * 25, 0.22);
+  }
+}
+
+// Speed lines streaming back past the arm as it extends.
+function createSpeedLines(origin, direction, count = 5) {
+  const dir = direction.clone().normalize();
+  const side = new THREE.Vector3(-dir.z, 0, dir.x);
+  for (let i = 0; i < count; i += 1) {
+    const start = origin.clone()
+      .addScaledVector(side, (Math.random() - 0.5) * 2.4)
+      .add(new THREE.Vector3(0, (Math.random() - 0.5) * 2.2, 0))
+      .addScaledVector(dir, -1.5);
+    spawnStreak(start, dir, 0xffffff, 3 + Math.random() * 2, 30, 0.16, 0.06);
+  }
+}
+
+// ---- Sword slash arc ----
+
+function createSlashArc(direction, roll = 0, sweep = 1, big = false, color = 0xcdeeff) {
+  const dir = direction.clone().normalize();
+  const radius = big ? 9 : 7;
+  const arc = new THREE.Mesh(
+    fxGeometry(`slashArc`, () => {
+      // Crescent: thick in the middle, thin at the ends.
+      const shape = new THREE.Shape();
+      const n = 24;
+      const span = 2.3;
+      for (let i = 0; i <= n; i += 1) {
+        const a = -span / 2 + (span * i) / n;
+        const w = Math.sin((i / n) * Math.PI) * 0.22;
+        const x = Math.cos(a) * (1 + w);
+        const y = Math.sin(a) * (1 + w);
+        if (i === 0) shape.moveTo(x, y);
+        else shape.lineTo(x, y);
+      }
+      for (let i = n; i >= 0; i -= 1) {
+        const a = -span / 2 + (span * i) / n;
+        shape.lineTo(Math.cos(a) * 0.96, Math.sin(a) * 0.96);
+      }
+      return new THREE.ShapeGeometry(shape, 1);
+    }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  const origin = playerMesh.position.clone().add(new THREE.Vector3(0, 6.2, 0)).addScaledVector(dir, 2.5);
+  arc.position.copy(origin);
+  // Lay the crescent in the swing plane: it opens toward the attack direction.
+  arc.rotation.order = "YXZ";
+  arc.rotation.set(-Math.PI / 2, Math.atan2(dir.x, dir.z) - Math.PI / 2, 0);
+  arc.rotateOnAxis(new THREE.Vector3(1, 0, 0), roll);
+  if (sweep < 0) arc.scale.y = -1;
+  addTimedEffect(arc, 0.24, (mesh, p, dt) => {
+    const s = radius * (0.85 + p * 0.5);
+    mesh.scale.set(s, (sweep < 0 ? -1 : 1) * s, s);
+    mesh.position.addScaledVector(dir, dt * 22);
+    mesh.material.opacity = 0.95 * (1 - p) ** 1.2;
+  });
+}
+
+function createSwordHitSparks(position, direction) {
+  const flash = glowSprite(0xe8f6ff, 5, 1, getStarTexture());
+  flash.position.copy(position);
+  addTimedEffect(flash, 0.12, (mesh, p) => { mesh.material.opacity = 1 - p; mesh.scale.setScalar(5 + p * 4); });
+  for (let i = 0; i < 9; i += 1) {
+    const d = direction.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 1.2, (Math.random() - 0.5) * 2));
+    spawnStreak(position, d, i % 3 ? 0xdff4ff : 0xffe2a0, 1.2, 55, 0.2, 0.08);
+  }
+}
+
+// ---- Gunfire ----
+
+function createMuzzleFlash(muzzle, direction) {
+  const dir = direction.clone().normalize();
+  const star = glowSprite(0xffe2a0, 3.2, 1, getStarTexture());
+  star.position.copy(muzzle).addScaledVector(dir, 0.6);
+  star.material.rotation = Math.random() * Math.PI;
+  addTimedEffect(star, 0.07, (mesh, p) => { mesh.material.opacity = 1 - p; mesh.scale.setScalar(3.2 + p * 2); });
+  // Flame cone out of the barrel.
+  const cone = new THREE.Mesh(
+    fxGeometry("muzzleCone", () => { const g = new THREE.ConeGeometry(0.55, 2.4, 10, 1, true); g.translate(0, 1.2, 0); g.rotateX(Math.PI / 2); return g; }),
+    new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  cone.position.copy(muzzle);
+  cone.lookAt(muzzle.clone().add(dir));
+  cone.rotateZ(Math.PI); // ConeGeometry tip faces away after the flip
+  addTimedEffect(cone, 0.08, (mesh, p) => { mesh.scale.set(1 - p * 0.4, 1 - p * 0.4, 1 + p); mesh.material.opacity = 0.9 * (1 - p); });
+  // Smoke puff drifting up.
+  for (let i = 0; i < 3; i += 1) {
+    const smoke = new THREE.Sprite(new THREE.SpriteMaterial({ map: getGlowTexture(), color: 0xbdb7ae, transparent: true, opacity: 0.45, depthWrite: false }));
+    smoke.position.copy(muzzle).addScaledVector(dir, 0.8 + i * 0.7);
+    smoke.scale.setScalar(1.2);
+    const drift = dir.clone().multiplyScalar(2 + i).add(new THREE.Vector3(0, 3 + Math.random() * 2, 0));
+    addTimedEffect(smoke, 0.9 + i * 0.15, (mesh, p, dt) => {
+      mesh.position.addScaledVector(drift, dt);
+      mesh.scale.setScalar(1.2 + p * 3.5);
+      mesh.material.opacity = 0.45 * (1 - p);
+    });
+  }
+}
+
+function ejectShellCasing() {
+  const model = playerMesh?.children[0];
+  const gun = model?.userData?.held?.gun;
+  if (!gun?.visible) return;
+  playerMesh.updateMatrixWorld(true);
+  const from = gun.userData.ejection.getWorldPosition(new THREE.Vector3());
+  const right = new THREE.Vector3(Math.cos(playerMesh.rotation.y), 0, -Math.sin(playerMesh.rotation.y));
+  const shell = new THREE.Mesh(
+    fxGeometry("shell", () => new THREE.CylinderGeometry(0.06, 0.06, 0.24, 8)),
+    fxGeometry("shellMat", () => new THREE.MeshStandardMaterial({ color: new THREE.Color(0xd8a640).convertSRGBToLinear(), metalness: 0.9, roughness: 0.25 })),
+  );
+  shell.position.copy(from);
+  const velocity = right.multiplyScalar(-(9 + Math.random() * 4)).add(new THREE.Vector3(0, 11 + Math.random() * 3, 0));
+  const groundY = playerMesh.position.y - 1.4;
+  const spin = new THREE.Vector3(Math.random() * 20, Math.random() * 20, Math.random() * 20);
+  addTimedEffect(shell, 1.1, (mesh, p, dt) => {
+    velocity.y -= 60 * dt;
+    mesh.position.addScaledVector(velocity, dt);
+    if (mesh.position.y < groundY) {
+      mesh.position.y = groundY;
+      velocity.y = Math.abs(velocity.y) * 0.35;
+      velocity.x *= 0.5;
+      velocity.z *= 0.5;
+      spin.multiplyScalar(0.5);
+    }
+    mesh.rotation.x += spin.x * dt;
+    mesh.rotation.y += spin.y * dt;
+    mesh.rotation.z += spin.z * dt;
+  });
+}
+
+// Bullet: a bright slug that races to the target with a fading tracer behind it.
+function createBulletTracer(start, end, color = 0x9defff, onArrive) {
+  const dirVec = end.clone().sub(start);
+  const length = dirVec.length();
+  const dir = dirVec.clone().normalize();
+  const travel = THREE.MathUtils.clamp(length / 900, 0.03, 0.12);
+  const slug = glowSprite(0xffffff, 1.4);
+  slug.position.copy(start);
+  const tracer = new THREE.Mesh(
+    fxGeometry("tracer", () => { const g = new THREE.CylinderGeometry(0.07, 0.07, 1, 6, 1, true); g.rotateX(Math.PI / 2); g.translate(0, 0, -0.5); return g; }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  tracer.position.copy(start);
+  tracer.lookAt(end);
+  let arrived = false;
+  addTimedEffect(slug, travel, (mesh, p) => {
+    mesh.position.copy(start).addScaledVector(dir, length * p);
+    tracer.position.copy(mesh.position);
+    tracer.scale.set(1, 1, Math.min(length * p, 14));
+    if (p >= 1 && !arrived) {
+      arrived = true;
+      onArrive?.(end, dir);
+    }
+  });
+  addTimedEffect(tracer, travel + 0.12, (mesh, p) => {
+    const late = Math.max(0, (p * (travel + 0.12) - travel) / 0.12);
+    mesh.material.opacity = 0.9 * (1 - late);
+  });
+}
+
+function createBulletImpact(position, direction, headshot = false) {
+  const flash = glowSprite(headshot ? 0xff6a4a : 0xfff0c0, headshot ? 5 : 3.2, 1, getStarTexture());
+  flash.position.copy(position);
+  addTimedEffect(flash, 0.1, (mesh, p) => { mesh.material.opacity = 1 - p; });
+  for (let i = 0; i < 6; i += 1) {
+    const d = direction.clone().negate().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, Math.random(), (Math.random() - 0.5) * 1.6));
+    spawnStreak(position, d, 0xffd27a, 0.8, 40, 0.18, 0.06);
+  }
+}
+
+// ---- Magic ----
+
+// Motes of light spiral into the hands while a spell charges.
+function spawnChargeMotes(color, count = 2) {
+  const hands = [playerHandWorldPosition("right"), playerHandWorldPosition("left")];
+  for (let i = 0; i < count; i += 1) {
+    const hand = hands[i % 2];
+    const offset = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.2), (Math.random() - 0.5)).normalize().multiplyScalar(4 + Math.random() * 3);
+    const mote = glowSprite(color, 0.9);
+    mote.position.copy(hand).add(offset);
+    addTimedEffect(mote, 0.3, (mesh, p) => {
+      const target = playerHandWorldPosition(i % 2 ? "left" : "right");
+      mesh.position.copy(target).addScaledVector(offset, (1 - p) ** 2);
+      mesh.material.opacity = Math.min(1, p * 3);
+      mesh.scale.setScalar(0.9 * (1 - p * 0.5));
+    });
+  }
+}
+
+function createHandRelease(color, power = 1) {
+  ["right", "left"].forEach((side) => {
+    const at = playerHandWorldPosition(side);
+    const burst = glowSprite(color, 3 * power, 1, getStarTexture());
+    burst.position.copy(at);
+    addTimedEffect(burst, 0.25, (mesh, p) => { mesh.scale.setScalar(3 * power * (1 + p * 2)); mesh.material.opacity = 1 - p; });
+  });
+}
+
+// ---- Wiring: basic attacks ----
+
+// Starts the basic-attack animation and returns how long until it lands.
+function startBasicAttackAnimation(target, onHit, aimPoint = null) {
+  const direction = aimPoint
+    ? aimPoint.clone().sub(playerMesh.position).setY(0).normalize()
+    : getAttackDirection(target);
+  faceAttackDirection(direction, 0.45);
+  const name = nextBasicAttackAction();
+  const def = PLAYER_ACTIONS[name];
+  const handlers = {};
+  if (player.weapon === "melee") {
+    handlers.impact = () => {
+      const hand = def.foot ? "foot" : def.hand || "right";
+      const at = hand === "foot"
+        ? playerMesh.position.clone().add(new THREE.Vector3(0, 5, 0)).addScaledVector(direction, 6)
+        : playerHandWorldPosition(hand);
+      const fire = player.diableJambeTimer > 0;
+      createFistImpact(at, direction, target ? 1 : 0.6, fire ? 0xff6a2a : 0xffd27a);
+      if (fire) createFireBurst(at);
+      createSpeedLines(at, direction, 3);
+      if (target) cameraShake = Math.max(cameraShake, 0.35);
+      onHit?.();
+    };
+  } else if (player.weapon === "sword") {
+    handlers.impact = () => {
+      const slash = def.slash || {};
+      createSlashArc(direction, slash.roll || 0, slash.sweep || 1, slash.big);
+      if (target) {
+        const hit = target.mesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+        createSwordHitSparks(hit, direction);
+        cameraShake = Math.max(cameraShake, slash.big ? 0.6 : 0.3);
+      }
+      onHit?.();
+    };
+  } else if (player.weapon === "gun") {
+    handlers.fire = () => onHit?.();
+  } else {
+    handlers.release = () => {
+      createHandRelease(0xa775ff);
+      onHit?.();
+    };
+  }
+  const action = playPlayerAction(name, handlers);
+  return action ? actionEventDelay(name) : 0;
+}
+
+// The special weapon's basic attack: a bolt of spirit energy fired at the cursor
+// (or, from the touch Attack button, at the nearest enemy in view). It lands
+// through resolveAttackHit, so special mastery bonuses apply as they level up.
+function castSpiritBolt(event) {
+  if (!playerMesh?.userData?.animation || player.health <= 0) return;
+  attackCooldown = 0.9;
+  skillCooldowns["spirit-bolt"] = Math.max(skillCooldowns["spirit-bolt"] || 0, 0.9);
+  audio.playSpecial();
+  const range = 95 * getAvatarTraits().rangeMultiplier;
+  const aim = event?.autoAim
+    ? getAutoGunAim(range)
+    : getGunAim(event?.clientX ?? mouseScreenPos.x, event?.clientY ?? mouseScreenPos.y, range);
+  const facing = aim.point.clone().sub(playerMesh.position).setY(0);
+  if (facing.lengthSq() > 1) {
+    playerMesh.rotation.y = Math.atan2(facing.x, facing.z);
+    faceAttackDirection(facing.normalize(), 0.55);
+  }
+  const damage = getDamage();
+  playPlayerAction("spirit-bolt", {
+    release: () => {
+      if (player.weapon !== "special" || !gameStarted) return;
+      const target = aim.target && aim.target.alive ? aim.target : null;
+      const from = playerHandWorldPosition("right");
+      const end = target ? target.mesh.position.clone().add(new THREE.Vector3(0, 6.1, 0)) : aim.point.clone();
+      createHandRelease(0xc9a8ff, 0.6);
+      fireSpiritBolt(from, end, () => {
+        const dir = end.clone().sub(from);
+        if (target) createFistImpact(end, dir, 0.9, 0xc9a8ff);
+        else createGroundImpact(end, dir.normalize());
+        resolveAttackHit(target && target.alive ? target : null, {
+          damage, isFalcon: false, isDiableJambeActive: false, isGunHeadshot: false, weapon: "special", aimPoint: aim.point,
+        });
+      });
+    },
+  });
+}
+
+// A glowing orb with a short sparkling tail that flies from -> to.
+function fireSpiritBolt(from, to, onArrive) {
+  const length = from.distanceTo(to);
+  const travel = THREE.MathUtils.clamp(length / 230, 0.06, 0.45);
+  const orb = glowSprite(0xd9c2ff, 2.6);
+  const core = glowSprite(0xffffff, 1.1);
+  orb.position.copy(from);
+  core.position.copy(from);
+  let arrived = false;
+  let lastMote = 0;
+  addTimedEffect(orb, travel, (mesh, p) => {
+    mesh.position.lerpVectors(from, to, p);
+    core.position.copy(mesh.position);
+    mesh.material.rotation += 0.3;
+    if (p - lastMote > 0.12) {
+      lastMote = p;
+      const mote = glowSprite(0xa775ff, 1.2);
+      mote.position.copy(mesh.position);
+      addTimedEffect(mote, 0.3, (m, q) => { m.material.opacity = 1 - q; m.scale.setScalar(1.2 * (1 - q * 0.6)); });
+    }
+    if (p >= 1 && !arrived) {
+      arrived = true;
+      onArrive?.();
+    }
+  });
+  addTimedEffect(core, travel, () => {});
+}
+
+// Fires a pistol shot from the muzzle: flash, smoke, casing, and a tracer to the target.
+function fireGunEffects(target, isHeadshot = false, color = 0x9defff, aimPoint = null) {
+  const muzzle = playerMuzzleWorldPosition();
+  let end;
+  if (aimPoint && (!target || aimPoint.distanceTo(target.mesh.position) < 14)) {
+    end = aimPoint.clone(); // exactly where the player clicked
+  } else if (target) {
+    end = target.mesh.position.clone();
+    end.y += isHeadshot ? 9.15 : 6.1;
+  } else {
+    end = muzzle.clone().addScaledVector(getAttackDirection(null), 90);
+  }
+  createMuzzleFlash(muzzle, end.clone().sub(muzzle));
+  ejectShellCasing();
+  createBulletTracer(muzzle, end, color, (at, dir) => {
+    if (target) createBulletImpact(at, dir, isHeadshot);
+    else if (aimPoint) createGroundImpact(at, dir);
+  });
+}
+
+// Bullet hitting the ground or a wall: a puff of dust and a few chips.
+function createGroundImpact(position, direction) {
+  const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: getGlowTexture(), color: 0xcbb994, transparent: true, opacity: 0.6, depthWrite: false }));
+  puff.position.copy(position).add(new THREE.Vector3(0, 0.4, 0));
+  puff.scale.setScalar(1.5);
+  addTimedEffect(puff, 0.6, (mesh, p, dt) => {
+    mesh.position.y += dt * 2.5;
+    mesh.scale.setScalar(1.5 + p * 3.5);
+    mesh.material.opacity = 0.6 * (1 - p);
+  });
+  const spark = glowSprite(0xffe2a0, 2.2, 1, getStarTexture());
+  spark.position.copy(position).add(new THREE.Vector3(0, 0.3, 0));
+  addTimedEffect(spark, 0.08, (mesh, p) => { mesh.material.opacity = 1 - p; });
+  for (let i = 0; i < 5; i += 1) {
+    const d = new THREE.Vector3((Math.random() - 0.5) * 1.2, 1 + Math.random(), (Math.random() - 0.5) * 1.2).sub(direction.clone().multiplyScalar(0.5));
+    spawnStreak(position, d, 0xd8c8a0, 0.6, 25, 0.25, 0.08);
+  }
+}
+
+// Charge-up motes for actions that gather power before releasing it.
+function updateActionCharge(anim) {
+  (anim.actions || []).forEach((action) => {
+    const window = action.def.charge;
+    if (!window || action.fading || action.progress === undefined) return;
+    if (action.progress >= window[0] && action.progress <= window[1]) {
+      spawnChargeMotes(action.def.chargeColor || (player.weapon === "special" ? 0xc9a8ff : 0xffd27a), 1);
+    }
+  });
+}
+// ── 32-enemy-animations.js ─ Enemy walk cycles, telegraphed strikes, flinches and defeat animation.
+//
+// The enemy AI (17-enemy-ai-and-damage.js) decides what enemies do; this layer
+// watches them and poses their bodies to match:
+//   - walking speed is read from how far each enemy moved this frame
+//   - simple melee strikes are held back for a short wind-up, so the player can
+//     see them coming and step away; they only land if the player is still in reach
+//   - taking damage makes an enemy flinch and stagger back
+//   - a defeated enemy falls over before it disappears
+
+let enemyUpdateContext = null;   // the enemy whose AI is running right now
+let enemyStrikeResolving = false; // true while a wound-up strike is being applied
+
+const ENEMY_WINDUP = 0.42;        // seconds between the wind-up starting and the blow landing
+const ENEMY_ATTACK_DURATION = 0.8;
+const ENEMY_DEATH_FALL = 0.45;
+const ENEMY_DEATH_TOTAL = 1.5;
+// Heavy enemies don't get shoved around by ordinary hits.
+const HEAVY_ENEMY_TYPES = new Set(["buggy", "brute", "gorilla_king", "yeti"]);
+// Multi-hit combos and specials that have their own timing land immediately.
+const IMMEDIATE_STRIKES = /Mace|Deadly|Rapid Rush|Meteor/;
+
+function enemyAnimState(enemy) {
+  if (!enemy.anim) {
+    enemy.anim = {
+      phase: Math.random() * 6, speed: 0, last: enemy.mesh.position.clone(),
+      attackT: -1, pending: null, flinchT: 0, deathT: -1, wasAlive: true,
+    };
+    enemy.mesh.rotation.order = "YXZ"; // lets the whole enemy tip over backwards whichever way it faces
+  }
+  return enemy.anim;
+}
+
+// Called from damagePlayer(). Returns true when the strike has been queued behind
+// a wind-up (the caller should not apply the damage yet).
+function interceptEnemyStrike(amount, source) {
+  const enemy = enemyUpdateContext;
+  if (!enemy || enemyStrikeResolving || !enemy.alive) return false;
+  const anim = enemyAnimState(enemy);
+  if (IMMEDIATE_STRIKES.test(source || "")) {
+    anim.attackT = ENEMY_WINDUP; // jump straight to the swing
+    anim.pending = null;
+    return false;
+  }
+  const distance = enemy.mesh.position.distanceTo(playerMesh.position);
+  anim.attackT = 0;
+  anim.pending = { amount, source, reach: Math.max(12, distance + 6) };
+  // A red glint warns that a blow is coming.
+  const glint = glowSprite(0xff4a3a, 3.5, 1, getStarTexture());
+  glint.position.copy(enemy.mesh.position).add(new THREE.Vector3(0, 11 * enemy.mesh.scale.y, 0));
+  addTimedEffect(glint, ENEMY_WINDUP, (mesh, p) => {
+    mesh.position.copy(enemy.mesh.position).add(new THREE.Vector3(0, 11 * enemy.mesh.scale.y, 0));
+    mesh.scale.setScalar(3.5 * (1.3 - p * 0.6));
+    mesh.material.opacity = 1 - p * p;
+    mesh.material.rotation = p * 2;
+  });
+  return true;
+}
+
+// Called from damageEnemy(): flinch and stagger away from the player.
+function reactEnemyHit(enemy, damage) {
+  if (!enemy.alive) return;
+  const anim = enemyAnimState(enemy);
+  anim.flinchT = 0.3;
+  if (HEAVY_ENEMY_TYPES.has(enemy.type)) return;
+  const away = enemy.mesh.position.clone().sub(playerMesh.position).setY(0);
+  if (away.lengthSq() < 1e-4) return;
+  anim.knock = away.normalize().multiplyScalar(Math.min(16, 7 + damage * 0.08));
+}
+
+// Called from defeatEnemy(): keep the body on screen while it falls.
+function startEnemyDeath(enemy) {
+  const anim = enemyAnimState(enemy);
+  const model = enemy.mesh.children[0];
+  if (!model?.userData?.parts) {
+    enemy.mesh.visible = false;
+    return;
+  }
+  anim.deathT = 0;
+  anim.pending = null;
+  anim.attackT = -1;
+  enemy.mesh.visible = true;
+}
+
+function updateEnemyAnimations(dt) {
+  if (dt <= 0) return;
+  const px = playerMesh.position.x;
+  const pz = playerMesh.position.z;
+  const now = performance.now() * 0.001;
+  for (let i = 0; i < enemies.length; i += 1) {
+    const enemy = enemies[i];
+    const group = enemy.mesh;
+    const anim = enemyAnimState(enemy);
+
+    if (!enemy.alive) {
+      anim.wasAlive = false;
+      if (anim.deathT < 0) continue;
+      anim.deathT += dt;
+      const fall = Math.min(1, anim.deathT / ENEMY_DEATH_FALL);
+      group.rotation.x = -(Math.PI / 2) * (1 - (1 - fall) ** 2) * 0.96;
+      if (!anim.landed && fall >= 1) {
+        anim.landed = true;
+        createDustCloud(group.position.clone());
+      }
+      // Sink into the ground at the end.
+      const sink = Math.max(0, (anim.deathT - 1.0) / (ENEMY_DEATH_TOTAL - 1.0));
+      group.position.y = anim.deathY - sink * 3.5 * group.scale.y;
+      if (anim.deathT >= ENEMY_DEATH_TOTAL) {
+        anim.deathT = -1;
+        group.visible = false;
+      }
+      continue;
+    }
+    if (!anim.wasAlive) {
+      // Respawned: stand back up.
+      anim.wasAlive = true;
+      anim.deathT = -1;
+      anim.landed = false;
+      anim.flinchT = 0;
+      group.rotation.x = 0;
+      group.visible = true;
+      anim.last.copy(group.position);
+    }
+    anim.deathY = group.position.y;
+
+    // Stagger from a hit.
+    if (anim.knock) {
+      group.position.addScaledVector(anim.knock, dt * 4);
+      anim.knock.multiplyScalar(Math.max(0, 1 - dt * 9));
+      if (anim.knock.lengthSq() < 0.05) anim.knock = null;
+    }
+
+    // Wound-up strike lands (or misses if the player got away).
+    if (anim.attackT >= 0) {
+      const before = anim.attackT;
+      anim.attackT += dt;
+      if (anim.pending && before < ENEMY_WINDUP && anim.attackT >= ENEMY_WINDUP) {
+        const strike = anim.pending;
+        anim.pending = null;
+        if (group.position.distanceTo(playerMesh.position) <= strike.reach && player.health > 0) {
+          enemyStrikeResolving = true;
+          try { damagePlayer(strike.amount, strike.source); } finally { enemyStrikeResolving = false; }
+          updateHud();
+        } else {
+          createFloatingText(group.position.clone().add(new THREE.Vector3(0, 10, 0)), "Miss", "#cfd8dc");
+        }
+      }
+      if (anim.attackT >= ENEMY_ATTACK_DURATION) anim.attackT = -1;
+    }
+    anim.flinchT = Math.max(0, anim.flinchT - dt);
+
+    // Posing is skipped for enemies too far away to see clearly.
+    const dx = group.position.x - px;
+    const dz = group.position.z - pz;
+    if (dx * dx + dz * dz > 420 * 420) {
+      anim.last.copy(group.position);
+      continue;
+    }
+    const model = group.children[0];
+    const parts = model?.userData?.parts;
+    if (!parts || !parts.leftShin) continue;
+
+    // Walking speed from actual movement (teleports and knockback are ignored).
+    const moved = Math.hypot(group.position.x - anim.last.x, group.position.z - anim.last.z);
+    anim.last.copy(group.position);
+    const speed = moved / dt;
+    const target = speed > 200 ? 0 : speed;
+    anim.speed += (target - anim.speed) * Math.min(1, dt * 10);
+    const stride = THREE.MathUtils.clamp(anim.speed / 30, 0, 1.2);
+    anim.phase += dt * (3 + anim.speed * 0.32);
+
+    const swing = Math.sin(anim.phase) * 0.62 * stride;
+    const breathe = Math.sin(now * 1.6 + i) * 0.03;
+    let lLx = swing;
+    let rLx = -swing;
+    let lS = 0.05 + Math.max(0, -Math.cos(anim.phase)) * 0.95 * stride;
+    let rS = 0.05 + Math.max(0, Math.cos(anim.phase)) * 0.95 * stride;
+    let lAx = -swing * 0.8 + breathe;
+    let rAx = swing * 0.8 - breathe;
+    let lF = -0.2 - stride * 0.5;
+    let rF = -0.2 - stride * 0.5;
+    let rAz = 0.07;
+    let tX = stride * 0.12;
+    let tY = Math.sin(anim.phase) * 0.1 * stride;
+    let hX = 0;
+    let lean = 0;
+
+    if (anim.attackT >= 0) {
+      const t = anim.attackT;
+      let w; // 0 = rest, 1 = fully wound up, then swings through to -1
+      if (t < ENEMY_WINDUP) {
+        const u = t / ENEMY_WINDUP;
+        w = u * u * (3 - 2 * u);
+        rAx = THREE.MathUtils.lerp(rAx, -2.75, w);
+        rF = THREE.MathUtils.lerp(rF, -1.25, w);
+        rAz = THREE.MathUtils.lerp(rAz, 0.25, w);
+        lAx = THREE.MathUtils.lerp(lAx, -0.7, w);
+        lF = THREE.MathUtils.lerp(lF, -1.2, w);
+        tX = THREE.MathUtils.lerp(tX, -0.22, w);
+        tY = THREE.MathUtils.lerp(tY, 0.3, w);
+        lean = -0.08 * w;
+      } else {
+        const u = Math.min(1, (t - ENEMY_WINDUP) / 0.1);
+        const back = THREE.MathUtils.smoothstep(t, ENEMY_WINDUP + 0.16, ENEMY_ATTACK_DURATION);
+        const s = (1 - (1 - u) ** 3) * (1 - back);
+        const hold = 1 - back;
+        rAx = THREE.MathUtils.lerp(rAx, THREE.MathUtils.lerp(-2.75, -0.75, 1 - (1 - u) ** 3), hold);
+        rF = THREE.MathUtils.lerp(rF, THREE.MathUtils.lerp(-1.25, -0.12, u), hold);
+        lAx = THREE.MathUtils.lerp(lAx, 0.35, s);
+        tX = THREE.MathUtils.lerp(tX, 0.38, s);
+        tY = THREE.MathUtils.lerp(tY, -0.35, s);
+        lean = 0.14 * s;
+        lLx -= 0.35 * s;
+        rLx += 0.3 * s;
+      }
+    }
+
+    if (anim.flinchT > 0) {
+      const f = Math.sin((anim.flinchT / 0.3) * Math.PI);
+      tX -= 0.42 * f;
+      hX -= 0.35 * f;
+      lAx -= 0.5 * f;
+      rAx -= 0.3 * f;
+      lean -= 0.14 * f;
+      lS += 0.25 * f;
+      rS += 0.25 * f;
+    }
+
+    parts.leftLeg.rotation.x = lLx;
+    parts.rightLeg.rotation.x = rLx;
+    parts.leftShin.rotation.x = lS;
+    parts.rightShin.rotation.x = rS;
+    parts.leftArm.rotation.x = lAx;
+    parts.rightArm.rotation.x = rAx;
+    parts.rightArm.rotation.z = rAz;
+    parts.leftForearm.rotation.x = lF;
+    parts.rightForearm.rotation.x = rF;
+    parts.torso.rotation.x = tX;
+    parts.torso.rotation.y = tY;
+    parts.head.rotation.x = hX;
+    group.rotation.x = lean;
+    // A little bounce in the step.
+    model.position.y = Math.abs(Math.sin(anim.phase)) * 0.18 * stride;
+  }
+}
+// ── 33-audio-music.js ─ Generated background music, ocean ambience, footsteps and per-weapon hit sounds.
+//
+// Everything is synthesised with Web Audio (no sound files). Music is a small
+// generative arrangement — pad chords, bass and a repeating melody — whose key,
+// tempo and instrument change with the island the player is on, and which slows
+// and softens at night.
+
+const MUSIC_STORAGE_KEY = "sea-legends-music";
+const midiHz = (note) => 440 * 2 ** ((note - 69) / 12);
+
+// scale: semitone offsets; chords: scale degrees for each bar's root.
+const MUSIC_THEMES = {
+  village: { root: 60, scale: [0, 2, 4, 7, 9], chords: [0, 3, 4, 3], tempo: 96, lead: "triangle", density: 0.6 },
+  jungle: { root: 57, scale: [0, 3, 5, 7, 10], chords: [0, 0, 3, 4], tempo: 108, lead: "square", density: 0.7, drum: true },
+  pirate: { root: 62, scale: [0, 2, 3, 7, 8], chords: [0, 4, 3, 4], tempo: 116, lead: "sawtooth", density: 0.65, drum: true },
+  desert: { root: 62, scale: [0, 1, 4, 5, 7, 8], chords: [0, 1, 0, 4], tempo: 84, lead: "triangle", density: 0.5 },
+  snowy: { root: 65, scale: [0, 2, 4, 7, 9, 11], chords: [0, 4, 2, 3], tempo: 72, lead: "sine", density: 0.45, bell: true },
+  sea: { root: 55, scale: [0, 2, 4, 7, 9], chords: [0, 2, 3, 4], tempo: 76, lead: "sine", density: 0.35 },
+};
+const MUSIC_ISLAND_THEMES = ["village", "jungle", "pirate", "desert", "snowy"];
+
+const musicState = {
+  on: true, theme: null, wanted: "village", step: 0, nextTime: 0, motif: [], motifPlays: 0, fade: 0,
+};
+try { musicState.on = localStorage.getItem(MUSIC_STORAGE_KEY) !== "off"; } catch (err) { /* storage unavailable */ }
+
+Object.assign(audio, {
+  musicGain: null,
+  ambienceGain: null,
+  lastHitSound: 0,
+
+  // A short enveloped oscillator note routed to `out`.
+  tone(freq, start, length, type, peak, out, attack = 0.01) {
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.linearRampToValueAtTime(peak, start + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+    osc.connect(gain);
+    gain.connect(out);
+    osc.start(start);
+    osc.stop(start + length + 0.05);
+  },
+
+  noiseBurst(start, length, peak, filterType, freq, out) {
+    const ctx = this.ctx;
+    if (!this.noiseBuffer) {
+      const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buffer;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = this.noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(freq, start);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(peak, start);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(out);
+    source.start(start, Math.random() * 0.8, length + 0.02);
+  },
+
+  // Each weapon lands with its own sound: thud, ring, crack or shimmer.
+  playWeaponHit(weapon) {
+    if (!this.enabled) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (now - this.lastHitSound < 0.05) return;
+    this.lastHitSound = now;
+    const out = ctx.destination;
+    if (weapon === "sword") {
+      this.tone(1760 + Math.random() * 200, now, 0.22, "triangle", 0.12, out, 0.002);
+      this.tone(2640 + Math.random() * 300, now, 0.16, "square", 0.04, out, 0.002);
+      this.noiseBurst(now, 0.06, 0.12, "highpass", 3000, out);
+    } else if (weapon === "gun") {
+      this.noiseBurst(now, 0.09, 0.25, "bandpass", 900, out);
+      this.tone(160, now, 0.1, "sine", 0.18, out, 0.002);
+    } else if (weapon === "special") {
+      this.tone(880, now, 0.3, "sine", 0.12, out);
+      this.tone(1320, now + 0.04, 0.3, "sine", 0.08, out);
+    } else {
+      // Fists and kicks: a low thump with a slap on top.
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(48, now + 0.13);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      osc.connect(gain);
+      gain.connect(out);
+      osc.start(now);
+      osc.stop(now + 0.2);
+      this.noiseBurst(now, 0.05, 0.18, "bandpass", 1400, out);
+    }
+  },
+
+  playFootstep(speed = 30) {
+    if (!this.enabled) return;
+    const now = this.ctx.currentTime;
+    const level = THREE.MathUtils.clamp(0.035 + speed / 2000, 0.035, 0.09);
+    this.noiseBurst(now, 0.07, level, "lowpass", 420 + Math.random() * 260, this.ctx.destination);
+  },
+
+  ensureBuses() {
+    if (this.musicGain || !this.enabled) return;
+    const ctx = this.ctx;
+    this.musicGain = ctx.createGain();
+    this.musicGain.gain.value = 0;
+    this.musicGain.connect(ctx.destination);
+    // Ocean: looping low noise whose level follows how close the shore is.
+    this.ambienceGain = ctx.createGain();
+    this.ambienceGain.gain.value = 0;
+    const seconds = 4;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      last = (last + (Math.random() * 2 - 1) * 0.04) / 1.02; // brown-ish noise
+      data[i] = last * 6;
+    }
+    // Blend the ends so the loop has no click.
+    const blend = Math.floor(ctx.sampleRate * 0.25);
+    for (let i = 0; i < blend; i += 1) {
+      const f = i / blend;
+      data[data.length - blend + i] = data[data.length - blend + i] * (1 - f) + data[i] * f;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 700;
+    source.connect(filter);
+    filter.connect(this.ambienceGain);
+    this.ambienceGain.connect(ctx.destination);
+    source.start();
+  },
+});
+
+function setMusicEnabled(on) {
+  musicState.on = !!on;
+  try { localStorage.setItem(MUSIC_STORAGE_KEY, on ? "on" : "off"); } catch (err) { /* storage unavailable */ }
+}
+
+function newMusicMotif(theme) {
+  // A two-bar melody (16 eighth-notes) as scale steps; null is a rest.
+  const motif = [];
+  let step = Math.floor(Math.random() * 3) + 2;
+  for (let i = 0; i < 16; i += 1) {
+    const strong = i % 4 === 0;
+    if (Math.random() > (strong ? Math.min(1, theme.density + 0.3) : theme.density)) {
+      motif.push(null);
+      continue;
+    }
+    step += Math.floor(Math.random() * 5) - 2;
+    step = THREE.MathUtils.clamp(step, 0, theme.scale.length * 2 - 1);
+    motif.push(step);
+  }
+  motif[0] = motif[0] ?? 2;
+  return motif;
+}
+
+function scaleNote(theme, step, octave = 0) {
+  const n = theme.scale.length;
+  return theme.root + theme.scale[((step % n) + n) % n] + 12 * (Math.floor(step / n) + octave);
+}
+
+// Schedules notes a little ahead of the audio clock. Called every frame.
+function updateMusic(dt) {
+  if (!audio.enabled || !audio.ctx) return;
+  audio.ensureBuses();
+  const ctx = audio.ctx;
+  const now = ctx.currentTime;
+  const island = typeof getIslandUnderPlayer === "function" && playerMesh ? getIslandUnderPlayer() : null;
+  const night = typeof dayCycle !== "undefined" && DAY_CYCLE.phases[dayCycle.phase].name === "night";
+
+  // Ocean ambience: loud at sea and on the beach, quiet inland.
+  let shore = 1;
+  if (island) {
+    const d = Math.hypot(playerMesh.position.x - island.position.x, playerMesh.position.z - island.position.z) / island.radius;
+    shore = THREE.MathUtils.clamp((d - 0.35) / 0.55, 0, 1) ** 2;
+  }
+  const swell = 0.75 + Math.sin(now * 0.45) * 0.25;
+  audio.ambienceGain.gain.setTargetAtTime(gameStarted ? (0.05 + shore * 0.3) * swell : 0, now, 0.4);
+
+  musicState.wanted = island ? MUSIC_ISLAND_THEMES[island.index] || "sea" : "sea";
+  const playing = musicState.on && gameStarted && player.health > 0;
+  // Cross-fade: fade out, swap theme, fade back in.
+  const changing = musicState.theme !== musicState.wanted;
+  const targetFade = playing && !changing ? 1 : 0;
+  musicState.fade += THREE.MathUtils.clamp(targetFade - musicState.fade, -dt / 1.2, dt / 1.5);
+  audio.musicGain.gain.setTargetAtTime(musicState.fade * (night ? 0.55 : 0.8), now, 0.1);
+  if (changing && musicState.fade <= 0.02) {
+    musicState.theme = musicState.wanted;
+    musicState.step = 0;
+    musicState.motif = [];
+    musicState.nextTime = now + 0.1;
+  }
+  if (!playing || !musicState.theme) return;
+
+  const theme = MUSIC_THEMES[musicState.theme];
+  const eighth = 60 / (theme.tempo * (night ? 0.85 : 1)) / 2;
+  if (musicState.nextTime < now) musicState.nextTime = now + 0.05;
+  const out = audio.musicGain;
+  while (musicState.nextTime < now + 0.3) {
+    const t = musicState.nextTime;
+    const step = musicState.step;
+    const inBar = step % 8;
+    const bar = Math.floor(step / 8) % theme.chords.length;
+    const chordRoot = theme.chords[bar];
+    if (step % 16 === 0) {
+      // Repeat each melody a few times so it sounds intentional, then vary it.
+      if (!musicState.motif.length || musicState.motifPlays >= 3) {
+        musicState.motif = newMusicMotif(theme);
+        musicState.motifPlays = 0;
+      }
+      musicState.motifPlays += 1;
+    }
+    if (inBar === 0) {
+      // Pad chord for the bar.
+      [0, 2, 4].forEach((third) => {
+        audio.tone(midiHz(scaleNote(theme, chordRoot + third, -1)), t, eighth * 8.2, "sine", 0.05, out, eighth * 1.5);
+      });
+    }
+    if (inBar === 0 || inBar === 4) {
+      audio.tone(midiHz(scaleNote(theme, chordRoot, -2)), t, eighth * 3, "triangle", 0.13, out, 0.02);
+    }
+    const note = musicState.motif[step % 16];
+    if (note !== null && note !== undefined) {
+      const freq = midiHz(scaleNote(theme, note + chordRoot, 0));
+      const peak = theme.lead === "sine" || theme.lead === "triangle" ? 0.1 : 0.045;
+      audio.tone(freq, t, eighth * (theme.bell ? 3.5 : 1.6), theme.lead, peak, out, 0.012);
+      if (theme.bell) audio.tone(freq * 2, t, eighth * 2.5, "sine", 0.03, out, 0.005);
+    }
+    if (theme.drum && !night) {
+      if (inBar % 2 === 0) audio.noiseBurst(t, 0.05, inBar === 0 ? 0.08 : 0.04, "highpass", 5000, out);
+      if (inBar === 0 || inBar === 3 || inBar === 6) audio.tone(90, t, 0.14, "sine", 0.16, out, 0.004);
+    }
+    musicState.step += 1;
+    musicState.nextTime += eighth;
+  }
+}
+
+// "Music" switch in the menu.
+const musicToggle = document.querySelector("#music-toggle");
+if (musicToggle) {
+  musicToggle.checked = musicState.on;
+  musicToggle.addEventListener("change", () => setMusicEnabled(musicToggle.checked));
+}
+// ── 34-world-queries.js ─ Line-of-sight checks against walls and terrain (camera, bullets, aiming).
+
+// Walls registered without a height are treated as this tall for sight lines,
+// so a camera looking down over a rooftop isn't counted as blocked.
+const SIGHT_WALL_HEIGHT = 34;
+const sightContact = { depth: 0, nx: 0, nz: 0 };
+const sightProbe = new THREE.Vector3();
+const sightCache = { list: [], x: Infinity, z: Infinity, time: -1 };
+
+// Collision volumes near the player, refreshed a few times a second.
+function nearbySightVolumes() {
+  const now = performance.now();
+  const p = playerMesh.position;
+  if (now - sightCache.time < 300 && Math.hypot(p.x - sightCache.x, p.z - sightCache.z) < 40) return sightCache.list;
+  sightCache.time = now;
+  sightCache.x = p.x;
+  sightCache.z = p.z;
+  const reach = 280;
+  sightCache.list = collisionVolumes.filter((v) => {
+    const dx = v.center.x - p.x;
+    const dz = v.center.z - p.z;
+    const r = reach + v.bound;
+    return dx * dx + dz * dz < r * r;
+  });
+  return sightCache.list;
+}
+
+// Is this point inside a wall/tree/rock? minSize skips thin obstacles (posts, saplings).
+function sightBlockedAt(x, y, z, pad, minSize) {
+  const volumes = nearbySightVolumes();
+  sightProbe.set(x, y, z);
+  for (let i = 0; i < volumes.length; i += 1) {
+    const v = volumes[i];
+    if (v.bound < minSize) continue;
+    const top = v.center.y + (v.height === Infinity ? SIGHT_WALL_HEIGHT : v.height);
+    if (y >= top || y < v.center.y - 6) continue;
+    if (measureCollision(v, sightProbe, pad, sightContact)) return true;
+  }
+  return false;
+}
+
+// How far (0..1) along from -> to the view stays clear of big obstacles.
+function clearSightFraction(from, to, steps = 14) {
+  for (let i = 1; i <= steps; i += 1) {
+    const f = i / steps;
+    if (sightBlockedAt(
+      from.x + (to.x - from.x) * f,
+      from.y + (to.y - from.y) * f,
+      from.z + (to.z - from.z) * f,
+      1.2, 5,
+    )) return (i - 1) / steps;
+  }
+  return 1;
+}
+
+// First point where a shot from -> to hits a wall, or null if the path is clear.
+function firstWallHit(from, to) {
+  const length = from.distanceTo(to);
+  const steps = Math.max(1, Math.ceil(length / 1.5));
+  for (let i = 1; i <= steps; i += 1) {
+    const f = i / steps;
+    const x = from.x + (to.x - from.x) * f;
+    const y = from.y + (to.y - from.y) * f;
+    const z = from.z + (to.z - from.z) * f;
+    if (sightBlockedAt(x, y, z, 0.3, 0)) {
+      const back = Math.max(0, f - 1 / steps);
+      return new THREE.Vector3(from.x + (to.x - from.x) * back, from.y + (to.y - from.y) * back, from.z + (to.z - from.z) * back);
+    }
+  }
+  return null;
+}
+
+function groundHeightAt(x, z) {
+  for (let i = 0; i < islands.length; i += 1) {
+    const isl = islands[i];
+    const dx = x - isl.position.x;
+    const dz = z - isl.position.z;
+    if (dx * dx + dz * dz <= isl.radius * isl.radius) {
+      return Math.max(OCEAN_SURFACE_Y, getIslandSurfaceHeightAt(x, z, isl));
+    }
+  }
+  return OCEAN_SURFACE_Y;
+}
+
+// Where a ray meets the ground or sea, following hills and slopes. Null if it never does.
+function raycastTerrain(ray, maxDistance = 700) {
+  const step = 4;
+  let prev = 0;
+  for (let t = step; t <= maxDistance; t += step) {
+    const x = ray.origin.x + ray.direction.x * t;
+    const y = ray.origin.y + ray.direction.y * t;
+    const z = ray.origin.z + ray.direction.z * t;
+    if (y <= groundHeightAt(x, z)) {
+      // Narrow down between the last clear step and this one.
+      let lo = prev;
+      let hi = t;
+      for (let i = 0; i < 6; i += 1) {
+        const mid = (lo + hi) / 2;
+        const my = ray.origin.y + ray.direction.y * mid;
+        if (my <= groundHeightAt(ray.origin.x + ray.direction.x * mid, ray.origin.z + ray.direction.z * mid)) hi = mid;
+        else lo = mid;
+      }
+      return ray.at(hi, new THREE.Vector3());
+    }
+    prev = t;
+  }
+  return null;
+}
+
+// Camera pull-in: 1 = full distance, smaller when a wall is between the camera and the player.
+let cameraClearFrac = 1;
+function updateCameraObstruction(pivot, desired) {
+  const clear = Math.max(0.16, clearSightFraction(pivot, desired) - 0.04);
+  // Pull in quickly so the wall never covers the player; ease back out slowly.
+  cameraClearFrac += (Math.min(1, clear) - cameraClearFrac) * (clear < cameraClearFrac ? 0.5 : 0.06);
+  return cameraClearFrac;
+}
+// ── 35-tutorial.js ─ First-minute guidance for new players.
+//
+// A small card walks a new player through moving, looking, jumping, attacking
+// and picking up the first quest. Each step completes itself when the player
+// does the thing. It shows once per browser and can be skipped.
+
+const TUTORIAL_STORAGE_KEY = "sea-legends-tutorial-done";
+const tutorialTouch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+const TUTORIAL_STEPS = [
+  {
+    text: tutorialTouch ? "Use the arrow pad to walk around." : "Walk around with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.",
+    start: (s) => { s.from = playerMesh.position.clone(); s.walked = 0; },
+    done: (s) => {
+      s.walked += Math.min(20, playerMesh.position.distanceTo(s.from));
+      s.from.copy(playerMesh.position);
+      return s.walked > 60;
+    },
+  },
+  {
+    text: tutorialTouch ? "Drag on the screen to look around." : "Hold <kbd>Right Click</kbd> and drag to look around.",
+    start: (s) => { s.yaw = cameraYaw; s.turned = 0; },
+    done: (s) => {
+      s.turned += Math.abs(cameraYaw - s.yaw);
+      s.yaw = cameraYaw;
+      return s.turned > 0.6;
+    },
+  },
+  {
+    text: tutorialTouch ? "Tap <kbd>Jump</kbd> to jump." : "Press <kbd>Space</kbd> to jump. Hold <kbd>Shift</kbd> to sprint.",
+    done: () => !isGrounded,
+  },
+  {
+    text: tutorialTouch ? "Tap <kbd>Attack</kbd> to throw a punch. Keep tapping to chain a combo." : "<kbd>Left Click</kbd> to attack. Keep clicking to chain a combo.",
+    done: () => attackCooldown > 0,
+  },
+  {
+    text: tutorialTouch
+      ? "Follow the compass at the top to the quest giver and tap <kbd>Interact</kbd>."
+      : "Follow the compass at the top to the quest giver and press <kbd>E</kbd>.",
+    done: () => quest.active || quest.complete,
+  },
+  {
+    text: tutorialTouch
+      ? "Defeat 5 bandits to finish your first quest. Watch for the red flash before an enemy strikes and step away."
+      : "Defeat 5 bandits to finish your first quest. Watch for the red flash before an enemy strikes, and step away or block with <kbd>F</kbd>.",
+    start: (s) => { s.time = 0; },
+    done: (s, dt) => { s.time += dt; return s.time > 9; },
+  },
+];
+
+const tutorialState = { index: -1, finished: false, card: null, scratch: {}, hold: 0 };
+try { tutorialState.finished = localStorage.getItem(TUTORIAL_STORAGE_KEY) === "1"; } catch (err) { /* storage unavailable */ }
+
+function finishTutorial() {
+  tutorialState.finished = true;
+  tutorialState.card?.remove();
+  tutorialState.card = null;
+  try { localStorage.setItem(TUTORIAL_STORAGE_KEY, "1"); } catch (err) { /* storage unavailable */ }
+}
+
+function showTutorialStep(index) {
+  tutorialState.index = index;
+  tutorialState.scratch = {};
+  const step = TUTORIAL_STEPS[index];
+  step.start?.(tutorialState.scratch);
+  if (!tutorialState.card) {
+    const card = document.createElement("div");
+    card.id = "tutorial-card";
+    card.className = "tutorial-card";
+    card.innerHTML = '<div class="tutorial-count"></div><p class="tutorial-text"></p><button type="button" class="tutorial-skip">Skip tutorial</button>';
+    card.querySelector(".tutorial-skip").addEventListener("click", finishTutorial);
+    (document.querySelector("#hud") || document.body).append(card);
+    tutorialState.card = card;
+  }
+  tutorialState.card.querySelector(".tutorial-count").textContent = `Getting started ${index + 1}/${TUTORIAL_STEPS.length}`;
+  tutorialState.card.querySelector(".tutorial-text").innerHTML = tr(step.text);
+  tutorialState.card.classList.remove("tutorial-done");
+}
+
+// Re-shows the current step after the language changes (36-i18n.js).
+function refreshTutorialText() {
+  if (!tutorialState.card || tutorialState.index < 0) return;
+  tutorialState.card.querySelector(".tutorial-text").innerHTML = tr(TUTORIAL_STEPS[tutorialState.index].text);
+}
+
+function updateTutorial(dt) {
+  if (tutorialState.finished || !playerMesh) return;
+  if (tutorialState.index < 0) {
+    // Only brand-new characters get the tutorial.
+    if (player.level > 1 || quest.complete || quest.active) { finishTutorial(); return; }
+    showTutorialStep(0);
+    return;
+  }
+  if (tutorialState.hold > 0) {
+    // Brief "done" tick before the next step appears.
+    tutorialState.hold -= dt;
+    if (tutorialState.hold <= 0) {
+      if (tutorialState.index + 1 >= TUTORIAL_STEPS.length) finishTutorial();
+      else showTutorialStep(tutorialState.index + 1);
+    }
+    return;
+  }
+  if (TUTORIAL_STEPS[tutorialState.index].done(tutorialState.scratch, dt)) {
+    tutorialState.card?.classList.add("tutorial-done");
+    tutorialState.hold = 0.7;
+  }
+}
+// ── 36-i18n.js ─ Game language switching (English, Hindi, Spanish, French, Portuguese).
+//
+// The game's code writes English text into the page as usual. This module
+// watches the page and swaps each piece of interface text for its translation,
+// so no gameplay code has to change. Text it has no translation for (the event
+// log, for example) stays in English. The choice is saved in this browser.
+
+const I18N_LANGS = ["en", "hi", "es", "fr", "pt"];
+const I18N_STORAGE_KEY = "sea-legends-language";
+
+// [English, हिन्दी, Español, Français, Português]
+const I18N_ROWS = [
+  // Loading screen and errors
+  ["A free 3D pirate adventure", "एक मुफ़्त 3D समुद्री डाकू एडवेंचर", "Una aventura pirata en 3D gratuita", "Une aventure pirate 3D gratuite", "Uma aventura pirata 3D gratuita"],
+  ["Explore the First Sea, master your weapons and take on its bosses.", "पहले समुद्र की खोज करें, अपने हथियारों में महारत हासिल करें और उसके बॉस से लड़ें।", "Explora el Primer Mar, domina tus armas y enfréntate a sus jefes.", "Explorez la Première Mer, maîtrisez vos armes et affrontez ses boss.", "Explore o Primeiro Mar, domine suas armas e enfrente seus chefes."],
+  ["Loading Sea Legends…", "Sea Legends लोड हो रहा है…", "Cargando Sea Legends…", "Chargement de Sea Legends…", "Carregando Sea Legends…"],
+  ["Play", "खेलें", "Jugar", "Jouer", "Jogar"],
+  ["Language", "भाषा", "Idioma", "Langue", "Idioma"],
+  ["Sound", "आवाज़", "Sonido", "Son", "Som"],
+  ["Trailer sound", "ट्रेलर की आवाज़", "Sonido del tráiler", "Son de la bande-annonce", "Som do trailer"],
+  ["Home", "होम", "Inicio", "Accueil", "Início"],
+  ["About", "हमारे बारे में", "Acerca de", "À propos", "Sobre"],
+  ["Game Guide", "गेम गाइड", "Guía del juego", "Guide du jeu", "Guia do jogo"],
+  ["Contact", "संपर्क", "Contacto", "Contact", "Contato"],
+  ["Terms & Conditions", "नियम और शर्तें", "Términos y condiciones", "Conditions générales", "Termos e condições"],
+  ["Privacy Policy", "गोपनीयता नीति", "Política de privacidad", "Politique de confidentialité", "Política de privacidade"],
+  ["Disclaimer", "अस्वीकरण", "Aviso legal", "Avertissement", "Aviso legal"],
+  ["Sea Legends could not start", "Sea Legends शुरू नहीं हो सका", "Sea Legends no pudo iniciarse", "Sea Legends n'a pas pu démarrer", "Sea Legends não pôde iniciar"],
+  ["Check your connection and browser graphics support, then try again.", "अपना इंटरनेट कनेक्शन और ब्राउज़र का ग्राफ़िक्स सपोर्ट जाँचें, फिर दोबारा कोशिश करें।", "Revisa tu conexión y la compatibilidad gráfica del navegador, y vuelve a intentarlo.", "Vérifiez votre connexion et la prise en charge graphique du navigateur, puis réessayez.", "Verifique sua conexão e o suporte gráfico do navegador e tente novamente."],
+  ["Reload game", "गेम दोबारा लोड करें", "Recargar el juego", "Recharger le jeu", "Recarregar o jogo"],
+
+  // Touch controls
+  ["Attack", "हमला", "Atacar", "Attaquer", "Atacar"],
+  ["Jump", "कूदें", "Saltar", "Sauter", "Pular"],
+  ["Interact", "बातचीत", "Interactuar", "Interagir", "Interagir"],
+  ["Touch game controls", "टच कंट्रोल", "Controles táctiles", "Commandes tactiles", "Controles de toque"],
+  ["Movement", "चलना", "Movimiento", "Déplacement", "Movimento"],
+  ["Move forward", "आगे चलें", "Avanzar", "Avancer", "Avançar"],
+  ["Move left", "बाएँ चलें", "Moverse a la izquierda", "Aller à gauche", "Mover para a esquerda"],
+  ["Move backward", "पीछे चलें", "Retroceder", "Reculer", "Recuar"],
+  ["Move right", "दाएँ चलें", "Moverse a la derecha", "Aller à droite", "Mover para a direita"],
+  ["Actions", "एक्शन", "Acciones", "Actions", "Ações"],
+  ["Select weapon", "हथियार चुनें", "Elegir arma", "Choisir une arme", "Escolher arma"],
+  ["Select melee", "मुक्के चुनें", "Elegir puños", "Choisir les poings", "Escolher punhos"],
+  ["Select sword", "तलवार चुनें", "Elegir espada", "Choisir l'épée", "Escolher espada"],
+  ["Select gun", "बंदूक चुनें", "Elegir pistola", "Choisir le pistolet", "Escolher pistola"],
+  ["Select special weapon", "स्पेशल हथियार चुनें", "Elegir arma especial", "Choisir l'arme spéciale", "Escolher arma especial"],
+
+  // Profiles
+  ["Local game profile", "लोकल गेम प्रोफ़ाइल", "Perfil de juego local", "Profil de jeu local", "Perfil de jogo local"],
+  ["Choose your profile", "अपनी प्रोफ़ाइल चुनें", "Elige tu perfil", "Choisissez votre profil", "Escolha seu perfil"],
+  ["Create or choose a local profile to resume your adventure on this browser.", "इस ब्राउज़र पर अपना एडवेंचर जारी रखने के लिए लोकल प्रोफ़ाइल बनाएँ या चुनें।", "Crea o elige un perfil local para continuar tu aventura en este navegador.", "Créez ou choisissez un profil local pour reprendre votre aventure dans ce navigateur.", "Crie ou escolha um perfil local para continuar sua aventura neste navegador."],
+  ["This is not an account or sign-in service. Profile names and game progress are stored in this browser only.", "यह कोई अकाउंट या साइन-इन सेवा नहीं है। प्रोफ़ाइल के नाम और गेम की प्रगति सिर्फ़ इसी ब्राउज़र में सेव होती है।", "Esto no es una cuenta ni un servicio de inicio de sesión. Los nombres de perfil y el progreso solo se guardan en este navegador.", "Ce n'est ni un compte ni un service de connexion. Les noms de profil et la progression sont enregistrés uniquement dans ce navigateur.", "Isto não é uma conta nem um serviço de login. Os nomes de perfil e o progresso ficam salvos apenas neste navegador."],
+  ["Saved on this browser", "इस ब्राउज़र में सेव", "Guardado en este navegador", "Enregistré dans ce navigateur", "Salvo neste navegador"],
+  ["Profile name", "प्रोफ़ाइल का नाम", "Nombre del perfil", "Nom du profil", "Nome do perfil"],
+  ["Continue adventure", "एडवेंचर जारी रखें", "Continuar aventura", "Continuer l'aventure", "Continuar aventura"],
+  ["New here?", "पहली बार आए हैं?", "¿Eres nuevo?", "Nouveau ici ?", "É novo aqui?"],
+  ["Create a profile", "प्रोफ़ाइल बनाएँ", "Crear un perfil", "Créer un profil", "Criar um perfil"],
+  ["New profile name", "नई प्रोफ़ाइल का नाम", "Nombre del nuevo perfil", "Nom du nouveau profil", "Nome do novo perfil"],
+  ["Create profile & play", "प्रोफ़ाइल बनाएँ और खेलें", "Crear perfil y jugar", "Créer le profil et jouer", "Criar perfil e jogar"],
+  ["Back to profiles", "प्रोफ़ाइल पर वापस", "Volver a los perfiles", "Retour aux profils", "Voltar aos perfis"],
+  ["Local profiles cannot be recovered or transferred. They are stored only in this browser. No email or SMS verification is available.", "लोकल प्रोफ़ाइल न तो वापस मिल सकती हैं, न ट्रांसफ़र हो सकती हैं। ये सिर्फ़ इसी ब्राउज़र में रहती हैं। ईमेल या SMS से पुष्टि उपलब्ध नहीं है।", "Los perfiles locales no se pueden recuperar ni transferir. Solo se guardan en este navegador. No hay verificación por correo ni SMS.", "Les profils locaux ne peuvent être ni récupérés ni transférés. Ils sont stockés uniquement dans ce navigateur. Aucune vérification par e-mail ou SMS n'est disponible.", "Perfis locais não podem ser recuperados nem transferidos. Eles ficam apenas neste navegador. Não há verificação por e-mail ou SMS."],
+  ["Read the game guide", "गेम गाइड पढ़ें", "Leer la guía del juego", "Lire le guide du jeu", "Ler o guia do jogo"],
+  ["no profile needed", "प्रोफ़ाइल की ज़रूरत नहीं", "no se necesita perfil", "aucun profil requis", "sem perfil necessário"],
+  ["Enter profile name", "प्रोफ़ाइल का नाम लिखें", "Escribe el nombre del perfil", "Saisissez le nom du profil", "Digite o nome do perfil"],
+  ["Pick a name (not your real name)", "कोई नाम चुनें (अपना असली नाम नहीं)", "Elige un nombre (no tu nombre real)", "Choisissez un nom (pas votre vrai nom)", "Escolha um nome (não o seu nome real)"],
+
+  // Start screen and avatar
+  ["Choose Your Path", "अपना रास्ता चुनें", "Elige tu camino", "Choisissez votre voie", "Escolha seu caminho"],
+  ["Sail the seas, clear islands, master weapons, and uncover a special ability questline.", "समुद्र में सफ़र करें, द्वीप जीतें, हथियारों में महारत पाएँ और स्पेशल एबिलिटी की क्वेस्ट खोजें।", "Navega los mares, conquista islas, domina armas y descubre una misión de habilidad especial.", "Naviguez sur les mers, libérez les îles, maîtrisez les armes et découvrez une quête de capacité spéciale.", "Navegue pelos mares, conquiste ilhas, domine armas e descubra uma missão de habilidade especial."],
+  ["Avatar Studio", "अवतार स्टूडियो", "Estudio de avatar", "Studio d'avatar", "Estúdio de avatar"],
+  ["Choose, preview, edit, create, or delete your human avatar.", "अपना अवतार चुनें, देखें, बदलें, बनाएँ या हटाएँ।", "Elige, previsualiza, edita, crea o elimina tu avatar.", "Choisissez, prévisualisez, modifiez, créez ou supprimez votre avatar.", "Escolha, visualize, edite, crie ou exclua seu avatar."],
+  ["Open 3D Studio", "3D स्टूडियो खोलें", "Abrir estudio 3D", "Ouvrir le studio 3D", "Abrir estúdio 3D"],
+  ["Preview Avatar", "अवतार देखें", "Vista previa del avatar", "Aperçu de l'avatar", "Pré-visualizar avatar"],
+  ["Saved Avatars", "सेव किए गए अवतार", "Avatares guardados", "Avatars enregistrés", "Avatares salvos"],
+  ["Live preview", "लाइव प्रीव्यू", "Vista previa en vivo", "Aperçu en direct", "Pré-visualização ao vivo"],
+  ["Balanced bulk.", "संतुलित शरीर।", "Complexión equilibrada.", "Carrure équilibrée.", "Porte equilibrado."],
+  ["Customize", "कस्टमाइज़ करें", "Personalizar", "Personnaliser", "Personalizar"],
+  ["Skin", "त्वचा", "Piel", "Peau", "Pele"],
+  ["Shirt", "शर्ट", "Camisa", "Chemise", "Camisa"],
+  ["Pants", "पैंट", "Pantalones", "Pantalon", "Calça"],
+  ["Hair", "बाल", "Pelo", "Cheveux", "Cabelo"],
+  ["Eyes", "आँखें", "Ojos", "Yeux", "Olhos"],
+  ["Boots", "जूते", "Botas", "Bottes", "Botas"],
+  ["Hair Style", "हेयरस्टाइल", "Peinado", "Coiffure", "Penteado"],
+  ["Short", "छोटे", "Corto", "Courts", "Curto"],
+  ["Spiky", "नुकीले", "De punta", "En pics", "Espetado"],
+  ["Captain Cap", "कप्तान टोपी", "Gorra de capitán", "Casquette de capitaine", "Boné de capitão"],
+  ["Messy", "बिखरे", "Despeinado", "En bataille", "Bagunçado"],
+  ["Outfit", "पोशाक", "Atuendo", "Tenue", "Roupa"],
+  ["Sailor", "नाविक", "Marinero", "Marin", "Marinheiro"],
+  ["Long Coat", "लंबा कोट", "Abrigo largo", "Long manteau", "Casaco longo"],
+  ["Light Armor", "हल्का कवच", "Armadura ligera", "Armure légère", "Armadura leve"],
+  ["Adventurer Vest", "एडवेंचरर जैकेट", "Chaleco de aventurero", "Gilet d'aventurier", "Colete de aventureiro"],
+  ["Height", "लंबाई", "Altura", "Taille", "Altura"],
+  ["Bulk", "शरीर", "Complexión", "Carrure", "Porte"],
+  ["Save Changes", "बदलाव सेव करें", "Guardar cambios", "Enregistrer", "Salvar alterações"],
+  ["Create New", "नया बनाएँ", "Crear nuevo", "Créer", "Criar novo"],
+  ["Delete Selected", "चुना हुआ हटाएँ", "Eliminar seleccionado", "Supprimer la sélection", "Excluir selecionado"],
+  ["Choose Your Side", "अपना पक्ष चुनें", "Elige tu bando", "Choisissez votre camp", "Escolha seu lado"],
+  ["Pirates", "समुद्री डाकू", "Piratas", "Pirates", "Piratas"],
+  ["Earn extra money from quests.", "क्वेस्ट से ज़्यादा पैसे कमाएँ।", "Gana más dinero con las misiones.", "Gagnez plus d'argent avec les quêtes.", "Ganhe mais dinheiro com missões."],
+  ["Marines", "मरीन", "Marines", "Marines", "Fuzileiros"],
+  ["Gain bonus defense from training.", "ट्रेनिंग से अतिरिक्त डिफ़ेंस पाएँ।", "Obtén defensa extra por el entrenamiento.", "Gagnez une défense bonus grâce à l'entraînement.", "Ganhe defesa extra com o treinamento."],
+  ["Neutral", "तटस्थ", "Neutral", "Neutre", "Neutro"],
+  ["No allegiance. Balanced progression.", "किसी का पक्ष नहीं। संतुलित प्रगति।", "Sin lealtades. Progreso equilibrado.", "Aucune allégeance. Progression équilibrée.", "Sem lealdade. Progressão equilibrada."],
+
+  // HUD and top bar
+  ["Stats", "आँकड़े", "Estadísticas", "Stats", "Atributos"],
+  ["Inventory", "इन्वेंटरी", "Inventario", "Inventaire", "Inventário"],
+  ["Shop", "दुकान", "Tienda", "Boutique", "Loja"],
+  ["Studio", "स्टूडियो", "Estudio", "Studio", "Estúdio"],
+  ["Close", "बंद करें", "Cerrar", "Fermer", "Fechar"],
+  ["Health", "हेल्थ", "Salud", "Santé", "Vida"],
+  ["Energy", "ऊर्जा", "Energía", "Énergie", "Energia"],
+  ["Game Settings", "गेम सेटिंग्स", "Ajustes del juego", "Paramètres du jeu", "Configurações do jogo"],
+  ["Teleport ready", "टेलीपोर्ट तैयार", "Teletransporte listo", "Téléportation prête", "Teleporte pronto"],
+  ["Teleported home", "घर टेलीपोर्ट हुए", "Teletransportado a casa", "Téléporté à la maison", "Teleportado para casa"],
+  ["Multiplayer offline", "मल्टीप्लेयर ऑफ़लाइन", "Multijugador sin conexión", "Multijoueur hors ligne", "Multijogador offline"],
+  ["Multiplayer not configured", "मल्टीप्लेयर सेट नहीं है", "Multijugador no configurado", "Multijoueur non configuré", "Multijogador não configurado"],
+  ["Servers offline", "सर्वर ऑफ़लाइन", "Servidores sin conexión", "Serveurs hors ligne", "Servidores offline"],
+  ["Servers offline · retrying", "सर्वर ऑफ़लाइन · फिर कोशिश", "Servidores sin conexión · reintentando", "Serveurs hors ligne · nouvel essai", "Servidores offline · tentando de novo"],
+  ["Disconnected · reconnecting", "डिस्कनेक्ट · फिर जुड़ रहे हैं", "Desconectado · reconectando", "Déconnecté · reconnexion", "Desconectado · reconectando"],
+  ["Servers", "सर्वर", "Servidores", "Serveurs", "Servidores"],
+  ["Controls", "कंट्रोल", "Controles", "Commandes", "Controles"],
+  ["Quest", "क्वेस्ट", "Misión", "Quête", "Missão"],
+  ["Music", "संगीत", "Música", "Musique", "Música"],
+  ["Log Out", "लॉग आउट", "Salir", "Déconnexion", "Sair"],
+  ["World servers", "वर्ल्ड सर्वर", "Servidores del mundo", "Serveurs du monde", "Servidores do mundo"],
+  ["Up to 10 players in each server.", "हर सर्वर में 10 खिलाड़ी तक।", "Hasta 10 jugadores por servidor.", "Jusqu'à 10 joueurs par serveur.", "Até 10 jogadores por servidor."],
+  ["Connect to browse available servers.", "उपलब्ध सर्वर देखने के लिए कनेक्ट करें।", "Conéctate para ver los servidores disponibles.", "Connectez-vous pour parcourir les serveurs disponibles.", "Conecte-se para ver os servidores disponíveis."],
+  ["Find an open server", "खाली सर्वर ढूँढें", "Buscar un servidor libre", "Trouver un serveur libre", "Encontrar um servidor livre"],
+  ["Close server browser", "सर्वर सूची बंद करें", "Cerrar lista de servidores", "Fermer la liste des serveurs", "Fechar lista de servidores"],
+  ["Time until the next part of the day", "दिन के अगले हिस्से तक का समय", "Tiempo hasta la siguiente parte del día", "Temps avant la prochaine partie de la journée", "Tempo até a próxima parte do dia"],
+  ["Day", "दिन", "Día", "Jour", "Dia"],
+  ["Sunset", "सूर्यास्त", "Atardecer", "Coucher du soleil", "Pôr do sol"],
+  ["Night", "रात", "Noche", "Nuit", "Noite"],
+  ["Sunrise", "सूर्योदय", "Amanecer", "Lever du soleil", "Nascer do sol"],
+
+  // Quests
+  ["Find the Quest Giver", "क्वेस्ट देने वाले को ढूँढें", "Encuentra al dador de misiones", "Trouvez le donneur de quêtes", "Encontre quem dá as missões"],
+  ["Walk to the gold marker on Starter Island and press E.", "स्टार्टर द्वीप पर सुनहरे निशान तक जाएँ और E दबाएँ।", "Ve al marcador dorado de la Isla Inicial y pulsa E.", "Allez au marqueur doré sur l'Île de départ et appuyez sur E.", "Vá até o marcador dourado na Ilha Inicial e aperte E."],
+  ["Walk to the gold Quest NPC on Starter Island and press E.", "स्टार्टर द्वीप पर सुनहरे क्वेस्ट NPC तक जाएँ और E दबाएँ।", "Ve al PNJ dorado de misiones en la Isla Inicial y pulsa E.", "Allez voir le PNJ doré des quêtes sur l'Île de départ et appuyez sur E.", "Vá até o NPC dourado de missões na Ilha Inicial e aperte E."],
+  ["Starter Island Cleared", "स्टार्टर द्वीप साफ़", "Isla Inicial despejada", "Île de départ libérée", "Ilha Inicial liberada"],
+  ["Quest Board", "क्वेस्ट बोर्ड", "Tablón de misiones", "Tableau des quêtes", "Quadro de missões"],
+  ["Choose a quest.", "एक क्वेस्ट चुनें।", "Elige una misión.", "Choisissez une quête.", "Escolha uma missão."],
+  ["Decline", "मना करें", "Rechazar", "Refuser", "Recusar"],
+  ["Bandit Trouble", "डाकुओं की मुसीबत", "Problemas con bandidos", "Ennuis de bandits", "Encrenca com bandidos"],
+  ["Defeat 5 starter bandits.", "5 डाकुओं को हराएँ।", "Derrota a 5 bandidos.", "Battez 5 bandits.", "Derrote 5 bandidos."],
+  ["Monkey Mischief", "बंदरों की शरारत", "Travesuras de monos", "Bêtises de singes", "Travessura dos macacos"],
+  ["Defeat 5 jungle monkeys.", "जंगल के 5 बंदरों को हराएँ।", "Derrota a 5 monos de la selva.", "Battez 5 singes de la jungle.", "Derrote 5 macacos da selva."],
+  ["Gorilla Strength", "गोरिल्ला की ताकत", "Fuerza de gorila", "Force de gorille", "Força de gorila"],
+  ["Defeat 5 wild gorillas.", "5 जंगली गोरिल्लाओं को हराएँ।", "Derrota a 5 gorilas salvajes.", "Battez 5 gorilles sauvages.", "Derrote 5 gorilas selvagens."],
+  ["The Gorilla King", "गोरिल्ला किंग", "El Rey Gorila", "Le Roi Gorille", "O Rei Gorila"],
+  ["Defeat the Gorilla King boss.", "बॉस गोरिल्ला किंग को हराएँ।", "Derrota al jefe Rey Gorila.", "Battez le boss Roi Gorille.", "Derrote o chefe Rei Gorila."],
+  ["Pirate Ambush", "डाकुओं का घात", "Emboscada pirata", "Embuscade pirate", "Emboscada pirata"],
+  ["Defeat 6 katana pirates at Pirate Town.", "पाइरेट टाउन में 6 कटाना डाकुओं को हराएँ।", "Derrota a 6 piratas con katana en Pueblo Pirata.", "Battez 6 pirates à katana à Ville Pirate.", "Derrote 6 piratas de katana na Cidade Pirata."],
+  ["Iron Mace Brutes", "लोहे की गदा वाले पहलवान", "Brutos de maza de hierro", "Brutes à masse de fer", "Brutamontes da maça de ferro"],
+  ["Defeat 4 brute enforcers.", "4 पहलवान रक्षकों को हराएँ।", "Derrota a 4 brutos ejecutores.", "Battez 4 brutes de main.", "Derrote 4 brutamontes."],
+  ["Captain Jester", "कैप्टन जेस्टर", "Capitán Bufón", "Capitaine Bouffon", "Capitão Bufão"],
+  ["Defeat Captain Jester.", "कैप्टन जेस्टर को हराएँ।", "Derrota al Capitán Bufón.", "Battez le Capitaine Bouffon.", "Derrote o Capitão Bufão."],
+  ["Desert Bandits", "रेगिस्तानी डाकू", "Bandidos del desierto", "Bandits du désert", "Bandidos do deserto"],
+  ["Defeat 5 desert bandits.", "5 रेगिस्तानी डाकुओं को हराएँ।", "Derrota a 5 bandidos del desierto.", "Battez 5 bandits du désert.", "Derrote 5 bandidos do deserto."],
+  ["Desert Officers", "रेगिस्तानी अफ़सर", "Oficiales del desierto", "Officiers du désert", "Oficiais do deserto"],
+  ["Defeat 5 desert officers.", "5 रेगिस्तानी अफ़सरों को हराएँ।", "Derrota a 5 oficiales del desierto.", "Battez 5 officiers du désert.", "Derrote 5 oficiais do deserto."],
+  ["Frozen Bandits", "बर्फ़ीले डाकू", "Bandidos helados", "Bandits gelés", "Bandidos congelados"],
+  ["Defeat 5 frozen bandits at Snowy Village.", "बर्फ़ीले गाँव में 5 बर्फ़ीले डाकुओं को हराएँ।", "Derrota a 5 bandidos helados en Aldea Nevada.", "Battez 5 bandits gelés au Village enneigé.", "Derrote 5 bandidos congelados na Vila Nevada."],
+  ["Snowman Swarm", "हिममानवों का झुंड", "Enjambre de muñecos de nieve", "Nuée de bonshommes de neige", "Enxame de bonecos de neve"],
+  ["Defeat 5 snowmen at Snowy Village.", "बर्फ़ीले गाँव में 5 हिममानवों को हराएँ।", "Derrota a 5 muñecos de nieve en Aldea Nevada.", "Battez 5 bonshommes de neige au Village enneigé.", "Derrote 5 bonecos de neve na Vila Nevada."],
+  ["The Yeti Boss", "बॉस यती", "El jefe Yeti", "Le boss Yéti", "O chefe Yeti"],
+  ["Defeat the Yeti boss at Snowy Village.", "बर्फ़ीले गाँव में बॉस यती को हराएँ।", "Derrota al jefe Yeti en Aldea Nevada.", "Battez le boss Yéti au Village enneigé.", "Derrote o chefe Yeti na Vila Nevada."],
+  ["Defeat bandits", "डाकुओं को हराएँ", "Derrota bandidos", "Battez des bandits", "Derrote bandidos"],
+  ["Reward", "इनाम", "Recompensa", "Récompense", "Recompensa"],
+  ["Progress", "प्रगति", "Progreso", "Progression", "Progresso"],
+  ["Aura kills", "ऑरा किल", "Bajas con aura", "Éliminations avec aura", "Abates com aura"],
+  ["Special ability unlocked.", "स्पेशल एबिलिटी अनलॉक।", "Habilidad especial desbloqueada.", "Capacité spéciale débloquée.", "Habilidade especial desbloqueada."],
+  ["locked until level 60 Desert training", "लेवल 60 की रेगिस्तानी ट्रेनिंग तक बंद", "bloqueada hasta el entrenamiento del desierto (nivel 60)", "verrouillée jusqu'à l'entraînement du désert (niveau 60)", "bloqueada até o treino do deserto (nível 60)"],
+
+  // Interaction prompts (after "Press E:")
+  ["Take quest - defeat 5 bandits", "क्वेस्ट लें - 5 डाकुओं को हराएँ", "Aceptar misión: derrota a 5 bandidos", "Prendre la quête : battre 5 bandits", "Aceitar missão: derrotar 5 bandidos"],
+  ["Choose your boat", "अपनी नाव चुनें", "Elige tu barco", "Choisir votre bateau", "Escolher seu barco"],
+  ["Buy a sword", "तलवार खरीदें", "Comprar una espada", "Acheter une épée", "Comprar uma espada"],
+  ["View Pirate Town quests", "पाइरेट टाउन की क्वेस्ट देखें", "Ver misiones de Pueblo Pirata", "Voir les quêtes de Ville Pirate", "Ver missões da Cidade Pirata"],
+  ["View Jungle quests", "जंगल की क्वेस्ट देखें", "Ver misiones de la Selva", "Voir les quêtes de la Jungle", "Ver missões da Selva"],
+  ["Learn Jungle Pulse", "जंगल पल्स सीखें", "Aprender Pulso de la Selva", "Apprendre Pulsation de la jungle", "Aprender Pulso da Selva"],
+  ["View Desert quests", "रेगिस्तान की क्वेस्ट देखें", "Ver misiones del Desierto", "Voir les quêtes du Désert", "Ver missões do Deserto"],
+  ["View Snowy Village quests", "बर्फ़ीले गाँव की क्वेस्ट देखें", "Ver misiones de Aldea Nevada", "Voir les quêtes du Village enneigé", "Ver missões da Vila Nevada"],
+  ["Train Foresight", "दूरदृष्टि की ट्रेनिंग", "Entrenar Previsión", "S'entraîner à la Prescience", "Treinar Previsão"],
+  ["Train Flash Step", "फ़्लैश स्टेप की ट्रेनिंग", "Entrenar Paso Relámpago", "S'entraîner au Pas éclair", "Treinar Passo Relâmpago"],
+  ["Talk to Old Cinder (Blaze Kick Master)", "ओल्ड सिंडर से बात करें (ब्लेज़ किक मास्टर)", "Hablar con el Viejo Ceniza (maestro de Patada Ardiente)", "Parler au Vieux Cendre (maître du Coup de pied ardent)", "Falar com o Velho Cinza (mestre do Chute Flamejante)"],
+  ["Return to Starter Island", "स्टार्टर द्वीप लौटें", "Volver a la Isla Inicial", "Retourner sur l'Île de départ", "Voltar para a Ilha Inicial"],
+  ["Learn Iron Aura", "आयरन ऑरा सीखें", "Aprender Aura de Hierro", "Apprendre Aura de fer", "Aprender Aura de Ferro"],
+  ["Open Teleporter Menu", "टेलीपोर्टर मेन्यू खोलें", "Abrir menú del teletransportador", "Ouvrir le menu du téléporteur", "Abrir menu do teleporte"],
+  ["Teleport to", "टेलीपोर्ट करें:", "Teletransportarse a", "Se téléporter vers", "Teleportar para"],
+  ["Press E", "E दबाएँ", "Pulsa E", "Appuyez sur E", "Aperte E"],
+
+  // Combat panel, weapons and skills
+  ["Melee", "मुक्के", "Puños", "Poings", "Punhos"],
+  ["Sword", "तलवार", "Espada", "Épée", "Espada"],
+  ["Gun", "बंदूक", "Pistola", "Pistolet", "Pistola"],
+  ["Defense", "डिफ़ेंस", "Defensa", "Défense", "Defesa"],
+  ["Special Abilities", "स्पेशल एबिलिटी", "Habilidades especiales", "Capacités spéciales", "Habilidades especiais"],
+  ["Special ability", "स्पेशल एबिलिटी", "Habilidad especial", "Capacité spéciale", "Habilidade especial"],
+  ["Swords", "तलवारें", "Espadas", "Épées", "Espadas"],
+  ["Guns", "बंदूकें", "Pistolas", "Pistolets", "Pistolas"],
+  ["Special", "स्पेशल", "Especial", "Spécial", "Especial"],
+  ["Items", "सामान", "Objetos", "Objets", "Itens"],
+  ["⭐ Mastery", "⭐ महारत", "⭐ Maestría", "⭐ Maîtrise", "⭐ Maestria"],
+  ["Boss", "बॉस", "Jefe", "Boss", "Chefe"],
+  ["COMBAT", "युद्ध", "COMBATE", "COMBAT", "COMBATE"],
+  ["UNLOCKED", "अनलॉक", "DESBLOQUEADO", "DÉBLOQUÉ", "DESBLOQUEADO"],
+  ["MELEE", "मुक्के", "PUÑOS", "POINGS", "PUNHOS"],
+  ["SWORD", "तलवार", "ESPADA", "ÉPÉE", "ESPADA"],
+  ["GUN", "बंदूक", "PISTOLA", "PISTOLET", "PISTOLA"],
+  ["SPECIAL", "स्पेशल", "ESPECIAL", "SPÉCIAL", "ESPECIAL"],
+  ["Need", "चाहिए", "Faltan", "Encore", "Faltam"],
+  ["Meteor Fist", "उल्का मुक्का", "Puño Meteoro", "Poing Météore", "Punho Meteoro"],
+  ["Ground Slam", "ज़मीनी प्रहार", "Golpe Sísmico", "Frappe au sol", "Impacto no Chão"],
+  ["Ember Shot", "अंगारा शॉट", "Tiro de Brasa", "Tir de Braise", "Tiro de Brasa"],
+  ["Inferno Kick", "इन्फ़र्नो किक", "Patada Infernal", "Coup de pied infernal", "Chute Infernal"],
+  ["Perfect Parry", "परफ़ेक्ट बचाव", "Bloqueo perfecto", "Parade parfaite", "Defesa perfeita"],
+  ["Iron Bastion", "लौह गढ़", "Bastión de Hierro", "Bastion de fer", "Bastião de Ferro"],
+  ["Piercing Thrust", "भेदी वार", "Estocada Perforante", "Estocade perçante", "Estocada Perfurante"],
+  ["Cyclone Spin", "चक्रवात घुमाव", "Giro Ciclón", "Tourbillon", "Giro Ciclone"],
+  ["Double Tap", "डबल टैप", "Doble Disparo", "Double tir", "Tiro Duplo"],
+  ["Buckshot Cone", "छर्रों की बौछार", "Cono de Perdigones", "Cône de chevrotine", "Cone de Chumbo"],
+  ["Spirit Bolt", "आत्मा बाण", "Rayo Espiritual", "Trait spirituel", "Raio Espiritual"],
+  ["Pulse Bubble", "पल्स बबल", "Burbuja de Pulso", "Bulle d'impulsion", "Bolha de Pulso"],
+  ["God's Judgment", "ईश्वर का न्याय", "Juicio Divino", "Jugement divin", "Julgamento Divino"],
+  ["Dash", "डैश", "Esquiva", "Ruée", "Avanço"],
+  ["Block", "बचाव", "Bloquear", "Bloquer", "Bloquear"],
+
+  // Captions in the controls panel
+  ["Move", "चलें", "Mover", "Bouger", "Mover"],
+  ["Right drag", "राइट ड्रैग", "Arrastrar (derecho)", "Glisser (droit)", "Arrastar (direito)"],
+  ["Camera", "कैमरा", "Cámara", "Caméra", "Câmera"],
+  ["Click", "क्लिक", "Clic", "Clic", "Clique"],
+  ["Space", "स्पेस", "Espacio", "Espace", "Espaço"],
+  ["Sprint", "दौड़ें", "Correr", "Sprinter", "Correr"],
+  ["Weapons", "हथियार", "Armas", "Armes", "Armas"],
+  ["Skills", "स्किल", "Habilidades", "Compétences", "Habilidades"],
+  ["Armament", "आर्मामेंट", "Armamento", "Armement", "Armamento"],
+  ["Observation", "अवलोकन", "Observación", "Observation", "Observação"],
+  ["Flash step", "फ़्लैश स्टेप", "Paso relámpago", "Pas éclair", "Passo relâmpago"],
+  ["Helm boat", "नाव चलाएँ", "Timonear barco", "Barrer le bateau", "Pilotar barco"],
+  ["Keyboard controls", "कीबोर्ड कंट्रोल", "Controles del teclado", "Commandes clavier", "Controles do teclado"],
+
+  // Boats, defeat
+  ["Boat Dock", "नाव घाट", "Muelle", "Quai", "Cais"],
+  ["Choose a vessel to summon:", "बुलाने के लिए नाव चुनें:", "Elige un barco para invocar:", "Choisissez un navire à appeler :", "Escolha um barco para chamar:"],
+  ["Dinghy", "छोटी नाव", "Bote", "Canot", "Bote"],
+  ["Sailor Boat", "नाविक नाव", "Barco de marinero", "Bateau de marin", "Barco de marinheiro"],
+  ["Brigade", "ब्रिगेड जहाज़", "Bergantín", "Brigantin", "Bergantim"],
+  ["Cancel", "रद्द करें", "Cancelar", "Annuler", "Cancelar"],
+  ["DEFEATED", "हार गए", "DERROTADO", "VAINCU", "DERROTADO"],
+  ["You were knocked out in battle", "आप लड़ाई में बेहोश हो गए", "Te dejaron fuera de combate", "Vous avez été mis K.O. au combat", "Você foi nocauteado em batalha"],
+  ["Respawn", "फिर से शुरू करें", "Reaparecer", "Réapparaître", "Renascer"],
+
+  // Settings menu
+  ["Settings & Performance", "सेटिंग्स और परफ़ॉर्मेंस", "Ajustes y rendimiento", "Paramètres et performances", "Configurações e desempenho"],
+  ["Performance Stats Bar", "परफ़ॉर्मेंस बार", "Barra de rendimiento", "Barre de performances", "Barra de desempenho"],
+  ["Show Performance Stats (Mem, CPU, GPU, Sent, Recv)", "परफ़ॉर्मेंस आँकड़े दिखाएँ (Mem, CPU, GPU, Sent, Recv)", "Mostrar estadísticas (Mem, CPU, GPU, Sent, Recv)", "Afficher les statistiques (Mem, CPU, GPU, Sent, Recv)", "Mostrar estatísticas (Mem, CPU, GPU, Sent, Recv)"],
+  ["Show Ping metric", "पिंग दिखाएँ", "Mostrar ping", "Afficher le ping", "Mostrar ping"],
+  ["Graphics Quality", "ग्राफ़िक्स क्वालिटी", "Calidad gráfica", "Qualité graphique", "Qualidade gráfica"],
+  ["Graphics Level", "ग्राफ़िक्स लेवल", "Nivel gráfico", "Niveau graphique", "Nível gráfico"],
+  ["Low levels disable shadows and lower resolution to boost performance.", "कम लेवल पर परछाइयाँ बंद होती हैं और रिज़ॉल्यूशन घटता है, जिससे गेम तेज़ चलता है।", "Los niveles bajos desactivan las sombras y bajan la resolución para mejorar el rendimiento.", "Les niveaux bas désactivent les ombres et réduisent la résolution pour de meilleures performances.", "Níveis baixos desativam sombras e reduzem a resolução para melhorar o desempenho."],
+  ["Volume", "आवाज़", "Volumen", "Volume", "Volume"],
+  ["Keyboard Bindings", "कीबोर्ड बटन", "Teclas", "Raccourcis clavier", "Atalhos do teclado"],
+  ["Keys", "बटन", "Teclas", "Touches", "Teclas"],
+  ["Action / Function", "काम", "Acción", "Action", "Ação"],
+  ["Move character / Steer boat", "किरदार चलाएँ / नाव चलाएँ", "Mover personaje / Timonear barco", "Déplacer le personnage / Diriger le bateau", "Mover personagem / Pilotar barco"],
+  ["Sprint toggle", "दौड़ चालू/बंद", "Activar carrera", "Activer le sprint", "Alternar corrida"],
+  ["Right Click", "राइट क्लिक", "Clic derecho", "Clic droit", "Clique direito"],
+  ["Drag to rotate screen (move camera)", "स्क्रीन घुमाने के लिए खींचें (कैमरा)", "Arrastra para girar la cámara", "Glissez pour tourner la caméra", "Arraste para girar a câmera"],
+  ["Left Click / R", "लेफ़्ट क्लिक / R", "Clic izquierdo / R", "Clic gauche / R", "Clique esquerdo / R"],
+  ["Strike / Shoot (aim gun at head for 1.5x headshot)", "मारें / गोली चलाएँ (1.5x हेडशॉट के लिए सिर पर निशाना लगाएँ)", "Golpear / Disparar (apunta a la cabeza para un tiro x1,5)", "Frapper / Tirer (visez la tête pour un tir x1,5)", "Golpear / Atirar (mire na cabeça para tiro x1,5)"],
+  ["Block (Hold to guard, tap right before hit to Perfect Parry)", "बचाव (रोकने के लिए दबाए रखें, परफ़ेक्ट बचाव के लिए वार से ठीक पहले दबाएँ)", "Bloquear (mantén para cubrirte; pulsa justo antes del golpe para un bloqueo perfecto)", "Bloquer (maintenez pour vous protéger ; appuyez juste avant le coup pour une parade parfaite)", "Bloquear (segure para se defender; aperte logo antes do golpe para uma defesa perfeita)"],
+  ["Dash in facing direction", "सामने की ओर डैश", "Esquivar hacia delante", "Ruée vers l'avant", "Avançar na direção em que olha"],
+  ["Equip: Melee (1), Sword (2), Gun (3), Special (4)", "चुनें: मुक्के (1), तलवार (2), बंदूक (3), स्पेशल (4)", "Equipar: Puños (1), Espada (2), Pistola (3), Especial (4)", "Équiper : Poings (1), Épée (2), Pistolet (3), Spécial (4)", "Equipar: Punhos (1), Espada (2), Pistola (3), Especial (4)"],
+  ["Active skills (requires Mastery Level 5 / 20)", "एक्टिव स्किल (महारत लेवल 5 / 20 ज़रूरी)", "Habilidades activas (requiere maestría 5 / 20)", "Compétences actives (maîtrise 5 / 20 requise)", "Habilidades ativas (exige maestria 5 / 20)"],
+  ["Steer Boat (E) / Disembark Boat (G)", "नाव चलाएँ (E) / नाव से उतरें (G)", "Timonear (E) / Desembarcar (G)", "Diriger (E) / Débarquer (G)", "Pilotar (E) / Desembarcar (G)"],
+  ["Toggle Aura (Armor / Damage boost, level 60 Desert)", "ऑरा चालू/बंद (कवच / ज़्यादा नुकसान, लेवल 60 रेगिस्तान)", "Activar aura (armadura / daño, nivel 60 Desierto)", "Activer l'aura (armure / dégâts, niveau 60 Désert)", "Alternar aura (armadura / dano, nível 60 Deserto)"],
+  ["Toggle settings and menu", "सेटिंग्स और मेन्यू खोलें/बंद करें", "Abrir o cerrar el menú", "Ouvrir ou fermer le menu", "Abrir ou fechar o menu"],
+  ["Save Protection Status", "सेव सुरक्षा", "Estado del guardado", "État de la sauvegarde", "Status do salvamento"],
+  ["Auto-Save is Active:", "ऑटो-सेव चालू है:", "Guardado automático activo:", "Sauvegarde auto active :", "Salvamento automático ativo:"],
+  ["Progress is auto-saved locally every 5 seconds. Save data cannot be deleted from within the game.", "प्रगति हर 5 सेकंड में इस डिवाइस पर अपने आप सेव होती है। सेव डेटा गेम के अंदर से नहीं हटाया जा सकता।", "El progreso se guarda localmente cada 5 segundos. Los datos no se pueden borrar desde el juego.", "La progression est sauvegardée localement toutes les 5 secondes. Les données ne peuvent pas être supprimées depuis le jeu.", "O progresso é salvo localmente a cada 5 segundos. Os dados não podem ser apagados dentro do jogo."],
+  ["Resume", "जारी रखें", "Reanudar", "Reprendre", "Continuar"],
+  ["Reset Character", "किरदार रीसेट करें", "Reiniciar personaje", "Réinitialiser le personnage", "Reiniciar personagem"],
+
+  // Avatar Studio and marketplace
+  ["AVATAR STUDIO & DESIGNER", "अवतार स्टूडियो और डिज़ाइनर", "ESTUDIO Y DISEÑADOR DE AVATARES", "STUDIO ET CRÉATEUR D'AVATARS", "ESTÚDIO E CRIADOR DE AVATARES"],
+  ["Design your unique character and trade with other players in the marketplace", "अपना अनोखा किरदार बनाएँ और मार्केटप्लेस में दूसरे खिलाड़ियों से व्यापार करें", "Diseña tu personaje único y comercia con otros jugadores en el mercado", "Créez votre personnage unique et échangez avec d'autres joueurs sur le marché", "Crie seu personagem único e negocie com outros jogadores no mercado"],
+  ["Avatar Designer", "अवतार डिज़ाइनर", "Diseñador de avatares", "Créateur d'avatar", "Criador de avatar"],
+  ["Marketplace", "मार्केटप्लेस", "Mercado", "Marché", "Mercado"],
+  ["🖱️ Drag to rotate model", "🖱️ घुमाने के लिए खींचें", "🖱️ Arrastra para girar el modelo", "🖱️ Glissez pour faire pivoter", "🖱️ Arraste para girar o modelo"],
+  ["Saved Templates", "सेव किए गए डिज़ाइन", "Plantillas guardadas", "Modèles enregistrés", "Modelos salvos"],
+  ["Avatar Name", "अवतार का नाम", "Nombre del avatar", "Nom de l'avatar", "Nome do avatar"],
+  ["Avatar name", "अवतार का नाम", "Nombre del avatar", "Nom de l'avatar", "Nome do avatar"],
+  ["Enter name...", "नाम लिखें...", "Escribe un nombre...", "Saisissez un nom...", "Digite um nome..."],
+  ["Body & Apparel Styling", "शरीर और कपड़े", "Cuerpo y ropa", "Corps et tenue", "Corpo e roupas"],
+  ["Skin Color", "त्वचा का रंग", "Color de piel", "Couleur de peau", "Cor da pele"],
+  ["Torso (Shirt)", "धड़ (शर्ट)", "Torso (camisa)", "Torse (chemise)", "Tronco (camisa)"],
+  ["Left Arm Color", "बाएँ हाथ का रंग", "Color del brazo izquierdo", "Couleur du bras gauche", "Cor do braço esquerdo"],
+  ["Right Arm Color", "दाएँ हाथ का रंग", "Color del brazo derecho", "Couleur du bras droit", "Cor do braço direito"],
+  ["Hair Color", "बालों का रंग", "Color de pelo", "Couleur des cheveux", "Cor do cabelo"],
+  ["Eye Color", "आँखों का रंग", "Color de ojos", "Couleur des yeux", "Cor dos olhos"],
+  ["Left Leg Color", "बाएँ पैर का रंग", "Color de la pierna izquierda", "Couleur de la jambe gauche", "Cor da perna esquerda"],
+  ["Right Leg Color", "दाएँ पैर का रंग", "Color de la pierna derecha", "Couleur de la jambe droite", "Cor da perna direita"],
+  ["Pants (Leg Base)", "पैंट", "Pantalones (base)", "Pantalon (base)", "Calça (base)"],
+  ["Boots Color", "जूतों का रंग", "Color de botas", "Couleur des bottes", "Cor das botas"],
+  ["Belt Color", "बेल्ट का रंग", "Color del cinturón", "Couleur de la ceinture", "Cor do cinto"],
+  ["Cape Color", "केप का रंग", "Color de la capa", "Couleur de la cape", "Cor da capa"],
+  ["Outfit Style", "पोशाक का स्टाइल", "Estilo de atuendo", "Style de tenue", "Estilo de roupa"],
+  ["Body Type", "शरीर का प्रकार", "Tipo de cuerpo", "Type de corps", "Tipo de corpo"],
+  ["Human", "इंसान", "Humano", "Humain", "Humano"],
+  ["Skeleton", "कंकाल", "Esqueleto", "Squelette", "Esqueleto"],
+  ["Head", "सिर", "Cabeza", "Tête", "Cabeça"],
+  ["Normal", "सामान्य", "Normal", "Normale", "Normal"],
+  ["Headless", "बिना सिर", "Sin cabeza", "Sans tête", "Sem cabeça"],
+  ["Accessory", "एक्सेसरी", "Accesorio", "Accessoire", "Acessório"],
+  ["None", "कोई नहीं", "Ninguno", "Aucun", "Nenhum"],
+  ["Golden Halo", "सुनहरा प्रभामंडल", "Halo dorado", "Auréole dorée", "Auréola dourada"],
+  ["Spectral Hands", "भूतिया हाथ", "Manos espectrales", "Mains spectrales", "Mãos espectrais"],
+  ["Cape Style", "केप का स्टाइल", "Estilo de capa", "Style de cape", "Estilo de capa"],
+  ["No Cape", "कोई केप नहीं", "Sin capa", "Sans cape", "Sem capa"],
+  ["Royal Cape", "शाही केप", "Capa real", "Cape royale", "Capa real"],
+  ["Long Flowing Cape", "लंबी लहराती केप", "Capa larga", "Longue cape", "Capa longa"],
+  ["Tattered Cape", "फटी केप", "Capa raída", "Cape en lambeaux", "Capa esfarrapada"],
+  ["Width", "चौड़ाई", "Anchura", "Largeur", "Largura"],
+  ["Arm Length", "हाथ की लंबाई", "Largo de brazos", "Longueur des bras", "Comprimento dos braços"],
+  ["Leg Length", "पैर की लंबाई", "Largo de piernas", "Longueur des jambes", "Comprimento das pernas"],
+  ["Torso Length", "धड़ की लंबाई", "Largo del torso", "Longueur du torse", "Comprimento do tronco"],
+  ["Head Size", "सिर का आकार", "Tamaño de cabeza", "Taille de la tête", "Tamanho da cabeça"],
+  ["Avatar Code", "अवतार कोड", "Código de avatar", "Code d'avatar", "Código do avatar"],
+  ["Share or import a design", "डिज़ाइन शेयर या इम्पोर्ट करें", "Comparte o importa un diseño", "Partagez ou importez un design", "Compartilhe ou importe um design"],
+  ["Copy Code", "कोड कॉपी करें", "Copiar código", "Copier le code", "Copiar código"],
+  ["Import", "इम्पोर्ट", "Importar", "Importer", "Importar"],
+  ["Paste an avatar code here, then press Import", "यहाँ अवतार कोड पेस्ट करें, फिर इम्पोर्ट दबाएँ", "Pega aquí un código de avatar y pulsa Importar", "Collez un code d'avatar ici, puis appuyez sur Importer", "Cole um código de avatar aqui e aperte Importar"],
+  ["Sell This Avatar Design", "यह अवतार डिज़ाइन बेचें", "Vender este diseño", "Vendre ce design", "Vender este design"],
+  ["Publish this design blueprint to the Marketplace. NPC players will buy it if the price is right!", "यह डिज़ाइन मार्केटप्लेस पर डालें। सही दाम होगा तो NPC खिलाड़ी इसे खरीदेंगे!", "Publica este diseño en el Mercado. ¡Los PNJ lo comprarán si el precio es justo!", "Publiez ce design sur le Marché. Les PNJ l'achèteront si le prix est bon !", "Publique este design no Mercado. Os NPCs vão comprar se o preço for bom!"],
+  ["Publish Design", "डिज़ाइन प्रकाशित करें", "Publicar diseño", "Publier le design", "Publicar design"],
+  ["Global Design Market", "ग्लोबल डिज़ाइन मार्केट", "Mercado global de diseños", "Marché mondial des designs", "Mercado global de designs"],
+  ["Buy designs from other creators, or view your active listings", "दूसरे क्रिएटर के डिज़ाइन खरीदें या अपनी लिस्टिंग देखें", "Compra diseños de otros creadores o mira tus anuncios", "Achetez des designs d'autres créateurs ou consultez vos annonces", "Compre designs de outros criadores ou veja seus anúncios"],
+  ["Your Active Listings", "आपकी लिस्टिंग", "Tus anuncios activos", "Vos annonces actives", "Seus anúncios ativos"],
+  ["You have no designs published for sale. Customize an avatar and set a price to publish!", "आपने बिक्री के लिए कोई डिज़ाइन नहीं डाला है। अवतार बनाएँ और दाम तय करके प्रकाशित करें!", "No tienes diseños a la venta. ¡Personaliza un avatar y ponle precio para publicarlo!", "Vous n'avez aucun design en vente. Personnalisez un avatar et fixez un prix pour le publier !", "Você não tem designs à venda. Personalize um avatar e defina um preço para publicar!"],
+  ["Browse Designs for Sale", "बिकाऊ डिज़ाइन देखें", "Ver diseños a la venta", "Parcourir les designs en vente", "Ver designs à venda"],
+
+  // Tutorial
+  ["Skip tutorial", "ट्यूटोरियल छोड़ें", "Saltar tutorial", "Passer le tutoriel", "Pular tutorial"],
+  ["Getting started", "शुरुआत", "Primeros pasos", "Premiers pas", "Primeiros passos"],
+  ["Walk around with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.", "<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> से चलें।", "Camina con <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.", "Déplacez-vous avec <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.", "Ande com <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>."],
+  ["Use the arrow pad to walk around.", "चलने के लिए तीर वाले पैड का इस्तेमाल करें।", "Usa la cruceta para caminar.", "Utilisez les flèches pour vous déplacer.", "Use o direcional para andar."],
+  ["Hold <kbd>Right Click</kbd> and drag to look around.", "चारों ओर देखने के लिए <kbd>Right Click</kbd> दबाकर खींचें।", "Mantén <kbd>Right Click</kbd> y arrastra para mirar alrededor.", "Maintenez <kbd>Right Click</kbd> et glissez pour regarder autour.", "Segure <kbd>Right Click</kbd> e arraste para olhar ao redor."],
+  ["Drag on the screen to look around.", "चारों ओर देखने के लिए स्क्रीन पर उँगली खींचें।", "Arrastra en la pantalla para mirar alrededor.", "Faites glisser l'écran pour regarder autour.", "Arraste na tela para olhar ao redor."],
+  ["Press <kbd>Space</kbd> to jump. Hold <kbd>Shift</kbd> to sprint.", "कूदने के लिए <kbd>Space</kbd> दबाएँ। दौड़ने के लिए <kbd>Shift</kbd> दबाए रखें।", "Pulsa <kbd>Space</kbd> para saltar. Mantén <kbd>Shift</kbd> para correr.", "Appuyez sur <kbd>Space</kbd> pour sauter. Maintenez <kbd>Shift</kbd> pour sprinter.", "Aperte <kbd>Space</kbd> para pular. Segure <kbd>Shift</kbd> para correr."],
+  ["Tap <kbd>Jump</kbd> to jump.", "कूदने के लिए <kbd>कूदें</kbd> दबाएँ।", "Toca <kbd>Saltar</kbd> para saltar.", "Touchez <kbd>Sauter</kbd> pour sauter.", "Toque em <kbd>Pular</kbd> para pular."],
+  ["<kbd>Left Click</kbd> to attack. Keep clicking to chain a combo.", "हमला करने के लिए <kbd>Left Click</kbd> करें। कॉम्बो बनाने के लिए क्लिक करते रहें।", "<kbd>Left Click</kbd> para atacar. Sigue haciendo clic para encadenar un combo.", "<kbd>Left Click</kbd> pour attaquer. Continuez à cliquer pour enchaîner un combo.", "<kbd>Left Click</kbd> para atacar. Continue clicando para fazer um combo."],
+  ["Tap <kbd>Attack</kbd> to throw a punch. Keep tapping to chain a combo.", "मुक्का मारने के लिए <kbd>हमला</kbd> दबाएँ। कॉम्बो के लिए दबाते रहें।", "Toca <kbd>Atacar</kbd> para dar un puñetazo. Sigue tocando para encadenar un combo.", "Touchez <kbd>Attaquer</kbd> pour frapper. Continuez pour enchaîner un combo.", "Toque em <kbd>Atacar</kbd> para socar. Continue tocando para fazer um combo."],
+  ["Follow the compass at the top to the quest giver and press <kbd>E</kbd>.", "ऊपर दिए कम्पास के सहारे क्वेस्ट देने वाले तक जाएँ और <kbd>E</kbd> दबाएँ।", "Sigue la brújula de arriba hasta el dador de misiones y pulsa <kbd>E</kbd>.", "Suivez la boussole en haut jusqu'au donneur de quêtes et appuyez sur <kbd>E</kbd>.", "Siga a bússola no topo até quem dá as missões e aperte <kbd>E</kbd>."],
+  ["Follow the compass at the top to the quest giver and tap <kbd>Interact</kbd>.", "ऊपर दिए कम्पास के सहारे क्वेस्ट देने वाले तक जाएँ और <kbd>बातचीत</kbd> दबाएँ।", "Sigue la brújula de arriba hasta el dador de misiones y toca <kbd>Interactuar</kbd>.", "Suivez la boussole en haut jusqu'au donneur de quêtes et touchez <kbd>Interagir</kbd>.", "Siga a bússola no topo até quem dá as missões e toque em <kbd>Interagir</kbd>."],
+  ["Defeat 5 bandits to finish your first quest. Watch for the red flash before an enemy strikes, and step away or block with <kbd>F</kbd>.", "अपनी पहली क्वेस्ट पूरी करने के लिए 5 डाकुओं को हराएँ। दुश्मन के वार से पहले लाल चमक पर नज़र रखें, और पीछे हटें या <kbd>F</kbd> से बचाव करें।", "Derrota a 5 bandidos para completar tu primera misión. Atento al destello rojo antes de cada golpe enemigo: apártate o bloquea con <kbd>F</kbd>.", "Battez 5 bandits pour terminer votre première quête. Guettez l'éclair rouge avant chaque coup ennemi, puis reculez ou bloquez avec <kbd>F</kbd>.", "Derrote 5 bandidos para concluir sua primeira missão. Fique de olho no brilho vermelho antes do golpe inimigo e se afaste ou bloqueie com <kbd>F</kbd>."],
+  ["Defeat 5 bandits to finish your first quest. Watch for the red flash before an enemy strikes and step away.", "अपनी पहली क्वेस्ट पूरी करने के लिए 5 डाकुओं को हराएँ। दुश्मन के वार से पहले लाल चमक पर नज़र रखें और पीछे हट जाएँ।", "Derrota a 5 bandidos para completar tu primera misión. Atento al destello rojo antes de cada golpe enemigo y apártate.", "Battez 5 bandits pour terminer votre première quête. Guettez l'éclair rouge avant chaque coup ennemi et reculez.", "Derrote 5 bandidos para concluir sua primeira missão. Fique de olho no brilho vermelho antes do golpe inimigo e se afaste."],
+
+  // Words used inside longer lines, traits and floating combat text
+  ["Level", "लेवल", "Nivel", "Niveau", "Nível"],
+  ["Lv.", "लेवल", "Nv.", "Niv.", "Nv."],
+  ["Lv", "लेवल", "Nv", "Niv", "Nv"],
+  ["points", "पॉइंट", "puntos", "points", "pontos"],
+  ["Mastery", "महारत", "Maestría", "Maîtrise", "Maestria"],
+  ["Aura", "ऑरा", "Aura", "Aura", "Aura"],
+  ["Cash", "पैसे", "Dinero", "Argent", "Dinheiro"],
+  ["Captain", "कप्तान", "Capitán", "Capitaine", "Capitão"],
+  ["Rookie", "नौसिखिया", "Novato", "Recrue", "Novato"],
+  ["Pirate", "समुद्री डाकू", "Pirata", "Pirate", "Pirata"],
+  ["Marine", "मरीन", "Marine", "Marine", "Fuzileiro"],
+  ["longer range", "ज़्यादा दूरी", "más alcance", "portée accrue", "mais alcance"],
+  ["less health", "कम हेल्थ", "menos salud", "moins de santé", "menos vida"],
+  ["more health", "ज़्यादा हेल्थ", "más salud", "plus de santé", "mais vida"],
+  ["faster movement", "तेज़ चाल", "más rapidez", "déplacement rapide", "mais rapidez"],
+  ["slower movement", "धीमी चाल", "menos rapidez", "déplacement lent", "menos rapidez"],
+  ["stronger hits", "ज़ोरदार वार", "golpes más fuertes", "coups plus forts", "golpes mais fortes"],
+  ["takes less damage", "कम नुकसान", "recibe menos daño", "subit moins de dégâts", "sofre menos dano"],
+  ["balanced bulk", "संतुलित शरीर", "complexión equilibrada", "carrure équilibrée", "porte equilibrado"],
+  ["Teleporting in", "टेलीपोर्ट होने में", "Teletransporte en", "Téléportation dans", "Teleporte em"],
+  ["Miss", "चूक", "Fallo", "Raté", "Errou"],
+  ["PERFECT PARRY!", "परफ़ेक्ट बचाव!", "¡BLOQUEO PERFECTO!", "PARADE PARFAITE !", "DEFESA PERFEITA!"],
+  ["HEADSHOT!", "हेडशॉट!", "¡TIRO EN LA CABEZA!", "TIR À LA TÊTE !", "TIRO NA CABEÇA!"],
+  ["VAPORIZED!", "भस्म!", "¡VAPORIZADO!", "VAPORISÉ !", "VAPORIZADO!"],
+  ["ICE SHELL SHATTERED!", "बर्फ़ का कवच टूटा!", "¡CAPARAZÓN DE HIELO ROTO!", "CARAPACE DE GLACE BRISÉE !", "CASCA DE GELO QUEBRADA!"],
+];
+
+// Island names that appear inside prompts like "Teleport to Jungle Island".
+const I18N_PLACES = [
+  ["Starter Island", "स्टार्टर द्वीप", "Isla Inicial", "Île de départ", "Ilha Inicial"],
+  ["Jungle Island", "जंगल द्वीप", "Isla de la Selva", "Île de la Jungle", "Ilha da Selva"],
+  ["Pirate Town", "पाइरेट टाउन", "Pueblo Pirata", "Ville Pirate", "Cidade Pirata"],
+  ["Desert Island", "रेगिस्तानी द्वीप", "Isla del Desierto", "Île du Désert", "Ilha do Deserto"],
+  ["Snowy Village", "बर्फ़ीला गाँव", "Aldea Nevada", "Village enneigé", "Vila Nevada"],
+];
+
+// `var` so tr() is safe to call even before this file has run (it returns English then).
+var i18nMaps = {};
+I18N_LANGS.slice(1).forEach((lang, i) => {
+  const map = new Map();
+  [...I18N_ROWS, ...I18N_PLACES].forEach((row) => { if (row[i + 1]) map.set(row[0], row[i + 1]); });
+  i18nMaps[lang] = map;
+});
+
+var currentLanguage = "en";
+try {
+  const saved = localStorage.getItem(I18N_STORAGE_KEY);
+  if (I18N_LANGS.includes(saved)) currentLanguage = saved;
+} catch (err) { /* storage unavailable */ }
+
+function i18nWord(english) {
+  if (currentLanguage === "en" || !i18nMaps || !i18nMaps[currentLanguage]) return english;
+  return i18nMaps[currentLanguage].get(english) ?? english;
+}
+
+// Lines the game builds from parts ("Level 3 | Sword | stronger hits"): each
+// pattern rebuilds the line from translated parts.
+const I18N_PATTERNS = [
+  [/^Press E: Teleport to (.+)$/, (m) => `${i18nWord("Press E")}: ${i18nWord("Teleport to")} ${i18nWord(m[1])}`],
+  [/^Press E: (.+)$/, (m) => `${i18nWord("Press E")}: ${i18nWord(m[1])}`],
+  [/^Level (\d+) \| (.+?) \| (.+)$/, (m) => `${i18nWord("Level")} ${m[1]} | ${i18nWord(m[2])} | ${m[3].split(", ").map(i18nWord).join(", ")}`],
+  [/^(.+) \| (\S+) (Captain|Rookie)$/, (m) => `${m[1]} | ${i18nWord(m[2])} ${i18nWord(m[3])}`],
+  [/^Lv\. (\d+)$/, (m) => `${i18nWord("Lv.")} ${m[1]}`],
+  [/^(\d+) points$/, (m) => `${m[1]} ${i18nWord("points")}`],
+  [/^Mastery (\d+)$/, (m) => `${i18nWord("Mastery")} ${m[1]}`],
+  [/^Mastery (\d+) \(Max\. (\d+)\)$/, (m) => `${i18nWord("Mastery")} ${m[1]} (Max. ${m[2]})`],
+  [/^(\d+)\/(\d+) \(Need (\d+) MP\)$/, (m) => `${m[1]}/${m[2]} (${i18nWord("Need")} ${m[3]} MP)`],
+  [/^Cash: (.+)$/, (m) => `${i18nWord("Cash")}: ${m[1]}`],
+  [/^(Day|Sunset|Night|Sunrise) · (.+)$/, (m) => `${i18nWord(m[1])} · ${m[2]}`],
+  [/^Getting started (\d+)\/(\d+)$/, (m) => `${i18nWord("Getting started")} ${m[1]}/${m[2]}`],
+  [/^Teleporting in (\d+)s\.\.\.$/, (m) => `${i18nWord("Teleporting in")} ${m[1]}s...`],
+  [/^Defeat bandits: (\d+)\/(\d+)\. Reward: (\S+), (\d+) XP\.$/, (m) => `${i18nWord("Defeat bandits")}: ${m[1]}/${m[2]}. ${i18nWord("Reward")}: ${m[3]}, ${m[4]} XP.`],
+  [/^(.+\.) Progress: (\d+)\/(\d+)\. Aura kills: (\d+)\/(\d+)\.$/, (m) => `${i18nWord(m[1])} ${i18nWord("Progress")}: ${m[2]}/${m[3]}. ${i18nWord("Aura kills")}: ${m[4]}/${m[5]}.`],
+  [/^(.+) \| Aura (\d+)$/, (m) => `${i18nWord(m[1])} | ${i18nWord("Aura")} ${m[2]}`],
+  [/^Special ability unlocked\. Aura (Lv \d+|locked until level 60 Desert training)\.$/, (m) => `${i18nWord("Special ability unlocked.")} ${i18nWord("Aura")} ${m[1].startsWith("Lv") ? m[1].replace("Lv", i18nWord("Lv")) : i18nWord(m[1])}.`],
+  [/^HEADSHOT! (-\d+)$/, (m) => `${i18nWord("HEADSHOT!")} ${m[1]}`],
+];
+
+// Translate one piece of English text into the current language.
+function tr(text) {
+  if (!currentLanguage || currentLanguage === "en" || !text || !i18nMaps || !i18nMaps[currentLanguage]) return text;
+  const key = text.trim();
+  if (!key) return text;
+  const direct = i18nMaps[currentLanguage].get(key);
+  if (direct !== undefined) return text.replace(key, direct);
+  for (let i = 0; i < I18N_PATTERNS.length; i += 1) {
+    const match = key.match(I18N_PATTERNS[i][0]);
+    if (match) return text.replace(key, I18N_PATTERNS[i][1](match));
+  }
+  return text;
+}
+
+// ---- Applying translations to the page ----
+
+// Key caps (<kbd>) keep the key names printed on the keyboard.
+const I18N_SKIP = "script, style, textarea, kbd, [data-no-i18n], .home-content, .site-footer, .content-page";
+const I18N_ATTRS = ["placeholder", "aria-label", "title"];
+const i18nTextSource = new WeakMap(); // text node -> { src, out }
+const i18nAttrSource = new WeakMap(); // element -> { attr: { src, out } }
+
+function i18nSkipped(element) {
+  return !element || element.closest(I18N_SKIP);
+}
+
+function translateTextNode(node) {
+  const record = i18nTextSource.get(node);
+  // Our own output: translate again from the English it came from.
+  // Anything else is new English text written by the game.
+  const src = record && node.data === record.out ? record.src : node.data;
+  if (!/[A-Za-z]/.test(src)) return;
+  const out = tr(src);
+  i18nTextSource.set(node, { src, out });
+  if (node.data !== out) node.data = out;
+}
+
+function translateAttributes(element) {
+  let records = i18nAttrSource.get(element);
+  I18N_ATTRS.forEach((attr) => {
+    const value = element.getAttribute(attr);
+    if (value === null) return;
+    const record = records?.[attr];
+    const src = record && value === record.out ? record.src : value;
+    const out = tr(src);
+    if (!records) { records = {}; i18nAttrSource.set(element, records); }
+    records[attr] = { src, out };
+    if (value !== out) element.setAttribute(attr, out);
+  });
+}
+
+function translateTree(root) {
+  if (root.nodeType === Node.TEXT_NODE) {
+    if (!i18nSkipped(root.parentElement)) translateTextNode(root);
+    return;
+  }
+  if (root.nodeType !== Node.ELEMENT_NODE || i18nSkipped(root)) return;
+  translateAttributes(root);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        return node.matches(I18N_SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.nodeType === Node.TEXT_NODE) translateTextNode(node);
+    else translateAttributes(node);
+  }
+}
+
+const i18nObserver = new MutationObserver((records) => {
+  for (let i = 0; i < records.length; i += 1) {
+    const record = records[i];
+    if (record.type === "characterData") {
+      if (!i18nSkipped(record.target.parentElement)) translateTextNode(record.target);
+    } else if (record.type === "attributes") {
+      if (!i18nSkipped(record.target)) translateAttributes(record.target);
+    } else {
+      record.addedNodes.forEach(translateTree);
+    }
+  }
+});
+
+function setLanguage(lang) {
+  if (!I18N_LANGS.includes(lang)) lang = "en";
+  currentLanguage = lang;
+  try { localStorage.setItem(I18N_STORAGE_KEY, lang); } catch (err) { /* storage unavailable */ }
+  document.documentElement.lang = lang;
+  document.querySelectorAll(".language-select, #loading-language").forEach((select) => { select.value = lang; });
+  translateTree(document.body);
+  refreshTutorialText?.();
+}
+
+document.querySelectorAll(".language-select, #loading-language").forEach((select) => {
+  select.value = currentLanguage;
+  select.addEventListener("change", () => setLanguage(select.value));
+});
+document.documentElement.lang = currentLanguage;
+translateTree(document.body);
+i18nObserver.observe(document.body, {
+  subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: I18N_ATTRS,
+});
 
 // ── 99-init.js ─ Startup sequence and closes the game closure.
 // Initialization
@@ -14676,12 +17669,51 @@ initAvatarStudioUI();
 setInterval(saveGame, 5000);
 const gameLoadStatus = document.querySelector("#game-load-status");
 if (gameLoadStatus) gameLoadStatus.hidden = true;
+// Loading finished: the loading screen offers a Play button instead of the progress bar.
+const loadingScreen = document.querySelector("#loading-screen");
+const loadingPlay = document.querySelector("#loading-play");
+const loadingVideo = document.querySelector("#loading-video");
+const loadingSound = document.querySelector("#loading-sound");
+if (loadingVideo) {
+  // Some browsers hold back autoplay until the page is interactive; nudge it.
+  loadingVideo.muted = true;
+  loadingVideo.play?.().catch(() => {});
+}
+loadingSound?.addEventListener("click", () => {
+  if (!loadingVideo) return;
+  loadingVideo.muted = !loadingVideo.muted;
+  if (!loadingVideo.muted) loadingVideo.play?.().catch(() => {});
+  loadingSound.setAttribute("aria-pressed", String(!loadingVideo.muted));
+});
+if (loadingScreen && loadingPlay) {
+  loadingScreen.classList.add("is-ready");
+  loadingPlay.hidden = false;
+  loadingPlay.addEventListener("click", () => {
+    loadingScreen.classList.add("is-leaving");
+    if (loadingVideo) loadingVideo.muted = true;
+    setTimeout(() => {
+      loadingScreen.hidden = true;
+      // Free the video once it's out of sight.
+      if (loadingVideo) {
+        loadingVideo.pause();
+        loadingVideo.removeAttribute("src");
+        loadingVideo.querySelectorAll("source").forEach((source) => source.remove());
+        loadingVideo.load();
+      }
+    }, 600);
+  });
+  loadingPlay.focus({ preventScroll: true });
+} else if (loadingScreen) {
+  loadingScreen.hidden = true;
+}
 } catch (error) {
   console.error("Sea Legends failed to initialize:", error);
   const status = document.querySelector("#game-load-status");
   const errorPanel = document.querySelector("#game-init-error");
   const errorMessage = document.querySelector("#game-init-error-message");
   if (status) status.hidden = true;
+  const loadingScreenEl = document.querySelector("#loading-screen");
+  if (loadingScreenEl) loadingScreenEl.hidden = true;
   if (errorMessage) {
     errorMessage.textContent = typeof THREE === "undefined"
       ? "The 3D library could not be loaded. Check your internet connection and allow the Three.js CDN request, then reload."

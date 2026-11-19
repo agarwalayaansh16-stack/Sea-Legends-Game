@@ -20,6 +20,7 @@ function setEnemyWeaponVisuals(enemy, weapon) {
 function updateEnemies(dt) {
   updateSurgeRocks(dt);
   enemies.forEach((enemy) => {
+    enemyUpdateContext = enemy;
     if (!enemy.alive) {
       enemy.respawnTimer -= dt;
       if (enemy.respawnTimer <= 0) {
@@ -37,29 +38,30 @@ function updateEnemies(dt) {
     if (enemy.type === "buggy" && enemy.parts) {
       const parts = enemy.parts;
       const t = performance.now() * 0.015;
+      const rest = { head: parts.head.userData.restPos, leftArm: parts.leftArm.userData.restPos, rightArm: parts.rightArm.userData.restPos, leftLeg: parts.leftLeg.userData.restPos, rightLeg: parts.rightLeg.userData.restPos };
       
       const isAttacking = enemy.ai.rush > 1.2 || enemy.ai.slash > 1.6;
       const isDamaged = enemy.hitTimer > 0;
       
       if (isAttacking) {
-        parts.leftArm.position.set(-6 + Math.sin(t) * 8, 5.9, Math.cos(t) * 8);
-        parts.rightArm.position.set(6 + Math.cos(t) * 8, 5.9, Math.sin(t) * 8);
-        parts.leftLeg.position.set(-2, 2.45 + Math.sin(t * 2) * 3, 0);
-        parts.rightLeg.position.set(2, 2.45 + Math.cos(t * 2) * 3, 0);
-        parts.head.position.y = 8.65 + Math.sin(t) * 4;
+        parts.leftArm.position.set(-6 + Math.sin(t) * 8, rest.leftArm.y, Math.cos(t) * 8);
+        parts.rightArm.position.set(6 + Math.cos(t) * 8, rest.rightArm.y, Math.sin(t) * 8);
+        parts.leftLeg.position.set(-2, rest.leftLeg.y + Math.sin(t * 2) * 3, 0);
+        parts.rightLeg.position.set(2, rest.rightLeg.y + Math.cos(t * 2) * 3, 0);
+        parts.head.position.y = rest.head.y + Math.sin(t) * 4;
       } else if (isDamaged) {
-        parts.head.position.y = 14 + Math.sin(t) * 3;
+        parts.head.position.y = rest.head.y + 5.4 + Math.sin(t) * 3;
         parts.head.rotation.y += 0.5;
-        parts.leftArm.position.set(-2.25, 5.9, 0);
-        parts.rightArm.position.set(2.25, 5.9, 0);
-        parts.leftLeg.position.set(-0.85, 2.45, 0);
-        parts.rightLeg.position.set(0.85, 2.45, 0);
+        parts.leftArm.position.copy(rest.leftArm);
+        parts.rightArm.position.copy(rest.rightArm);
+        parts.leftLeg.position.copy(rest.leftLeg);
+        parts.rightLeg.position.copy(rest.rightLeg);
       } else {
-        parts.head.position.y = 8.65 + Math.sin(t * 0.4) * 0.7;
-        parts.leftArm.position.set(-2.25, 5.9, 0);
-        parts.rightArm.position.set(2.25, 5.9, 0);
-        parts.leftLeg.position.set(-0.85, 2.45, 0);
-        parts.rightLeg.position.set(0.85, 2.45, 0);
+        parts.head.position.y = rest.head.y + Math.sin(t * 0.4) * 0.7;
+        parts.leftArm.position.copy(rest.leftArm);
+        parts.rightArm.position.copy(rest.rightArm);
+        parts.leftLeg.position.copy(rest.leftLeg);
+        parts.rightLeg.position.copy(rest.rightLeg);
       }
     }
 
@@ -550,9 +552,13 @@ function updateEnemies(dt) {
       enemy.mesh.position.y = OCEAN_SURFACE_Y;
     }
   });
+  enemyUpdateContext = null;
+  updateEnemyAnimations(dt);
 }
 
 function damagePlayer(amount, source) {
+  // Simple enemy strikes wind up first (32-enemy-animations.js) and land a moment later.
+  if (interceptEnemyStrike(amount, source)) return;
   if (player.isGodMode) return; // Admin Invulnerability!
   if (player.shieldTimer > 0) return; // Invulnerable shield active!
 
@@ -702,6 +708,8 @@ function damageEnemy(enemy, baseAmount, label = "Strike", color = "#ff7a3d", isF
 
   enemy.health = Math.max(0, enemy.health - finalDamage);
   triggerHitFlash(enemy.mesh);
+  reactEnemyHit(enemy, finalDamage);
+  audio.playWeaponHit(player.weapon);
 
   const pos = enemy.mesh.position.clone().add(new THREE.Vector3(0, 8, 0));
   if (isHeadshot) {

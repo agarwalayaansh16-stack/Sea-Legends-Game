@@ -427,7 +427,6 @@ let nearbyInteractable = null;
 let playerMesh;
 let cameraYaw = 0.68;
 let cameraPitch = 0.38;
-let shiftLockEnabled = true;
 let homeTeleportCountdown = 0;
 let questGiverPosition = new THREE.Vector3();
 let activeBoat = null;

@@ -7,6 +7,8 @@ try {
     const errorPanel = document.querySelector("#game-init-error");
     const errorMessage = document.querySelector("#game-init-error-message");
     if (status) status.hidden = true;
+    const loadingScreen = document.querySelector("#loading-screen");
+    if (loadingScreen) loadingScreen.hidden = true;
     if (errorMessage) errorMessage.textContent = message;
     if (errorPanel) errorPanel.hidden = false;
   };

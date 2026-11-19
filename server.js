@@ -14,6 +14,8 @@ const types = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
 
 const server = http.createServer((request, response) => {
@@ -26,7 +28,12 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  fs.readFile(filePath, (error, data) => {
+  // Media files (like the loading-screen trailer) live in public/, as Next.js expects.
+  const publicPath = path.normalize(path.join(root, "public", requestedPath));
+  const sendPath = !fs.existsSync(filePath) && publicPath.startsWith(path.join(root, "public")) && fs.existsSync(publicPath)
+    ? publicPath : filePath;
+
+  fs.readFile(sendPath, (error, data) => {
     if (error) {
       response.writeHead(404);
       response.end("Not found");

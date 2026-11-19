@@ -1,7 +1,12 @@
 
 // ── 19-combat-and-effects.js ─ Attacks, projectiles, hazards and combat visual effects.
 function attack(event = null) {
-  if (!gameStarted || attackCooldown > 0 || player.weapon === "special") return;
+  if (!gameStarted || attackCooldown > 0) return;
+  // The special weapon's basic attack is Spirit Bolt (31-combat-animations.js).
+  if (player.weapon === "special") {
+    castSpiritBolt(event);
+    return;
+  }
 
   // Melee Ground Slam in Air!
   if (!isGrounded && jumpOffset > 0 && player.weapon === "melee" && player.mastery.melee >= 20) {
@@ -9,6 +14,7 @@ function attack(event = null) {
     verticalVelocity = -100; // Slam down!
     playerMesh.position.y = (getIslandUnderPlayer()?.surfaceY || STARTER_SURFACE_Y) + 0.15;
     isGrounded = true;
+    playPlayerAction("air-slam");
     createGroundSlam(playerMesh.position.clone(), { type: "player" });
     audio.playImpact();
 
@@ -26,10 +32,6 @@ function attack(event = null) {
   // Set attack cooldown
   const isGatling = player.weapon === "melee" && player.mastery.melee >= 50;
   attackCooldown = isGatling ? 0.11 : (player.weapon === "gun" ? 0.55 : 0.42);
-
-  if (playerMesh?.userData?.animation) {
-    playerMesh.userData.animation.attackTimer = playerMesh.userData.animation.attackDuration;
-  }
 
   // Procedural Sound triggers
   if (player.weapon === "sword") audio.playSlash();
@@ -65,67 +67,120 @@ function attack(event = null) {
 
   let target = null;
   let isGunHeadshot = false;
+  let aimPoint = null;
 
   if (player.weapon === "gun") {
-    // Raycast to find if we clicked or aimed directly at any enemy
-    const clientX = event?.clientX ?? mouseScreenPos.x;
-    const clientY = event?.clientY ?? mouseScreenPos.y;
-    const mouse = new THREE.Vector2();
-    mouse.x = (clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-    
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, camera);
-    
-    // Find all alive enemies in range
-    const candidateEnemies = enemies.filter(enemy => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range);
-    
-    let bestHit = null;
-    for (const enemy of candidateEnemies) {
-      const intersects = raycaster.intersectObject(enemy.mesh, true);
-      if (intersects.length > 0) {
-        const dist = intersects[0].distance;
-        if (bestHit === null || dist < bestHit.dist) {
-          let isHead = false;
-          for (let i = 0; i < intersects.length; i++) {
-            let obj = intersects[i].object;
-            while (obj) {
-              if (obj.userData && obj.userData.isHead) {
-                isHead = true;
-                break;
-              }
-              obj = obj.parent;
-            }
-            if (isHead) break;
-          }
-          bestHit = { enemy, dist, isHead };
-        }
-      }
-    }
-    
-    if (bestHit) {
-      target = bestHit.enemy;
-      isGunHeadshot = bestHit.isHead;
-    }
-  }
-
-  // Fallback to closest enemy if no direct mouse-hit target
-  if (!target) {
+    // The gun shoots exactly where the cursor is: an enemy, the ground, or open air.
+    const aim = event?.autoAim
+      ? getAutoGunAim(range)
+      : getGunAim(event?.clientX ?? mouseScreenPos.x, event?.clientY ?? mouseScreenPos.y, range);
+    target = aim.target;
+    isGunHeadshot = aim.isHead;
+    aimPoint = aim.point;
+  } else {
+    // Melee and sword: nearest enemy within reach.
     target = enemies
       .filter((enemy) => enemy.alive && enemy.mesh.position.distanceTo(playerMesh.position) <= range)
       .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-    isGunHeadshot = false;
   }
 
-  if (playerMesh?.userData?.animation) {
-    playerMesh.userData.animation.attackImpact = target ? 1 : 0.3;
+  // The attack animation decides when the blow lands; damage and effects happen then.
+  const weaponUsed = player.weapon;
+  startBasicAttackAnimation(target, () => {
+    if (weaponUsed === "gun") fireGunEffects(target, isGunHeadshot, undefined, aimPoint);
+    else if (weaponUsed === "special") createSpecialBurst(target);
+    resolveAttackHit(target, { damage, isFalcon, isDiableJambeActive, isGunHeadshot, weapon: weaponUsed, aimPoint });
+  }, aimPoint);
+}
+
+// Where a gun shot fired at screen position (clientX, clientY) goes.
+// Returns { point, target, isHead }: `point` is the 3D spot under the cursor
+// (an enemy, the ground, or a point `range` away when aiming at the sky);
+// `target` is the first enemy on the bullet's path from the gun to that spot.
+function getGunAim(clientX, clientY, range) {
+  const mouse = new THREE.Vector2((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const ray = raycaster.ray;
+  const gunPos = playerMesh.position.clone().add(new THREE.Vector3(0, 7.5, 0));
+
+  // 1. Clicked directly on an enemy?
+  let best = null;
+  enemies.forEach((enemy) => {
+    if (!enemy.alive || enemy.mesh.position.distanceTo(playerMesh.position) > range * 1.25) return;
+    const hits = raycaster.intersectObject(enemy.mesh, true);
+    if (!hits.length || (best && hits[0].distance >= best.dist)) return;
+    let isHead = false;
+    for (let obj = hits[0].object; obj; obj = obj.parent) {
+      if (obj.userData?.isHead) { isHead = true; break; }
+    }
+    best = { enemy, dist: hits[0].distance, point: hits[0].point, isHead };
+  });
+  if (best) {
+    // A wall between the gun and the enemy stops the bullet.
+    const wall = firstWallHit(gunPos, best.point);
+    if (wall) return { point: wall, target: null, isHead: false, wall: true };
+    return { point: best.point.clone(), target: best.enemy, isHead: best.isHead };
   }
-  
-  if (player.weapon === "gun") {
-    createGunShot(target, isGunHeadshot);
-  } else {
-    createCombatEffect(player.weapon, target);
+
+  // 2. Otherwise the ground under the cursor, following hills and slopes
+  //    (or far along the ray when aiming above the horizon).
+  let point = raycastTerrain(ray);
+  if (!point || point.distanceTo(gunPos) > range) {
+    // Aim along the cursor ray, capped at the gun's range from the player.
+    const flat = (point || ray.at(range * 2, new THREE.Vector3())).clone().sub(gunPos);
+    point = gunPos.clone().addScaledVector(flat.normalize(), range);
   }
+
+  // Walls, trees and rocks stop the bullet short.
+  const wallHit = firstWallHit(gunPos, point);
+  if (wallHit) point = wallHit;
+
+  // 3. Any enemy standing in the bullet's path still gets hit.
+  const shot = point.clone().sub(gunPos);
+  const shotLen = shot.length();
+  const shotDir = shot.clone().normalize();
+  let pathHit = null;
+  enemies.forEach((enemy) => {
+    if (!enemy.alive) return;
+    const centre = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+    const along = centre.clone().sub(gunPos).dot(shotDir);
+    if (along < 0 || along > shotLen + 4) return;
+    const miss = gunPos.clone().addScaledVector(shotDir, along).distanceTo(centre);
+    if (miss < 4.5 && (!pathHit || along < pathHit.along)) pathHit = { enemy, along };
+  });
+  if (pathHit) {
+    return { point: gunPos.clone().addScaledVector(shotDir, pathHit.along), target: pathHit.enemy, isHead: false };
+  }
+  return { point, target: null, isHead: false };
+}
+
+// Touch "Attack" button: aim at the nearest enemy with a clear line of fire,
+// or straight ahead when there is none.
+function getAutoGunAim(range) {
+  const gunPos = playerMesh.position.clone().add(new THREE.Vector3(0, 7.5, 0));
+  const inRange = enemies
+    .filter((e) => e.alive && e.mesh.position.distanceTo(playerMesh.position) <= range)
+    .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position));
+  for (const enemy of inRange) {
+    const chest = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6.1, 0));
+    if (!firstWallHit(gunPos, chest)) return { point: chest, target: enemy, isHead: false };
+  }
+  const ahead = gunPos.clone().add(new THREE.Vector3(Math.sin(playerMesh.rotation.y), 0, Math.cos(playerMesh.rotation.y)).multiplyScalar(range));
+  return { point: firstWallHit(gunPos, ahead) || ahead, target: null, isHead: false };
+}
+
+// Gun aim at the current mouse position (used by gun skills).
+function getMouseGunAim(range = 85) {
+  return getGunAim(mouseScreenPos.x, mouseScreenPos.y, range);
+}
+
+// Second half of a basic attack, run on the animation's impact frame.
+function resolveAttackHit(target, hit) {
+  const { isFalcon, isDiableJambeActive, isGunHeadshot } = hit;
+  const damage = hit.damage;
+  if (player.weapon !== hit.weapon) return;
+  if (target && !target.alive) target = null;
 
   // Sword Dimensional Blade: Fires giant air slash forward!
   if (player.weapon === "sword" && player.mastery.sword >= 50) {
@@ -136,15 +191,19 @@ function attack(event = null) {
   // Gun Double Tap: Fires a second bullet quickly
   if (player.weapon === "gun" && player.mastery.gun >= 5) {
     setTimeout(() => {
-      if (player.weapon === "gun") {
-        audio.playShot();
-        createGunShot(target, isGunHeadshot);
-        if (target && target.alive) {
-          const dmgDouble = Math.round(getDamage() * 0.85);
-          damageEnemy(target, dmgDouble, "DoubleTap", "#9defff", isGunHeadshot);
-        }
-      }
-    }, 110);
+      if (player.weapon !== "gun") return;
+      playPlayerAction("shoot", {
+        fire: () => {
+          if (player.weapon !== "gun") return;
+          audio.playShot();
+          fireGunEffects(target && target.alive ? target : null, isGunHeadshot, undefined, hit.aimPoint);
+          if (target && target.alive) {
+            const dmgDouble = Math.round(getDamage() * 0.85);
+            damageEnemy(target, dmgDouble, "DoubleTap", "#9defff", isGunHeadshot);
+          }
+        },
+      });
+    }, 140);
   }
 
   // Pulse Bubble repel for Special Mastery 50
@@ -354,7 +413,7 @@ function createGunShot(target, isHeadshot = false) {
   const start = playerMesh.position.clone().add(direction.clone().multiplyScalar(5));
   start.y += 6;
   const end = target ? target.mesh.position.clone() : start.clone().add(direction.clone().multiplyScalar(80));
-  end.y += target ? (isHeadshot ? 8.65 : 5.7) : 0;
+  end.y += target ? (isHeadshot ? 9.15 : 6.1) : 0;
   const midpoint = start.clone().lerp(end, 0.5);
   const length = start.distanceTo(end);
 
@@ -732,7 +791,7 @@ function updateHazards(dt) {
 }
 
 function createFloatingText(position, text, color = "#fff7e6") {
-  const label = makeLabel(text, 0.72);
+  const label = makeLabel(tr(text), 0.72);
   label.position.copy(position);
   label.material.color = new THREE.Color(color);
   addTimedEffect(label, 0.75, (mesh, progress) => {

@@ -25,6 +25,8 @@ function loop(time) {
     updateInteractionPrompt();
     updateTeleport(stepDt);
     updateCamera();
+    updateMusic(dt);
+    updateTutorial(dt);
     updateMultiplayer(stepDt, time);
     updateBossHud();
 
@@ -330,9 +332,7 @@ function updatePlayer(dt) {
 
   // Continuous attacks when holding Left Mouse Button or KeyR
   if ((isLeftMouseDown || keys.has("KeyR")) && attackCooldown <= 0) {
-    if (player.weapon === "melee" || player.weapon === "sword") {
-      attack({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
-    }
+    attack({ clientX: mouseScreenPos.x, clientY: mouseScreenPos.y });
   }
 
   // Active parry Iron Bastion heal
@@ -378,12 +378,15 @@ function updatePlayer(dt) {
     const targetYaw = Math.atan2(moveVelocity.x, moveVelocity.z);
     let turn = targetYaw - playerMesh.rotation.y;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    playerMesh.rotation.y += turn * (1 - Math.exp(-16 * dt));
+    if (attackFacing.timer <= 0) playerMesh.rotation.y += turn * (1 - Math.exp(-16 * dt));
   } else {
     const decel = grounded ? 14 : 2.5;
     moveVelocity.multiplyScalar(Math.exp(-decel * dt));
     if (moveVelocity.lengthSq() < 0.5) moveVelocity.set(0, 0, 0);
   }
+
+  // While attacking, face the target instead of the movement direction.
+  updateAttackFacing(dt);
 
   if (moveVelocity.lengthSq() > 0) {
     playerMesh.position.addScaledVector(moveVelocity, dt);
@@ -760,6 +763,55 @@ function updateTeleport(dt) {
   }
 }
 
+// Elbows and knees: bend with the stride, tuck in the air, absorb landings.
+// Also twists the shoulders against the stride and lets the head look around when idle.
+function applyLimbBends(model, anim, moving, groundSpeed) {
+  const parts = model.userData.parts;
+  if (!parts.leftShin || !parts.leftForearm) return;
+  // A footstep sound each time a foot comes down.
+  const stepSide = Math.sin(anim.walkPhase) > 0;
+  if (stepSide !== anim.stepSide && moving && isGrounded && !player.isSwimming) audio.playFootstep(groundSpeed);
+  anim.stepSide = stepSide;
+  const intensity = moving ? THREE.MathUtils.clamp(groundSpeed / 75, 0.3, 1.15) : 0;
+  const air = player.isSwimming ? 0 : anim.air || 0;
+  let dip = 0;
+  if (!player.isSwimming && jumpState.landingTimer > 0) {
+    dip = Math.sin((1 - jumpState.landingTimer / 0.24) * Math.PI) * jumpState.landingStrength;
+  }
+  const knee = (leg, phase) => {
+    let bend;
+    if (player.isSwimming) {
+      bend = 0.2 + Math.max(0, Math.sin(phase * 2)) * 0.25;
+    } else {
+      // The leg swinging forward lifts its foot; the planted leg stays nearly straight.
+      bend = 0.06 + Math.max(0, -Math.cos(phase)) * 1.05 * intensity + Math.max(0, -leg.rotation.x) * 0.2 * intensity;
+      bend = THREE.MathUtils.lerp(bend, 0.35 + Math.max(0, -leg.rotation.x) * 1.25, air);
+      bend += dip * 1.1;
+    }
+    return THREE.MathUtils.clamp(bend, 0, 2.3);
+  };
+  parts.leftShin.rotation.x = knee(parts.leftLeg, anim.walkPhase);
+  parts.rightShin.rotation.x = knee(parts.rightLeg, anim.walkPhase + Math.PI);
+
+  const elbow = (arm) => {
+    if (player.isSwimming) return 0.35;
+    const bend = 0.2 + Math.max(0, -arm.rotation.x - 0.1) * 0.35 + intensity * 0.55 + air * 0.25 + dip * 0.3;
+    return THREE.MathUtils.clamp(bend, 0.05, 2.0);
+  };
+  parts.leftForearm.rotation.x = -elbow(parts.leftArm);
+  // The striking arm straightens out during an attack.
+  parts.rightForearm.rotation.x = anim.attackTimer > 0 || anim.punchChargeTimer > 0 ? -0.1 : -elbow(parts.rightArm);
+
+  if (!player.isSwimming && anim.punchChargeTimer <= 0 && anim.slamTimer <= 0) {
+    const t = performance.now() * 0.001;
+    const twist = Math.sin(anim.walkPhase) * 0.1 * intensity;
+    parts.torso.rotation.y = twist;
+    const idle = 1 - Math.min(1, intensity * 3);
+    parts.head.rotation.y = -twist * 0.7 + Math.sin(t * 0.37) * 0.22 * idle;
+    parts.head.rotation.x = Math.sin(t * 0.23 + 1.3) * 0.05 * idle;
+  }
+}
+
 function updatePlayerAnimation(dt) {
   const model = playerMesh.children[0];
   if (!model?.userData?.parts) return;
@@ -856,9 +908,9 @@ function updatePlayerAnimation(dt) {
 
     // Reset arm and leg Y/Z rotations that swim modified
     model.userData.parts.leftArm.rotation.y = 0;
-    model.userData.parts.leftArm.rotation.z = -0.15;
+    model.userData.parts.leftArm.rotation.z = -0.07;
     model.userData.parts.rightArm.rotation.y = 0;
-    model.userData.parts.rightArm.rotation.z = 0.15;
+    model.userData.parts.rightArm.rotation.z = 0.07;
     model.userData.parts.leftLeg.rotation.z = 0.04;
     model.userData.parts.rightLeg.rotation.z = -0.04;
 
@@ -938,6 +990,11 @@ function updatePlayerAnimation(dt) {
     }
   }
 
+  applyLimbBends(model, anim, moving, groundSpeed);
+  // Held weapons, combat stance and keyframed attacks/skills (31-combat-animations.js).
+  updateHeldWeapons(model);
+  applyPlayerActions(model, anim, dt);
+
   // Squash & stretch: stretch on take-off, squash on landing.
   if (!model.userData.baseScale) model.userData.baseScale = model.scale.clone();
   const base = model.userData.baseScale;
@@ -972,21 +1029,6 @@ function updatePlayerAnimation(dt) {
     model.userData.parts.cape.rotation.x = 0.12 + (speed / 35) * 0.35 + wave;
     model.userData.parts.cape.rotation.y = Math.cos(performance.now() * 0.006) * 0.03 * (speed / 35);
     model.userData.parts.cape.rotation.z = Math.sin(performance.now() * 0.006) * 0.02 * (speed / 35);
-  }
-
-  if (anim.attackTimer > 0) {
-    const attackProgress = 1 - anim.attackTimer / anim.attackDuration;
-    const impact = Math.max(0, anim.attackImpact || 0);
-    const baseStrike = player.weapon === "melee" ? 1.6 : 0.9;
-    const strike = Math.sin(attackProgress * Math.PI) * (baseStrike + impact * 0.7);
-    model.userData.parts.rightArm.rotation.x -= strike;
-    model.userData.parts.leftArm.rotation.x += strike * 0.28;
-    model.userData.parts.torso.rotation.z = Math.sin(attackProgress * Math.PI) * (0.08 + impact * 0.05);
-    if (anim.attackTimer <= 0.001) {
-      anim.attackImpact = 0;
-    }
-  } else {
-    model.userData.parts.torso.rotation.z = 0;
   }
 
   if (anim.wallHitTimer > 0) {

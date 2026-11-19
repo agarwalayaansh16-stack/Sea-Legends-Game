@@ -1,7 +1,7 @@
 
 // ── 18-camera-and-quests.js ─ Camera, interaction prompts and quest dialogue.
 function updateCamera() {
-  const targetYaw = isHelming ? boatYaw : (shiftLockEnabled ? playerMesh.rotation.y : cameraYaw);
+  const targetYaw = isHelming ? boatYaw : cameraYaw;
   const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
   const distance = isHelming ? 100 : (isSniper ? 98 : 58);
   const horizontalDistance = Math.cos(cameraPitch) * distance;
@@ -16,7 +16,15 @@ function updateCamera() {
     Math.cos(targetYaw) * horizontalDistance,
   );
   
-  camera.position.lerp(targetPos.clone().add(offset), 0.12);
+  if (!isHelming) {
+    // Walls between the camera and the player pull the camera in (34-world-queries.js).
+    const pivot = targetPos.clone().add(new THREE.Vector3(0, 7, 0));
+    const frac = updateCameraObstruction(pivot, targetPos.clone().add(offset));
+    if (frac < 0.999) {
+      offset.sub(new THREE.Vector3(0, 7, 0)).multiplyScalar(frac).add(new THREE.Vector3(0, 7, 0));
+    }
+  }
+  camera.position.lerp(targetPos.clone().add(offset), cameraClearFrac < 0.95 ? 0.3 : 0.12);
   if (camera.position.y < floorY) camera.position.y = floorY;
   
   if (cameraShake > 0) {
@@ -26,9 +34,6 @@ function updateCamera() {
     cameraShake = Math.max(0, cameraShake - 0.08);
   }
   camera.lookAt(targetPos.x, targetPos.y + (isHelming ? 4 : 7), targetPos.z);
-  if (shiftLockEnabled && !isHelming) {
-    cameraYaw = targetYaw;
-  }
 }
 
 function updateInteractionPrompt() {

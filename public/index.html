@@ -42,7 +42,48 @@
           <canvas id="perf-graph-ping" class="perf-graph" width="40" height="14"></canvas>
         </div>
       </div>
-      <div id="game-load-status" role="status" aria-live="polite">Loading Sea Legends…</div>
+      <section id="loading-screen" class="loading-screen" aria-labelledby="loading-title">
+        <div class="loading-media" aria-hidden="true">
+          <video id="loading-video" class="loading-video" autoplay muted loop playsinline preload="auto" poster="/media/sea-legends-trailer-poster.jpg">
+            <source src="/media/sea-legends-trailer.mp4" type="video/mp4">
+          </video>
+          <div class="loading-shade"></div>
+          <div class="loading-sparkles"><span style="--x:8%;--d:0s;--t:9s;--s:4px"></span><span style="--x:17%;--d:3.1s;--t:11s;--s:3px"></span><span style="--x:26%;--d:1.4s;--t:8s;--s:5px"></span><span style="--x:34%;--d:5.2s;--t:12s;--s:3px"></span><span style="--x:43%;--d:2.2s;--t:10s;--s:4px"></span><span style="--x:51%;--d:6.3s;--t:9s;--s:3px"></span><span style="--x:59%;--d:0.7s;--t:13s;--s:5px"></span><span style="--x:66%;--d:4.1s;--t:9s;--s:3px"></span><span style="--x:74%;--d:2.9s;--t:11s;--s:4px"></span><span style="--x:82%;--d:5.8s;--t:10s;--s:3px"></span><span style="--x:90%;--d:1.9s;--t:12s;--s:5px"></span><span style="--x:96%;--d:3.7s;--t:8s;--s:3px"></span><span style="--x:13%;--d:7.2s;--t:10s;--s:3px"></span><span style="--x:70%;--d:7.9s;--t:11s;--s:4px"></span></div>
+        </div>
+        <button id="loading-sound" class="loading-sound" type="button" aria-pressed="false" aria-label="Trailer sound">
+          <span class="loading-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="loading-sound-text">Sound</span>
+        </button>
+        <div class="loading-card">
+          <p class="loading-eyebrow"><span class="loading-eyebrow-line" aria-hidden="true"></span><span>A free 3D pirate adventure</span><span class="loading-eyebrow-line" aria-hidden="true"></span></p>
+          <h1 id="loading-title" class="loading-title" aria-label="Sea Legends"><span class="loading-title-inner" aria-hidden="true"><span class="ll" style="--i:0">S</span><span class="ll" style="--i:1">E</span><span class="ll" style="--i:2">A</span><span class="ll-gap"></span><span class="ll" style="--i:4">L</span><span class="ll" style="--i:5">E</span><span class="ll" style="--i:6">G</span><span class="ll" style="--i:7">E</span><span class="ll" style="--i:8">N</span><span class="ll" style="--i:9">D</span><span class="ll" style="--i:10">S</span></span></h1>
+          <p class="loading-tagline">Explore the First Sea, master your weapons and take on its bosses.</p>
+          <div class="loading-progress-wrap">
+            <div class="loading-progress" aria-hidden="true"><span class="loading-progress-fill"></span></div>
+            <div id="game-load-status" role="status" aria-live="polite">Loading Sea Legends…</div>
+          </div>
+          <button id="loading-play" class="loading-play" type="button" hidden><span class="loading-play-icon" aria-hidden="true">▶</span><span>Play</span></button>
+          <label class="loading-language">
+            <span>Language</span>
+            <select id="loading-language" aria-label="Language">
+              <option value="en">English</option>
+              <option value="hi">हिन्दी</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="pt">Português</option>
+            </select>
+          </label>
+          <nav class="loading-links" aria-label="Site information">
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+            <a href="/game-guide">Game Guide</a>
+            <a href="/contact">Contact</a>
+            <a href="/terms">Terms &amp; Conditions</a>
+            <a href="/privacy-policy">Privacy Policy</a>
+            <a href="/disclaimer">Disclaimer</a>
+          </nav>
+        </div>
+      </section>
       <section id="game-init-error" role="alert" aria-labelledby="game-init-error-title" hidden>
         <h2 id="game-init-error-title">Sea Legends could not start</h2>
         <p id="game-init-error-message">Check your connection and browser graphics support, then try again.</p>
@@ -277,8 +318,18 @@
               <span>Quest</span>
             </label>
             <label class="toggle">
-              <input id="shiftlock-toggle" type="checkbox" checked>
-              <span>Shift lock</span>
+              <input id="music-toggle" type="checkbox" checked>
+              <span>Music</span>
+            </label>
+            <label class="toggle language-toggle">
+              <span aria-hidden="true">🌐</span>
+              <select id="language-select" class="language-select" aria-label="Language">
+                <option value="en">English</option>
+                <option value="hi">हिन्दी</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="pt">Português</option>
+              </select>
             </label>
             <button id="hud-logout-btn" class="btn-danger-ghost" type="button">Log Out</button>
           </div>

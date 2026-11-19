@@ -27,7 +27,7 @@ function defeatBandit(enemy) {
 
 function defeatEnemy(enemy) {
   enemy.alive = false;
-  enemy.mesh.visible = false;
+  startEnemyDeath(enemy); // falls over, then disappears
   enemy.respawnTimer = (enemy.type === "buggy" || enemy.type === "gorilla_king" || enemy.type === "yeti") ? 45 : 6;
   let xpReward = 18;
   let moneyReward = 12;
