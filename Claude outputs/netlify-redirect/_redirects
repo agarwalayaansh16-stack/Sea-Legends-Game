@@ -1,0 +1,2 @@
+# Send every old Netlify URL to the same path on the official site, permanently.
+/*  https://dapolice.vercel.app/:splat  301!

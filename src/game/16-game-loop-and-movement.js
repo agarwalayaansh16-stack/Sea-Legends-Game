@@ -324,9 +324,12 @@ function updatePlayer(dt) {
     player.health = player.maxHealth;
     player.stamina = player.maxStamina;
   }
+  updateBoatUi(dt);
   if (isHelming) {
     playerMoveState.velocity.set(0, 0, 0);
     updateBoat(dt);
+    updatePlayerAnimation(dt);
+    holdShipWheelPose();
     return;
   }
 

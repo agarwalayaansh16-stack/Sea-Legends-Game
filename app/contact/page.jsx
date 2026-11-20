@@ -2,7 +2,7 @@ import ContentLayout from "../content-layout";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
-  title: "Contact Sea Legends",
+  title: "Contact",
   description: "How to contact the Sea Legends project owner about the game, site, privacy, or accessibility.",
   alternates: { canonical: `${siteUrl}/contact` },
   openGraph: { title: "Contact Sea Legends", description: "Contact information for the Sea Legends project.", url: `${siteUrl}/contact` },

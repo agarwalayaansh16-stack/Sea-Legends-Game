@@ -612,7 +612,10 @@ body[data-weapon="gun"] #game {
   gap: 10px;
   margin-top: 28px;
 }
-.loading-links a {
+.loading-links a,
+.loading-links .loading-link-button {
+  font-family: inherit;
+  cursor: pointer;
   padding: 8px 15px;
   border-radius: 999px;
   border: 1px solid rgba(255, 244, 220, 0.22);
@@ -625,7 +628,9 @@ body[data-weapon="gun"] #game {
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .loading-links a:hover,
-.loading-links a:focus-visible {
+.loading-links a:focus-visible,
+.loading-links .loading-link-button:hover,
+.loading-links .loading-link-button:focus-visible {
   transform: translateY(-3px);
   color: #3a1a02;
   background: linear-gradient(180deg, #ffe7a3, #ffc061);
@@ -672,7 +677,7 @@ body[data-weapon="gun"] #game {
   .loading-eyebrow-line { width: 22px; }
   .loading-tagline { font-size: 0.98rem; }
   .loading-play { padding: 14px 44px 14px 38px; font-size: 1.15rem; }
-  .loading-links a { padding: 7px 12px; font-size: 0.82rem; }
+  .loading-links a, .loading-links .loading-link-button { padding: 7px 12px; font-size: 0.82rem; }
 }
 
 /* People who prefer less motion get the still poster and no moving effects. */
@@ -709,4 +714,66 @@ html:has(#game-root) body::-webkit-scrollbar,
   display: none;
   width: 0;
   height: 0;
+}
+
+/* Home page introduction shown as a panel over the loading screen. */
+.loading-links .loading-link-button[hidden] { display: none; }
+.intro-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20001;
+  background: rgba(4, 14, 22, 0.6);
+  backdrop-filter: blur(4px);
+  animation: loading-fade-in 0.3s ease both;
+}
+.intro-backdrop[hidden] { display: none; }
+.home-content > .intro-close { display: none; }
+.home-content.is-panel-open {
+  position: fixed;
+  z-index: 20002;
+  top: 50%;
+  left: 50%;
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translate(-50%, -50%);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 210, 122, 0.35);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  animation: intro-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 210, 122, 0.5) transparent;
+}
+.home-content.is-panel-open > .intro-close {
+  display: grid;
+  place-items: center;
+  position: sticky;
+  top: 14px;
+  float: right;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  margin: 14px 14px -54px 0;
+  border: 1px solid rgba(255, 244, 220, 0.3);
+  border-radius: 50%;
+  background: rgba(6, 22, 34, 0.75);
+  color: #fff4dc;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.home-content.is-panel-open > .intro-close:hover,
+.home-content.is-panel-open > .intro-close:focus-visible {
+  background: linear-gradient(180deg, #ffe7a3, #ffc061);
+  color: #3a1a02;
+  transform: rotate(90deg);
+  outline: none;
+}
+@keyframes intro-in {
+  from { opacity: 0; transform: translate(-50%, -46%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-content.is-panel-open, .intro-backdrop { animation: none; }
 }

@@ -1,9 +1,10 @@
 
 // ── 18-camera-and-quests.js ─ Camera, interaction prompts and quest dialogue.
 function updateCamera() {
-  const targetYaw = isHelming ? boatYaw : cameraYaw;
+  // The camera sits behind the bow, so it looks the way the boat sails.
+  const targetYaw = isHelming ? boatYaw + Math.PI : cameraYaw;
   const isSniper = player.weapon === "gun" && player.mastery.gun >= 50 && player.lastMoveSpeed === 0;
-  const distance = isHelming ? 100 : (isSniper ? 98 : 58);
+  const distance = isHelming ? 62 + activeBoat.userData.spec.length * 1.15 : (isSniper ? 98 : 58);
   const horizontalDistance = Math.cos(cameraPitch) * distance;
   const height = (isHelming ? 24 : 14) + Math.sin(cameraPitch) * distance;
   const island = getIslandUnderPlayer();
@@ -33,7 +34,7 @@ function updateCamera() {
     camera.position.z += (Math.random() - 0.5) * cameraShake;
     cameraShake = Math.max(0, cameraShake - 0.08);
   }
-  camera.lookAt(targetPos.x, targetPos.y + (isHelming ? 4 : 7), targetPos.z);
+  camera.lookAt(targetPos.x, targetPos.y + (isHelming ? activeBoat.userData.spec.depth + 6 : 7), targetPos.z);
 }
 
 function updateInteractionPrompt() {

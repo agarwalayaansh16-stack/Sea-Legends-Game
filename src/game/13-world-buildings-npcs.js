@@ -1407,58 +1407,6 @@ function createHakiTrainer(position) {
   });
 }
 
-function createBoat(type) {
-  const sizes = {
-    dinghy: { length: 18, width: 6, color: 0x8c5c3a, sail: false },
-    sailor: { length: 24, width: 7.5, color: 0x4b7a9a, sail: true },
-    brigade: { length: 32, width: 9, color: 0x30536f, sail: true },
-  };
-  const spec = sizes[type] || sizes.dinghy;
-  const boat = new THREE.Group();
-
-  const hull = new THREE.Mesh(
-    new THREE.BoxGeometry(spec.length, 1.8, spec.width),
-    new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.62, metalness: 0.12 }),
-  );
-  hull.position.y = 0.9;
-  hull.castShadow = true;
-  boat.add(hull);
-
-  const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(spec.length * 0.88, 0.4, spec.width * 0.92),
-    new THREE.MeshStandardMaterial({ color: 0xd4b27e, roughness: 0.72 }),
-  );
-  deck.position.y = 1.35;
-  boat.add(deck);
-
-  if (spec.sail) {
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.18, 8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x3b3029, roughness: 0.85 }),
-    );
-    mast.position.y = 4.5;
-    boat.add(mast);
-
-    const sail = new THREE.Mesh(
-      new THREE.PlaneGeometry(6, 7.5),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
-    );
-    sail.position.set(0, 4.5, 0);
-    sail.rotation.y = -Math.PI / 2;
-    sail.rotation.z = 0.12;
-    boat.add(sail);
-  }
-
-  const cabin = new THREE.Mesh(
-    new THREE.BoxGeometry(spec.length * 0.3, 1.6, spec.width * 0.75),
-    new THREE.MeshStandardMaterial({ color: 0x2c4b5c, roughness: 0.78 }),
-  );
-  cabin.position.set(-spec.length * 0.15, 2.1, 0);
-  boat.add(cabin);
-
-  return boat;
-}
-
 function addIslandRocks(group, radius, height) {
   const rockMaterial = new THREE.MeshStandardMaterial({ color: worldHex(WORLD_PALETTE.terrain.rockDark), roughness: 0.97, flatShading: true });
   const rockCount = 18;
@@ -1480,22 +1428,6 @@ function addIslandRocks(group, radius, height) {
     const globalPos = group.position.clone().add(new THREE.Vector3(rx, ry, rz));
     addCollisionCircle(globalPos, rockRadius * 0.85, "Shore Rock");
   }
-}
-
-function handleBoatSelection(type) {
-  if (activeBoat) {
-    scene.remove(activeBoat);
-  }
-  const boat = createBoat(type);
-  enhanceWorldSurfaces(boat);
-  const offset = new THREE.Vector3(0, 0, -28).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerMesh.rotation.y);
-  boat.position.copy(playerMesh.position).add(offset);
-  boat.position.y = OCEAN_SURFACE_Y + 0.28;
-  boat.rotation.y = playerMesh.rotation.y;
-  scene.add(boat);
-  activeBoat = boat;
-  hideBoatMenu();
-  log(`Spawned ${type} boat near the water.`);
 }
 
 function showBoatMenu() {

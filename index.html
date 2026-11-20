@@ -75,6 +75,7 @@
           </label>
           <nav class="loading-links" aria-label="Site information">
             <a href="/">Home</a>
+            <button id="loading-intro" class="loading-link-button" type="button" aria-haspopup="dialog" hidden>Introduction</button>
             <a href="/about">About</a>
             <a href="/game-guide">Game Guide</a>
             <a href="/contact">Contact</a>
@@ -414,15 +415,45 @@
           <span id="compass-label" class="compass-label">Quest</span>
         </div>
 
-        <div id="boat-menu" class="boat-menu hidden">
-          <strong>Boat Dock</strong>
-          <p>Choose a vessel to summon:</p>
+        <div id="boat-menu" class="boat-menu hidden" role="dialog" aria-labelledby="boat-menu-title">
+          <p class="boat-menu-eyebrow">Harbour master</p>
+          <strong id="boat-menu-title">Boat Dock</strong>
+          <p class="boat-menu-lead">Choose a vessel. It launches at the nearest open water and you take the helm straight away.</p>
           <div class="boat-options">
-            <button class="boat-option" data-boat="dinghy" type="button">Dinghy</button>
-            <button class="boat-option" data-boat="sailor" type="button">Sailor Boat</button>
-            <button class="boat-option" data-boat="brigade" type="button">Brigade</button>
+            <button class="boat-option" data-boat="dinghy" type="button">
+              <svg class="boat-option-art" viewBox="0 0 80 60" aria-hidden="true"><path class="bs-wave" d="M0 52 Q10 48 20 52 T40 52 T60 52 T80 52"/><path class="bs-trim" d="M10 40 L70 40"/><path class="bs-oar" d="M22 34 L8 50 M58 34 L72 50"/><path class="bs-hull" d="M6 40 L74 40 L66 52 Q40 56 14 52 Z"/></svg>
+              <span class="boat-option-name">Dinghy</span>
+              <span class="boat-option-desc">Small and nimble. Turns on a coin.</span>
+              <span class="boat-stats"><span class="boat-stat"><em>Speed</em><i style="--v:0.5"></i></span><span class="boat-stat"><em>Handling</em><i style="--v:1"></i></span><span class="boat-stat"><em>Size</em><i style="--v:0.3"></i></span></span>
+            </button>
+            <button class="boat-option" data-boat="sailor" type="button">
+              <svg class="boat-option-art" viewBox="0 0 80 60" aria-hidden="true"><path class="bs-wave" d="M0 52 Q10 48 20 52 T40 52 T60 52 T80 52"/><path class="bs-mast" d="M40 40 V8"/><path class="bs-sail" d="M26 12 Q40 16 54 12 L52 34 Q40 38 28 34 Z"/><path class="bs-flag" d="M40 8 L50 10 L40 13 Z"/><path class="bs-hull" d="M6 40 L74 40 L66 52 Q40 56 14 52 Z"/></svg>
+              <span class="boat-option-name">Sailor Boat</span>
+              <span class="boat-option-desc">Balanced and quick under one sail.</span>
+              <span class="boat-stats"><span class="boat-stat"><em>Speed</em><i style="--v:0.8"></i></span><span class="boat-stat"><em>Handling</em><i style="--v:0.72"></i></span><span class="boat-stat"><em>Size</em><i style="--v:0.62"></i></span></span>
+            </button>
+            <button class="boat-option" data-boat="brigade" type="button">
+              <svg class="boat-option-art" viewBox="0 0 80 60" aria-hidden="true"><path class="bs-wave" d="M0 52 Q10 48 20 52 T40 52 T60 52 T80 52"/><path class="bs-mast" d="M30 40 V10 M50 40 V6"/><path class="bs-sail" d="M20 14 Q30 17 40 14 L39 26 Q30 28 21 26 Z M20 28 Q30 31 40 28 L39 37 Q30 39 21 37 Z M40 10 Q50 13 60 10 L59 22 Q50 24 41 22 Z M40 24 Q50 27 60 24 L59 36 Q50 38 41 36 Z"/><path class="bs-mast" d="M66 38 L78 30"/><path class="bs-flag" d="M50 6 L60 8 L50 11 Z"/><path class="bs-hull" d="M6 40 L74 40 L66 52 Q40 56 14 52 Z"/></svg>
+              <span class="boat-option-name">Brigade</span>
+              <span class="boat-option-desc">The fastest ship, with cannons and two masts.</span>
+              <span class="boat-stats"><span class="boat-stat"><em>Speed</em><i style="--v:1"></i></span><span class="boat-stat"><em>Handling</em><i style="--v:0.5"></i></span><span class="boat-stat"><em>Size</em><i style="--v:1"></i></span></span>
+            </button>
           </div>
           <button id="boat-menu-close" type="button">Cancel</button>
+        </div>
+
+        <button id="boat-board" class="boat-board hidden" type="button"><kbd>G</kbd><span>Board your boat</span></button>
+
+        <div id="sail-hud" class="sail-hud hidden" aria-live="off">
+          <div class="sail-hud-top">
+            <span class="sail-hud-icon" aria-hidden="true">⚓</span>
+            <span id="sail-hud-name" class="sail-hud-name">Boat</span>
+            <span id="sail-heading" class="sail-heading">N</span>
+          </div>
+          <div class="sail-speed"><span id="sail-speed-value">0</span><small>knots</small></div>
+          <div class="sail-bar"><i id="sail-speed-fill"></i></div>
+          <div class="sail-keys"><span><kbd>W</kbd><kbd>S</kbd> Sail</span><span><kbd>A</kbd><kbd>D</kbd> Steer</span></div>
+          <button id="sail-ashore" class="sail-ashore" type="button"><kbd>G</kbd> Go ashore</button>
         </div>
 
         <div class="controls" aria-label="Keyboard controls">

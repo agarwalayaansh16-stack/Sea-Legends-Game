@@ -154,7 +154,7 @@ function updateCompass() {
   const dx = targetPos.x - playerMesh.position.x;
   const dz = targetPos.z - playerMesh.position.z;
   const distance = Math.sqrt(dx * dx + dz * dz);
-  const targetYaw = isHelming ? boatYaw : cameraYaw;
+  const targetYaw = isHelming ? boatYaw + Math.PI : cameraYaw;
 
   const fx = -Math.sin(targetYaw);
   const fz = -Math.cos(targetYaw);

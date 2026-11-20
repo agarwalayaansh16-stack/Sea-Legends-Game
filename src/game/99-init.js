@@ -48,6 +48,57 @@ loadingSound?.addEventListener("click", () => {
   if (!loadingVideo.muted) loadingVideo.play?.().catch(() => {});
   loadingSound.setAttribute("aria-pressed", String(!loadingVideo.muted));
 });
+// "Introduction" opens the home page's intro text (below the game, which the
+// page no longer scrolls to) as a panel over the loading screen.
+function setupIntroPanel() {
+const introSection = document.querySelector(".home-content");
+const introButton = document.querySelector("#loading-intro");
+if (introSection && introButton && !introButton.dataset.ready) {
+  introButton.dataset.ready = "1";
+  introButton.hidden = false;
+  const backdrop = document.createElement("div");
+  backdrop.className = "intro-backdrop";
+  backdrop.hidden = true;
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "intro-close";
+  closeButton.setAttribute("aria-label", "Close introduction");
+  closeButton.textContent = "✕";
+  introSection.prepend(closeButton);
+  document.body.append(backdrop);
+  const closeIntro = () => {
+    introSection.classList.remove("is-panel-open");
+    introSection.removeAttribute("role");
+    introSection.removeAttribute("aria-modal");
+    backdrop.hidden = true;
+    introButton.focus({ preventScroll: true });
+  };
+  introButton.addEventListener("click", () => {
+    introSection.classList.add("is-panel-open");
+    introSection.setAttribute("role", "dialog");
+    introSection.setAttribute("aria-modal", "true");
+    introSection.scrollTop = 0;
+    backdrop.hidden = false;
+    closeButton.focus({ preventScroll: true });
+  });
+  closeButton.addEventListener("click", closeIntro);
+  backdrop.addEventListener("click", closeIntro);
+  // "Play the game above" inside the intro just closes the panel.
+  introSection.querySelectorAll('a[href="#game-root"]').forEach((link) => {
+    link.addEventListener("click", (event) => { event.preventDefault(); closeIntro(); });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && introSection.classList.contains("is-panel-open")) {
+      event.stopPropagation();
+      closeIntro();
+    }
+  }, true);
+}
+}
+// The intro is part of the page around the game; wait for it if it isn't there yet.
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setupIntroPanel);
+else setupIntroPanel();
+
 if (loadingScreen && loadingPlay) {
   loadingScreen.classList.add("is-ready");
   loadingPlay.hidden = false;

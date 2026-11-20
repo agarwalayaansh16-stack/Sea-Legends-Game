@@ -35,6 +35,8 @@
 .home-content h1 { max-width: 800px; margin: 0 0 18px; color: var(--paper); font-size: clamp(2.2rem, 6vw, 4rem); line-height: 1.08; text-transform: none; }
 .home-content h2 { margin: 38px 0 12px; color: var(--gold); font-size: clamp(1.4rem, 3vw, 1.9rem); }
 .home-content h3 { margin: 0 0 8px; color: var(--paper); font-size: 1.1rem; }
+.home-faq { padding: 14px 0; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.home-faq p { margin: 0; }
 .home-content p, .home-content li { max-width: 800px; }
 .home-content a:not(.content-button) { color: var(--sea-bright); text-underline-offset: 3px; }
 .home-content a:focus-visible { outline: 3px solid var(--gold-bright); outline-offset: 4px; }

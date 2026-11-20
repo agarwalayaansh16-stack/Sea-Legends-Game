@@ -8,7 +8,12 @@ export const metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: "Sea Legends", template: "%s | Sea Legends" },
   description: "Explore islands, take on quests, and play Sea Legends, a free browser-based 3D action RPG.",
-  openGraph: { type: "website", siteName: "Sea Legends", title: "Sea Legends", description: "A free browser-based 3D action RPG set across a chain of islands.", url: siteUrl },
+  applicationName: "Sea Legends",
+  openGraph: {
+    type: "website", siteName: "Sea Legends", locale: "en_US", title: "Sea Legends",
+    description: "A free browser-based 3D action RPG set across a chain of islands.", url: siteUrl,
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }) {
