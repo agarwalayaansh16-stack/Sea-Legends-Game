@@ -1,4 +1,5 @@
 import ContentLayout from "../../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function IslandGuidePage() {
-  return <ContentLayout eyebrow="ISLAND GUIDE">
+  return <Localized><ContentLayout eyebrow="ISLAND GUIDE">
     <h1>Islands of the First Sea</h1>
     <p className="content-lead">The First Sea is a chain of islands, each with its own landscape, enemies and quest giver. This guide covers the five islands you can currently visit, in the order most players reach them, with the level you need and what to do when you get there.</p>
 
@@ -61,8 +62,8 @@ export default function IslandGuidePage() {
     <p>Two advanced trainers live in Snowy Village. The <strong>Flash Step Master</strong> (level 75, $5,000) teaches a short-range teleport on <kbd>T</kbd>. The <strong>Foresight Master</strong> (level 80, $7,500) teaches Foresight, which automatically dodges a limited number of attacks and is toggled with <kbd>K</kbd>. Each trainer has a teleporter beside them that takes you back to Starter Island.</p>
 
     <h2>Getting between islands</h2>
-    <p>There are two ways to travel. <strong>Teleporters</strong> on Starter Island send you to the other islands; interact with one to choose a destination, but some routes need a minimum level (15 for Jungle Island, 60 for Desert Island). <strong>Boats</strong> let you go anywhere: summon one from a Boat Dealer, walk up to it and press <kbd>G</kbd> to take the helm, steer with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, and press <kbd>G</kbd> again to step off. The Home button in the top bar teleports you back to Starter Island after a short countdown.</p>
+    <p>There are two ways to travel. <strong>Teleporters</strong> on Starter Island send you to the other islands; interact with one to choose a destination, but some routes need a minimum level (15 for Jungle Island, 60 for Desert Island). <strong>Boats</strong> let you go anywhere: choose one at a Boat Dealer and it launches at the nearest open water with you at the helm. Steer with <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>, press <kbd>G</kbd> to go ashore, and press <kbd>G</kbd> near your boat to climb back aboard. The Home button in the top bar teleports you back to Starter Island after a short countdown.</p>
 
     <p><a className="content-button" href="/#game-root">Play Sea Legends</a> <a href="/guides/enemies-and-bosses">Enemy and boss guide</a> · <a href="/guides/weapons-and-skills">Weapons and skills</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

@@ -266,6 +266,59 @@ const I18N_ROWS = [
   ["Sail", "चलाएँ", "Navegar", "Naviguer", "Navegar"],
   ["Steer", "मोड़ें", "Girar", "Barrer", "Virar"],
   ["Go ashore", "किनारे उतरें", "Bajar a tierra", "Débarquer", "Desembarcar"],
+  ["Map", "नक्शा", "Mapa", "Carte", "Mapa"],
+  ["PARRY!", "पैरी!", "¡PARADA!", "PARADE !", "DEFESA!"],
+  ["PERFECT PARRY!", "परफ़ेक्ट पैरी!", "¡PARADA PERFECTA!", "PARADE PARFAITE !", "DEFESA PERFEITA!"],
+  ["EXECUTION!", "खात्मा!", "¡EJECUCIÓN!", "EXÉCUTION !", "EXECUÇÃO!"],
+  ["Reflected", "लौटाया", "Reflejado", "Renvoyé", "Refletido"],
+  ["Execution! A perfect parry finished the enemy off.", "खात्मा! एक परफ़ेक्ट पैरी ने दुश्मन को खत्म कर दिया।", "¡Ejecución! Una parada perfecta acabó con el enemigo.", "Exécution ! Une parade parfaite a achevé l'ennemi.", "Execução! Uma defesa perfeita acabou com o inimigo."],
+  ["🗺 Map", "🗺 नक्शा", "🗺 Mapa", "🗺 Carte", "🗺 Mapa"],
+  ["Open world map (M)", "दुनिया का नक्शा खोलें (M)", "Abrir el mapa del mundo (M)", "Ouvrir la carte du monde (M)", "Abrir o mapa do mundo (M)"],
+  ["World map", "दुनिया का नक्शा", "Mapa del mundo", "Carte du monde", "Mapa do mundo"],
+  ["World Map", "दुनिया का नक्शा", "Mapa del mundo", "Carte du monde", "Mapa do mundo"],
+  ["First Sea", "फ़र्स्ट सी", "Primer Mar", "Première Mer", "Primeiro Mar"],
+  ["Close map", "नक्शा बंद करें", "Cerrar mapa", "Fermer la carte", "Fechar mapa"],
+  ["Map of the First Sea", "फ़र्स्ट सी का नक्शा", "Mapa del Primer Mar", "Carte de la Première Mer", "Mapa do Primeiro Mar"],
+  ["Quest Log", "क्वेस्ट सूची", "Diario de misiones", "Journal de quêtes", "Diário de missões"],
+  ["Current quest", "मौजूदा क्वेस्ट", "Misión actual", "Quête en cours", "Missão atual"],
+  ["Available now", "अभी उपलब्ध", "Disponibles ahora", "Disponibles maintenant", "Disponíveis agora"],
+  ["Coming up", "आगे आने वाले", "Próximamente", "À venir", "Em breve"],
+  ["Completed", "पूरे हुए", "Completadas", "Terminées", "Concluídas"],
+  ["No quest yet. Visit a quest giver and press E.", "अभी कोई क्वेस्ट नहीं। किसी क्वेस्ट देने वाले के पास जाकर E दबाएँ।", "Aún no tienes misión. Ve a quien da las misiones y pulsa E.", "Aucune quête pour l'instant. Allez voir un donneur de quêtes et appuyez sur E.", "Nenhuma missão ainda. Vá até quem dá as missões e aperte E."],
+  ["You", "आप", "Tú", "Vous", "Você"],
+  ["Your boat", "आपकी नाव", "Tu barco", "Votre bateau", "Seu barco"],
+  ["Quest target", "क्वेस्ट का लक्ष्य", "Objetivo de la misión", "Objectif de quête", "Alvo da missão"],
+  ["Raider ship", "लुटेरा जहाज़", "Barco saqueador", "Navire pillard", "Navio saqueador"],
+  ["Raider sunk!", "लुटेरा जहाज़ डूब गया!", "¡Saqueador hundido!", "Pillard coulé !", "Saqueador afundado!"],
+  ["Cannons", "तोपें", "Cañones", "Canons", "Canhões"],
+  ["Fire", "दागें", "Disparar", "Tirer", "Disparar"],
+  ["Skills", "कौशल", "Habilidades", "Compétences", "Habilidades"],
+  ["Iron Aura", "आयरन ऑरा", "Aura de Hierro", "Aura de fer", "Aura de Ferro"],
+  ["Foresight", "फ़ोरसाइट", "Previsión", "Prescience", "Previsão"],
+  ["Flash Step", "फ़्लैश स्टेप", "Paso Relámpago", "Pas éclair", "Passo Relâmpago"],
+  ["Sound effects", "ध्वनि प्रभाव", "Efectos de sonido", "Effets sonores", "Efeitos sonoros"],
+  ["Lower graphics automatically if the game runs slowly", "गेम धीमा चले तो ग्राफ़िक्स अपने आप कम करें", "Bajar los gráficos automáticamente si el juego va lento", "Baisser automatiquement les graphismes si le jeu ralentit", "Reduzir os gráficos automaticamente se o jogo ficar lento"],
+  ["Save backup", "सेव का बैकअप", "Copia de seguridad", "Sauvegarde de secours", "Backup do save"],
+  ["Your progress lives in this browser only. Download a backup file to keep it safe or to move it to another browser or device.", "आपकी प्रगति सिर्फ़ इसी ब्राउज़र में रहती है। इसे सुरक्षित रखने या दूसरे ब्राउज़र या डिवाइस पर ले जाने के लिए बैकअप फ़ाइल डाउनलोड करें।", "Tu progreso solo vive en este navegador. Descarga una copia de seguridad para protegerlo o llevarlo a otro navegador o dispositivo.", "Votre progression n'existe que dans ce navigateur. Téléchargez une sauvegarde pour la protéger ou la transférer vers un autre navigateur ou appareil.", "Seu progresso fica só neste navegador. Baixe um arquivo de backup para protegê-lo ou levá-lo a outro navegador ou dispositivo."],
+  ["Download backup", "बैकअप डाउनलोड करें", "Descargar copia", "Télécharger la sauvegarde", "Baixar backup"],
+  ["Load backup", "बैकअप लोड करें", "Cargar copia", "Charger une sauvegarde", "Carregar backup"],
+  ["Replace current progress?", "मौजूदा प्रगति बदलें?", "¿Reemplazar el progreso actual?", "Remplacer la progression actuelle ?", "Substituir o progresso atual?"],
+  ["Backup found", "बैकअप मिला", "Copia encontrada", "Sauvegarde trouvée", "Backup encontrado"],
+  ["Press the button again to replace this profile's progress.", "इस प्रोफ़ाइल की प्रगति बदलने के लिए बटन फिर से दबाएँ।", "Pulsa el botón otra vez para reemplazar el progreso de este perfil.", "Appuyez à nouveau sur le bouton pour remplacer la progression de ce profil.", "Aperte o botão de novo para substituir o progresso deste perfil."],
+  ["Choose a profile first.", "पहले एक प्रोफ़ाइल चुनें।", "Primero elige un perfil.", "Choisissez d'abord un profil.", "Escolha um perfil primeiro."],
+  ["There is no progress to back up yet.", "बैकअप के लिए अभी कोई प्रगति नहीं है।", "Todavía no hay progreso que guardar.", "Il n'y a encore aucune progression à sauvegarder.", "Ainda não há progresso para salvar."],
+  ["Backup downloaded.", "बैकअप डाउनलोड हो गया।", "Copia descargada.", "Sauvegarde téléchargée.", "Backup baixado."],
+  ["That file is too large to be a Sea Legends backup.", "यह फ़ाइल Sea Legends बैकअप होने के लिए बहुत बड़ी है।", "Ese archivo es demasiado grande para ser una copia de Sea Legends.", "Ce fichier est trop volumineux pour être une sauvegarde Sea Legends.", "Esse arquivo é grande demais para ser um backup do Sea Legends."],
+  ["That file is not a valid Sea Legends backup.", "यह फ़ाइल सही Sea Legends बैकअप नहीं है।", "Ese archivo no es una copia válida de Sea Legends.", "Ce fichier n'est pas une sauvegarde Sea Legends valide.", "Esse arquivo não é um backup válido do Sea Legends."],
+  ["The backup could not be saved in this browser.", "बैकअप इस ब्राउज़र में सेव नहीं हो सका।", "No se pudo guardar la copia en este navegador.", "La sauvegarde n'a pas pu être enregistrée dans ce navigateur.", "Não foi possível salvar o backup neste navegador."],
+  ["Backup loaded. Restarting the game...", "बैकअप लोड हो गया। गेम फिर से शुरू हो रहा है...", "Copia cargada. Reiniciando el juego...", "Sauvegarde chargée. Redémarrage du jeu...", "Backup carregado. Reiniciando o jogo..."],
+  ["Cannons fire at the spot you click, or at the nearest raider ship. Raiders patrol the waters around every island.", "तोपें उस जगह दागी जाती हैं जहाँ आप क्लिक करते हैं, या सबसे पास के लुटेरे जहाज़ पर। लुटेरे हर द्वीप के आसपास के पानी में गश्त करते हैं।", "Los cañones disparan donde haces clic o al barco saqueador más cercano. Los saqueadores patrullan las aguas de cada isla.", "Les canons tirent là où vous cliquez, ou sur le navire pillard le plus proche. Les pillards patrouillent autour de chaque île.", "Os canhões disparam onde você clica ou no navio saqueador mais próximo. Os saqueadores patrulham as águas ao redor de cada ilha."],
+  ["Your boat ran into the shore. Back off with S, or press G to step ashore.", "आपकी नाव किनारे से टकरा गई। S से पीछे हटें, या किनारे उतरने के लिए G दबाएँ।", "Tu barco chocó con la costa. Retrocede con S o pulsa G para bajar a tierra.", "Votre bateau a heurté le rivage. Reculez avec S, ou appuyez sur G pour débarquer.", "Seu barco bateu na costa. Recue com S ou aperte G para desembarcar."],
+  ["You stepped ashore. Press G near your boat to sail again.", "आप किनारे उतर गए। फिर से नाव चलाने के लिए उसके पास G दबाएँ।", "Has bajado a tierra. Pulsa G junto a tu barco para volver a navegar.", "Vous avez débarqué. Appuyez sur G près de votre bateau pour reprendre la mer.", "Você desembarcou. Aperte G perto do barco para navegar de novo."],
+  ["No shore nearby, so you dived into the sea. Press G to climb back aboard.", "पास में कोई किनारा नहीं था, इसलिए आप समुद्र में कूद गए। वापस चढ़ने के लिए G दबाएँ।", "No había costa cerca, así que te lanzaste al mar. Pulsa G para volver a bordo.", "Pas de rivage à proximité : vous avez plongé dans la mer. Appuyez sur G pour remonter à bord.", "Não havia costa por perto, então você mergulhou no mar. Aperte G para voltar a bordo."],
+  ["Get closer to your boat to climb aboard.", "सवार होने के लिए अपनी नाव के पास जाएँ।", "Acércate a tu barco para subir a bordo.", "Approchez-vous de votre bateau pour monter à bord.", "Chegue mais perto do barco para embarcar."],
+  ["You don't have a boat yet. Visit the Boat Dealer near the Starter Island shore.", "आपके पास अभी नाव नहीं है। स्टार्टर द्वीप के किनारे नाव डीलर के पास जाएँ।", "Aún no tienes barco. Visita al vendedor de barcos en la costa de la Isla Inicial.", "Vous n'avez pas encore de bateau. Allez voir le marchand de bateaux sur le rivage de l'Île de départ.", "Você ainda não tem barco. Visite o vendedor de barcos na costa da Ilha Inicial."],
+  ["There is no open water nearby. Walk closer to the sea and try again.", "पास में खुला पानी नहीं है। समुद्र के पास जाकर फिर कोशिश करें।", "No hay agua abierta cerca. Acércate al mar e inténtalo de nuevo.", "Pas d'eau libre à proximité. Rapprochez-vous de la mer et réessayez.", "Não há água aberta por perto. Chegue mais perto do mar e tente de novo."],
   ["DEFEATED", "हार गए", "DERROTADO", "VAINCU", "DERROTADO"],
   ["You were knocked out in battle", "आप लड़ाई में बेहोश हो गए", "Te dejaron fuera de combate", "Vous avez été mis K.O. au combat", "Você foi nocauteado em batalha"],
   ["Respawn", "फिर से शुरू करें", "Reaparecer", "Réapparaître", "Renascer"],
@@ -451,6 +504,9 @@ const I18N_PATTERNS = [
   [/^(.+\.) Progress: (\d+)\/(\d+)\. Aura kills: (\d+)\/(\d+)\.$/, (m) => `${i18nWord(m[1])} ${i18nWord("Progress")}: ${m[2]}/${m[3]}. ${i18nWord("Aura kills")}: ${m[4]}/${m[5]}.`],
   [/^(.+) \| Aura (\d+)$/, (m) => `${i18nWord(m[1])} | ${i18nWord("Aura")} ${m[2]}`],
   [/^Special ability unlocked\. Aura (Lv \d+|locked until level 60 Desert training)\.$/, (m) => `${i18nWord("Special ability unlocked.")} ${i18nWord("Aura")} ${m[1].startsWith("Lv") ? m[1].replace("Lv", i18nWord("Lv")) : i18nWord(m[1])}.`],
+  [/^The game was running slowly, so graphics were lowered to level (\d+)\. You can change this in the Esc menu\.$/, (m) => ({ hi: `गेम धीमा चल रहा था, इसलिए ग्राफ़िक्स लेवल ${m[1]} पर कम किए गए। आप इसे Esc मेन्यू में बदल सकते हैं।`, es: `El juego iba lento, así que los gráficos bajaron al nivel ${m[1]}. Puedes cambiarlo en el menú Esc.`, fr: `Le jeu ralentissait : les graphismes sont passés au niveau ${m[1]}. Vous pouvez changer cela dans le menu Échap.`, pt: `O jogo estava lento, então os gráficos foram reduzidos para o nível ${m[1]}. Você pode mudar isso no menu Esc.` })[currentLanguage] || m[0]],
+  [/^Your (Dinghy|Sailor Boat|Brigade) is launched and you have the helm\. W and S to sail, A and D to steer, G to go ashore\.$/, (m) => ({ hi: `आपकी ${i18nWord(m[1])} पानी में उतर गई और पतवार आपके हाथ में है। W और S से चलाएँ, A और D से मोड़ें, G से किनारे उतरें।`, es: `Tu ${i18nWord(m[1])} está en el agua y llevas el timón. W y S para navegar, A y D para girar, G para bajar a tierra.`, fr: `Votre ${i18nWord(m[1])} est à l'eau et vous tenez la barre. W et S pour naviguer, A et D pour diriger, G pour débarquer.`, pt: `Seu ${i18nWord(m[1])} está na água e você está no leme. W e S para navegar, A e D para virar, G para desembarcar.` })[currentLanguage] || m[0]],
+  [/^Raider sunk! \+\$(\d+), \+(\d+) XP\.$/, (m) => `${i18nWord("Raider sunk!")} +$${m[1]}, +${m[2]} XP.`],
   [/^HEADSHOT! (-\d+)$/, (m) => `${i18nWord("HEADSHOT!")} ${m[1]}`],
 ];
 
@@ -547,8 +603,14 @@ function setLanguage(lang) {
   document.querySelectorAll(".language-select, #loading-language").forEach((select) => { select.value = lang; });
   translateTree(document.body);
   refreshTutorialText?.();
+  // Let the site pages (intro, footer) follow the game's language picker.
+  window.dispatchEvent(new CustomEvent("sea-legends-language", { detail: lang }));
 }
 
+// A language picked in the site footer switches the game too.
+window.addEventListener("sea-legends-language", (event) => {
+  if (event.detail && event.detail !== currentLanguage) setLanguage(event.detail);
+});
 document.querySelectorAll(".language-select, #loading-language").forEach((select) => {
   select.value = currentLanguage;
   select.addEventListener("change", () => setLanguage(select.value));

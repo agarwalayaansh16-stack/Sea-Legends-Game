@@ -38,12 +38,16 @@ const audio = {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      // Sound effects get their own level; music connects to masterGain directly.
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.setValueAtTime(this.effectsVolume ?? 1, this.ctx.currentTime);
+      this.sfxGain.connect(this.masterGain);
       
       const originalConnect = AudioNode.prototype.connect;
       const self = this;
       AudioNode.prototype.connect = function(destination, output, input) {
         if (destination === self.ctx.destination) {
-          return originalConnect.call(this, self.masterGain, output, input);
+          return originalConnect.call(this, self.sfxGain, output, input);
         }
         return originalConnect.call(this, destination, output, input);
       };
@@ -53,6 +57,10 @@ const audio = {
     } catch (e) {
       console.warn("Web Audio API not supported", e);
     }
+  },
+  setEffectsVolume(val) {
+    this.effectsVolume = clamp(val, 0, 1);
+    if (this.sfxGain && this.ctx) this.sfxGain.gain.setValueAtTime(this.effectsVolume, this.ctx.currentTime);
   },
   setVolume(val) {
     this.volume = clamp(val, 0, 1);
@@ -1487,6 +1495,10 @@ window.addEventListener("keydown", (event) => {
   if (code === "KeyE") {
     interact();
   }
+  if (code === "KeyM") {
+    event.preventDefault();
+    toggleWorldMap();
+  }
   if (code === "Digit1") setWeapon("melee");
   if (code === "Digit2") setWeapon("sword");
   if (code === "Digit3") setWeapon("gun");
@@ -1612,6 +1624,7 @@ document.querySelectorAll("#mobile-controls [data-touch-action]").forEach((butto
     if (button.dataset.touchAction === "attack") attack(player.weapon === "gun" || player.weapon === "special" ? { autoAim: true } : null);
     if (button.dataset.touchAction === "jump") jump();
     if (button.dataset.touchAction === "interact") interact();
+    if (button.dataset.touchAction === "map") toggleWorldMap();
   });
 });
 
@@ -8537,6 +8550,10 @@ function updatePlayer(dt) {
     player.stamina = player.maxStamina;
   }
   updateBoatUi(dt);
+  updateMobileSkills();
+  updateAutoGraphics();
+  updateSeaCombat(dt);
+  updateMoveFx(dt);
   if (isHelming) {
     playerMoveState.velocity.set(0, 0, 0);
     updateBoat(dt);
@@ -8964,6 +8981,7 @@ function updateTeleport(dt) {
   const wasActive = homeTeleportCountdown > 0;
   homeTeleportCountdown = Math.max(0, homeTeleportCountdown - dt);
 
+  teleportStatus.classList.toggle("is-counting", homeTeleportCountdown > 0);
   if (homeTeleportCountdown > 0) {
     teleportStatus.textContent = `Teleporting in ${Math.ceil(homeTeleportCountdown)}s...`;
     return;
@@ -9206,9 +9224,11 @@ function updatePlayerAnimation(dt) {
   }
 
   applyLimbBends(model, anim, moving, groundSpeed);
+  applyRunStyle(model, anim, moving, groundSpeed, dt);
   // Held weapons, combat stance and keyframed attacks/skills (31-combat-animations.js).
   updateHeldWeapons(model);
   applyPlayerActions(model, anim, dt);
+  applyBlockPose(model, anim, dt);
 
   // Squash & stretch: stretch on take-off, squash on landing.
   if (!model.userData.baseScale) model.userData.baseScale = model.scale.clone();
@@ -9598,6 +9618,11 @@ function updateEnemies(dt) {
     }
 
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+    // Parried enemies reel for a moment and can't act (42-move-effects.js).
+    if (enemy.parryStun > 0) {
+      enemy.parryStun -= dt;
+      return;
+    }
 
     // Captain Jester split-apart animation
     if (enemy.type === "buggy" && enemy.parts) {
@@ -10149,6 +10174,15 @@ function damagePlayer(amount, source) {
     return 0; // Completely dodge attack!
   }
 
+  // Perfect Parry: block just before the blow lands. Anyone can parry; it takes no damage,
+  // staggers the attacker and executes it below 10% health (42-move-effects.js).
+  if (player.isBlocking && performance.now() - player.blockStartTime < PARRY_WINDOW_MS) {
+    const attacker = enemyStrikeResolving ? enemyStrikeAttacker : enemyUpdateContext;
+    addMasteryXp("defense", 12);
+    performParry(attacker && attacker.alive ? attacker : null, amount);
+    return 0;
+  }
+
   const isHeadshot = Math.random() < 0.20;
   if (isHeadshot) {
     amount = Math.round(amount * 1.5);
@@ -10164,26 +10198,6 @@ function damagePlayer(amount, source) {
 
   let block = player.isBlocking ? 0.45 : 1;
   let parried = false;
-
-  // Perfect Parry: Block within 0.25s of keydown
-  if (player.isBlocking && player.mastery.defense >= 5 && (performance.now() - player.blockStartTime < 250)) {
-    block = 0; // Immune!
-    parried = true;
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "PERFECT PARRY!", "#7ce0b4");
-    audio.playHaki(); // Clang sound effect
-
-    // Reflect 40% damage to closest enemy
-    const closest = enemies
-      .filter((e) => e.alive && e.mesh.position.distanceTo(playerMesh.position) < 80)
-      .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-    if (closest) {
-      const reflectedDmg = Math.round(amount * 0.4);
-      closest.health -= reflectedDmg;
-      triggerHitFlash(closest.mesh);
-      createFloatingText(closest.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Reflected -${reflectedDmg}`, "#7ce0b4");
-      if (closest.health <= 0) defeatEnemy(closest);
-    }
-  }
 
   const haki = player.haki.active ? Math.max(0.35, 1 - player.haki.level * 0.1) : 1;
   const finalDamage = Math.max(0, Math.round(amount * block * haki));
@@ -10202,6 +10216,7 @@ function damagePlayer(amount, source) {
   player.health = Math.max(0, player.health - finalDamage);
   cameraShake = Math.max(cameraShake, finalDamage / 25);
   if (finalDamage > 0) {
+    flashScreen("hurt");
     if (isHeadshot) {
       createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `HEADSHOT! -${finalDamage}`, "#ff3333");
       log(`⚠️ HEADSHOT! Taken 1.5x damage from ${source || "an enemy"}.`);
@@ -10538,7 +10553,10 @@ function purchaseHaki() {
 
 // ── 19-combat-and-effects.js ─ Attacks, projectiles, hazards and combat visual effects.
 function attack(event = null) {
-  if (!gameStarted || attackCooldown > 0) return;
+  if (!gameStarted) return;
+  // At the helm, attacking fires the ship's cannons (41-sea-combat.js).
+  if (isHelming) { fireBoatCannons(event); return; }
+  if (attackCooldown > 0) return;
   // The special weapon's basic attack is Spirit Bolt (31-combat-animations.js).
   if (player.weapon === "special") {
     castSpiritBolt(event);
@@ -16232,6 +16250,7 @@ function updateActionCharge(anim) {
 
 let enemyUpdateContext = null;   // the enemy whose AI is running right now
 let enemyStrikeResolving = false; // true while a wound-up strike is being applied
+let enemyStrikeAttacker = null;   // the enemy whose wound-up strike is being applied
 
 const ENEMY_WINDUP = 0.42;        // seconds between the wind-up starting and the blow landing
 const ENEMY_ATTACK_DURATION = 0.8;
@@ -16361,9 +16380,13 @@ function updateEnemyAnimations(dt) {
         anim.pending = null;
         if (group.position.distanceTo(playerMesh.position) <= strike.reach && player.health > 0) {
           enemyStrikeResolving = true;
-          try { damagePlayer(strike.amount, strike.source); } finally { enemyStrikeResolving = false; }
+          enemyStrikeAttacker = enemy;
+          let dealt;
+          try { dealt = damagePlayer(strike.amount, strike.source); } finally { enemyStrikeResolving = false; enemyStrikeAttacker = null; }
+          enemySwingFx(enemy, dealt !== 0);
           updateHud();
         } else {
+          enemySwingFx(enemy, false);
           createFloatingText(group.position.clone().add(new THREE.Vector3(0, 10, 0)), "Miss", "#cfd8dc");
         }
       }
@@ -16581,7 +16604,7 @@ Object.assign(audio, {
     const ctx = this.ctx;
     this.musicGain = ctx.createGain();
     this.musicGain.gain.value = 0;
-    this.musicGain.connect(ctx.destination);
+    this.musicGain.connect(this.masterGain || ctx.destination);
     // Ocean: looping low noise whose level follows how close the shore is.
     this.ambienceGain = ctx.createGain();
     this.ambienceGain.gain.value = 0;
@@ -16664,7 +16687,7 @@ function updateMusic(dt) {
   const changing = musicState.theme !== musicState.wanted;
   const targetFade = playing && !changing ? 1 : 0;
   musicState.fade += THREE.MathUtils.clamp(targetFade - musicState.fade, -dt / 1.2, dt / 1.5);
-  audio.musicGain.gain.setTargetAtTime(musicState.fade * (night ? 0.55 : 0.8), now, 0.1);
+  audio.musicGain.gain.setTargetAtTime(musicState.fade * (night ? 0.55 : 0.8) * (audio.musicVolume ?? 1), now, 0.1);
   if (changing && musicState.fade <= 0.02) {
     musicState.theme = musicState.wanted;
     musicState.step = 0;
@@ -17214,6 +17237,59 @@ const I18N_ROWS = [
   ["Sail", "चलाएँ", "Navegar", "Naviguer", "Navegar"],
   ["Steer", "मोड़ें", "Girar", "Barrer", "Virar"],
   ["Go ashore", "किनारे उतरें", "Bajar a tierra", "Débarquer", "Desembarcar"],
+  ["Map", "नक्शा", "Mapa", "Carte", "Mapa"],
+  ["PARRY!", "पैरी!", "¡PARADA!", "PARADE !", "DEFESA!"],
+  ["PERFECT PARRY!", "परफ़ेक्ट पैरी!", "¡PARADA PERFECTA!", "PARADE PARFAITE !", "DEFESA PERFEITA!"],
+  ["EXECUTION!", "खात्मा!", "¡EJECUCIÓN!", "EXÉCUTION !", "EXECUÇÃO!"],
+  ["Reflected", "लौटाया", "Reflejado", "Renvoyé", "Refletido"],
+  ["Execution! A perfect parry finished the enemy off.", "खात्मा! एक परफ़ेक्ट पैरी ने दुश्मन को खत्म कर दिया।", "¡Ejecución! Una parada perfecta acabó con el enemigo.", "Exécution ! Une parade parfaite a achevé l'ennemi.", "Execução! Uma defesa perfeita acabou com o inimigo."],
+  ["🗺 Map", "🗺 नक्शा", "🗺 Mapa", "🗺 Carte", "🗺 Mapa"],
+  ["Open world map (M)", "दुनिया का नक्शा खोलें (M)", "Abrir el mapa del mundo (M)", "Ouvrir la carte du monde (M)", "Abrir o mapa do mundo (M)"],
+  ["World map", "दुनिया का नक्शा", "Mapa del mundo", "Carte du monde", "Mapa do mundo"],
+  ["World Map", "दुनिया का नक्शा", "Mapa del mundo", "Carte du monde", "Mapa do mundo"],
+  ["First Sea", "फ़र्स्ट सी", "Primer Mar", "Première Mer", "Primeiro Mar"],
+  ["Close map", "नक्शा बंद करें", "Cerrar mapa", "Fermer la carte", "Fechar mapa"],
+  ["Map of the First Sea", "फ़र्स्ट सी का नक्शा", "Mapa del Primer Mar", "Carte de la Première Mer", "Mapa do Primeiro Mar"],
+  ["Quest Log", "क्वेस्ट सूची", "Diario de misiones", "Journal de quêtes", "Diário de missões"],
+  ["Current quest", "मौजूदा क्वेस्ट", "Misión actual", "Quête en cours", "Missão atual"],
+  ["Available now", "अभी उपलब्ध", "Disponibles ahora", "Disponibles maintenant", "Disponíveis agora"],
+  ["Coming up", "आगे आने वाले", "Próximamente", "À venir", "Em breve"],
+  ["Completed", "पूरे हुए", "Completadas", "Terminées", "Concluídas"],
+  ["No quest yet. Visit a quest giver and press E.", "अभी कोई क्वेस्ट नहीं। किसी क्वेस्ट देने वाले के पास जाकर E दबाएँ।", "Aún no tienes misión. Ve a quien da las misiones y pulsa E.", "Aucune quête pour l'instant. Allez voir un donneur de quêtes et appuyez sur E.", "Nenhuma missão ainda. Vá até quem dá as missões e aperte E."],
+  ["You", "आप", "Tú", "Vous", "Você"],
+  ["Your boat", "आपकी नाव", "Tu barco", "Votre bateau", "Seu barco"],
+  ["Quest target", "क्वेस्ट का लक्ष्य", "Objetivo de la misión", "Objectif de quête", "Alvo da missão"],
+  ["Raider ship", "लुटेरा जहाज़", "Barco saqueador", "Navire pillard", "Navio saqueador"],
+  ["Raider sunk!", "लुटेरा जहाज़ डूब गया!", "¡Saqueador hundido!", "Pillard coulé !", "Saqueador afundado!"],
+  ["Cannons", "तोपें", "Cañones", "Canons", "Canhões"],
+  ["Fire", "दागें", "Disparar", "Tirer", "Disparar"],
+  ["Skills", "कौशल", "Habilidades", "Compétences", "Habilidades"],
+  ["Iron Aura", "आयरन ऑरा", "Aura de Hierro", "Aura de fer", "Aura de Ferro"],
+  ["Foresight", "फ़ोरसाइट", "Previsión", "Prescience", "Previsão"],
+  ["Flash Step", "फ़्लैश स्टेप", "Paso Relámpago", "Pas éclair", "Passo Relâmpago"],
+  ["Sound effects", "ध्वनि प्रभाव", "Efectos de sonido", "Effets sonores", "Efeitos sonoros"],
+  ["Lower graphics automatically if the game runs slowly", "गेम धीमा चले तो ग्राफ़िक्स अपने आप कम करें", "Bajar los gráficos automáticamente si el juego va lento", "Baisser automatiquement les graphismes si le jeu ralentit", "Reduzir os gráficos automaticamente se o jogo ficar lento"],
+  ["Save backup", "सेव का बैकअप", "Copia de seguridad", "Sauvegarde de secours", "Backup do save"],
+  ["Your progress lives in this browser only. Download a backup file to keep it safe or to move it to another browser or device.", "आपकी प्रगति सिर्फ़ इसी ब्राउज़र में रहती है। इसे सुरक्षित रखने या दूसरे ब्राउज़र या डिवाइस पर ले जाने के लिए बैकअप फ़ाइल डाउनलोड करें।", "Tu progreso solo vive en este navegador. Descarga una copia de seguridad para protegerlo o llevarlo a otro navegador o dispositivo.", "Votre progression n'existe que dans ce navigateur. Téléchargez une sauvegarde pour la protéger ou la transférer vers un autre navigateur ou appareil.", "Seu progresso fica só neste navegador. Baixe um arquivo de backup para protegê-lo ou levá-lo a outro navegador ou dispositivo."],
+  ["Download backup", "बैकअप डाउनलोड करें", "Descargar copia", "Télécharger la sauvegarde", "Baixar backup"],
+  ["Load backup", "बैकअप लोड करें", "Cargar copia", "Charger une sauvegarde", "Carregar backup"],
+  ["Replace current progress?", "मौजूदा प्रगति बदलें?", "¿Reemplazar el progreso actual?", "Remplacer la progression actuelle ?", "Substituir o progresso atual?"],
+  ["Backup found", "बैकअप मिला", "Copia encontrada", "Sauvegarde trouvée", "Backup encontrado"],
+  ["Press the button again to replace this profile's progress.", "इस प्रोफ़ाइल की प्रगति बदलने के लिए बटन फिर से दबाएँ।", "Pulsa el botón otra vez para reemplazar el progreso de este perfil.", "Appuyez à nouveau sur le bouton pour remplacer la progression de ce profil.", "Aperte o botão de novo para substituir o progresso deste perfil."],
+  ["Choose a profile first.", "पहले एक प्रोफ़ाइल चुनें।", "Primero elige un perfil.", "Choisissez d'abord un profil.", "Escolha um perfil primeiro."],
+  ["There is no progress to back up yet.", "बैकअप के लिए अभी कोई प्रगति नहीं है।", "Todavía no hay progreso que guardar.", "Il n'y a encore aucune progression à sauvegarder.", "Ainda não há progresso para salvar."],
+  ["Backup downloaded.", "बैकअप डाउनलोड हो गया।", "Copia descargada.", "Sauvegarde téléchargée.", "Backup baixado."],
+  ["That file is too large to be a Sea Legends backup.", "यह फ़ाइल Sea Legends बैकअप होने के लिए बहुत बड़ी है।", "Ese archivo es demasiado grande para ser una copia de Sea Legends.", "Ce fichier est trop volumineux pour être une sauvegarde Sea Legends.", "Esse arquivo é grande demais para ser um backup do Sea Legends."],
+  ["That file is not a valid Sea Legends backup.", "यह फ़ाइल सही Sea Legends बैकअप नहीं है।", "Ese archivo no es una copia válida de Sea Legends.", "Ce fichier n'est pas une sauvegarde Sea Legends valide.", "Esse arquivo não é um backup válido do Sea Legends."],
+  ["The backup could not be saved in this browser.", "बैकअप इस ब्राउज़र में सेव नहीं हो सका।", "No se pudo guardar la copia en este navegador.", "La sauvegarde n'a pas pu être enregistrée dans ce navigateur.", "Não foi possível salvar o backup neste navegador."],
+  ["Backup loaded. Restarting the game...", "बैकअप लोड हो गया। गेम फिर से शुरू हो रहा है...", "Copia cargada. Reiniciando el juego...", "Sauvegarde chargée. Redémarrage du jeu...", "Backup carregado. Reiniciando o jogo..."],
+  ["Cannons fire at the spot you click, or at the nearest raider ship. Raiders patrol the waters around every island.", "तोपें उस जगह दागी जाती हैं जहाँ आप क्लिक करते हैं, या सबसे पास के लुटेरे जहाज़ पर। लुटेरे हर द्वीप के आसपास के पानी में गश्त करते हैं।", "Los cañones disparan donde haces clic o al barco saqueador más cercano. Los saqueadores patrullan las aguas de cada isla.", "Les canons tirent là où vous cliquez, ou sur le navire pillard le plus proche. Les pillards patrouillent autour de chaque île.", "Os canhões disparam onde você clica ou no navio saqueador mais próximo. Os saqueadores patrulham as águas ao redor de cada ilha."],
+  ["Your boat ran into the shore. Back off with S, or press G to step ashore.", "आपकी नाव किनारे से टकरा गई। S से पीछे हटें, या किनारे उतरने के लिए G दबाएँ।", "Tu barco chocó con la costa. Retrocede con S o pulsa G para bajar a tierra.", "Votre bateau a heurté le rivage. Reculez avec S, ou appuyez sur G pour débarquer.", "Seu barco bateu na costa. Recue com S ou aperte G para desembarcar."],
+  ["You stepped ashore. Press G near your boat to sail again.", "आप किनारे उतर गए। फिर से नाव चलाने के लिए उसके पास G दबाएँ।", "Has bajado a tierra. Pulsa G junto a tu barco para volver a navegar.", "Vous avez débarqué. Appuyez sur G près de votre bateau pour reprendre la mer.", "Você desembarcou. Aperte G perto do barco para navegar de novo."],
+  ["No shore nearby, so you dived into the sea. Press G to climb back aboard.", "पास में कोई किनारा नहीं था, इसलिए आप समुद्र में कूद गए। वापस चढ़ने के लिए G दबाएँ।", "No había costa cerca, así que te lanzaste al mar. Pulsa G para volver a bordo.", "Pas de rivage à proximité : vous avez plongé dans la mer. Appuyez sur G pour remonter à bord.", "Não havia costa por perto, então você mergulhou no mar. Aperte G para voltar a bordo."],
+  ["Get closer to your boat to climb aboard.", "सवार होने के लिए अपनी नाव के पास जाएँ।", "Acércate a tu barco para subir a bordo.", "Approchez-vous de votre bateau pour monter à bord.", "Chegue mais perto do barco para embarcar."],
+  ["You don't have a boat yet. Visit the Boat Dealer near the Starter Island shore.", "आपके पास अभी नाव नहीं है। स्टार्टर द्वीप के किनारे नाव डीलर के पास जाएँ।", "Aún no tienes barco. Visita al vendedor de barcos en la costa de la Isla Inicial.", "Vous n'avez pas encore de bateau. Allez voir le marchand de bateaux sur le rivage de l'Île de départ.", "Você ainda não tem barco. Visite o vendedor de barcos na costa da Ilha Inicial."],
+  ["There is no open water nearby. Walk closer to the sea and try again.", "पास में खुला पानी नहीं है। समुद्र के पास जाकर फिर कोशिश करें।", "No hay agua abierta cerca. Acércate al mar e inténtalo de nuevo.", "Pas d'eau libre à proximité. Rapprochez-vous de la mer et réessayez.", "Não há água aberta por perto. Chegue mais perto do mar e tente de novo."],
   ["DEFEATED", "हार गए", "DERROTADO", "VAINCU", "DERROTADO"],
   ["You were knocked out in battle", "आप लड़ाई में बेहोश हो गए", "Te dejaron fuera de combate", "Vous avez été mis K.O. au combat", "Você foi nocauteado em batalha"],
   ["Respawn", "फिर से शुरू करें", "Reaparecer", "Réapparaître", "Renascer"],
@@ -17399,6 +17475,9 @@ const I18N_PATTERNS = [
   [/^(.+\.) Progress: (\d+)\/(\d+)\. Aura kills: (\d+)\/(\d+)\.$/, (m) => `${i18nWord(m[1])} ${i18nWord("Progress")}: ${m[2]}/${m[3]}. ${i18nWord("Aura kills")}: ${m[4]}/${m[5]}.`],
   [/^(.+) \| Aura (\d+)$/, (m) => `${i18nWord(m[1])} | ${i18nWord("Aura")} ${m[2]}`],
   [/^Special ability unlocked\. Aura (Lv \d+|locked until level 60 Desert training)\.$/, (m) => `${i18nWord("Special ability unlocked.")} ${i18nWord("Aura")} ${m[1].startsWith("Lv") ? m[1].replace("Lv", i18nWord("Lv")) : i18nWord(m[1])}.`],
+  [/^The game was running slowly, so graphics were lowered to level (\d+)\. You can change this in the Esc menu\.$/, (m) => ({ hi: `गेम धीमा चल रहा था, इसलिए ग्राफ़िक्स लेवल ${m[1]} पर कम किए गए। आप इसे Esc मेन्यू में बदल सकते हैं।`, es: `El juego iba lento, así que los gráficos bajaron al nivel ${m[1]}. Puedes cambiarlo en el menú Esc.`, fr: `Le jeu ralentissait : les graphismes sont passés au niveau ${m[1]}. Vous pouvez changer cela dans le menu Échap.`, pt: `O jogo estava lento, então os gráficos foram reduzidos para o nível ${m[1]}. Você pode mudar isso no menu Esc.` })[currentLanguage] || m[0]],
+  [/^Your (Dinghy|Sailor Boat|Brigade) is launched and you have the helm\. W and S to sail, A and D to steer, G to go ashore\.$/, (m) => ({ hi: `आपकी ${i18nWord(m[1])} पानी में उतर गई और पतवार आपके हाथ में है। W और S से चलाएँ, A और D से मोड़ें, G से किनारे उतरें।`, es: `Tu ${i18nWord(m[1])} está en el agua y llevas el timón. W y S para navegar, A y D para girar, G para bajar a tierra.`, fr: `Votre ${i18nWord(m[1])} est à l'eau et vous tenez la barre. W et S pour naviguer, A et D pour diriger, G pour débarquer.`, pt: `Seu ${i18nWord(m[1])} está na água e você está no leme. W e S para navegar, A e D para virar, G para desembarcar.` })[currentLanguage] || m[0]],
+  [/^Raider sunk! \+\$(\d+), \+(\d+) XP\.$/, (m) => `${i18nWord("Raider sunk!")} +$${m[1]}, +${m[2]} XP.`],
   [/^HEADSHOT! (-\d+)$/, (m) => `${i18nWord("HEADSHOT!")} ${m[1]}`],
 ];
 
@@ -17495,8 +17574,14 @@ function setLanguage(lang) {
   document.querySelectorAll(".language-select, #loading-language").forEach((select) => { select.value = lang; });
   translateTree(document.body);
   refreshTutorialText?.();
+  // Let the site pages (intro, footer) follow the game's language picker.
+  window.dispatchEvent(new CustomEvent("sea-legends-language", { detail: lang }));
 }
 
+// A language picked in the site footer switches the game too.
+window.addEventListener("sea-legends-language", (event) => {
+  if (event.detail && event.detail !== currentLanguage) setLanguage(event.detail);
+});
 document.querySelectorAll(".language-select, #loading-language").forEach((select) => {
   select.value = currentLanguage;
   select.addEventListener("change", () => setLanguage(select.value));
@@ -17646,8 +17731,8 @@ function createBoatSail(width, height, color, emblem) {
   return sail;
 }
 
-function createBoat(type) {
-  const spec = BOAT_SPECS[type] || BOAT_SPECS.dinghy;
+function createBoat(type, look = null) {
+  const spec = look?.spec || BOAT_SPECS[type] || BOAT_SPECS.dinghy;
   const boat = new THREE.Group();
   boat.userData.boatType = BOAT_SPECS[type] ? type : "dinghy";
   boat.userData.spec = spec;
@@ -17735,9 +17820,9 @@ function createBoat(type) {
 
   // Masts, yards and sails.
   const faction = String(player?.faction || "");
-  const sailColor = faction.startsWith("Marine") ? "#f4f1ea" : faction.startsWith("Pirate") ? "#2b2a2f" : "#efe3c8";
-  const emblem = faction.startsWith("Marine") ? "#2f6db3" : faction.startsWith("Pirate") ? "#efe6d6" : null;
-  const flagColor = faction.startsWith("Marine") ? 0x2f6db3 : faction.startsWith("Pirate") ? 0x141414 : 0xc23b2e;
+  const sailColor = look?.sailColor || (faction.startsWith("Marine") ? "#f4f1ea" : faction.startsWith("Pirate") ? "#2b2a2f" : "#efe3c8");
+  const emblem = look?.emblem || (faction.startsWith("Marine") ? "#2f6db3" : faction.startsWith("Pirate") ? "#efe6d6" : null);
+  const flagColor = look?.flagColor ?? (faction.startsWith("Marine") ? 0x2f6db3 : faction.startsWith("Pirate") ? 0x141414 : 0xc23b2e);
   const mastSpots = spec.masts === 2 ? [0.12, -0.16] : spec.masts === 1 ? [0.06] : [];
   mastSpots.forEach((f, idx) => {
     const mastH = spec.depth * (idx === 0 ? 5.2 : 4.4);
@@ -18058,6 +18143,7 @@ function updateBoatUi(dt) {
       fill: document.getElementById("sail-speed-fill"),
       heading: document.getElementById("sail-heading"),
       ashore: document.getElementById("sail-ashore"),
+      cannon: document.getElementById("sail-cannon-fill"),
     };
     boatUiRefs.board?.addEventListener("click", () => { if (gameStarted && !isHelming) toggleHelm(); });
     boatUiRefs.ashore?.addEventListener("click", () => { if (gameStarted && isHelming) unhelmBoat(); });
@@ -18079,6 +18165,12 @@ function updateBoatUi(dt) {
   if (refs.speed && refs.speed.textContent !== String(knots)) refs.speed.textContent = String(knots);
   if (refs.fill) refs.fill.style.transform = `scaleX(${Math.min(1, Math.abs(boatVelocity) / spec.maxSpeed).toFixed(3)})`;
   refs.hud.classList.toggle("is-reversing", boatVelocity < -1);
+  if (refs.cannon && typeof BOAT_CANNONS !== "undefined") {
+    const cfg = BOAT_CANNONS[activeBoat.userData.boatType] || BOAT_CANNONS.dinghy;
+    const ready = 1 - Math.min(1, playerCannonReload / cfg.reload);
+    refs.cannon.style.transform = `scaleX(${ready.toFixed(3)})`;
+    refs.cannon.classList.toggle("is-ready", ready >= 1);
+  }
   if (refs.heading) {
     const deg = ((Math.atan2(Math.sin(boatYaw), -Math.cos(boatYaw)) * 180) / Math.PI + 360) % 360;
     const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -18100,6 +18192,1619 @@ function holdShipWheelPose() {
   if (parts.leftForearm) parts.leftForearm.rotation.x = -0.55;
   if (parts.rightForearm) parts.rightForearm.rotation.x = -0.55;
 }
+
+// ── 38-mobile-skills.js ─ Touch buttons for skills, dash, block and trained abilities.
+var mobileSkillSig = "";
+var mobileSkillButtons = [];
+
+function mobileSkillItems() {
+  const weapon = player.weapon;
+  const mastery = player.mastery?.[weapon] || 1;
+  const items = (masterySkills[weapon] || [])
+    .filter((s) => s.key && mastery >= s.req)
+    .map((s) => ({ kind: "skill", key: s.key, label: s.name, id: s.id, cd: s.cd }));
+  items.push({ kind: "dash", key: "Q", label: "Dash" });
+  items.push({ kind: "block", key: "F", label: "Block" });
+  if (player.haki?.unlocked) items.push({ kind: "haki", key: "H", label: "Iron Aura" });
+  if (player.observationHaki?.unlocked) items.push({ kind: "foresight", key: "K", label: "Foresight" });
+  if (player.hasFlashStep) items.push({ kind: "flash", key: "T", label: "Flash Step" });
+  return items;
+}
+
+function mobileSkillsAllowed() {
+  return gameStarted && !escMenuOpen && player.health > 0 && !isHelming && !(player.stunTimer > 0);
+}
+
+function buildMobileSkills(bar, items) {
+  bar.textContent = "";
+  mobileSkillButtons = items.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `mobile-skill mobile-skill-${item.kind}`;
+    button.setAttribute("aria-label", tr(item.label));
+    const key = document.createElement("kbd");
+    key.textContent = item.key;
+    const name = document.createElement("span");
+    name.textContent = tr(item.label);
+    button.append(key, name);
+    if (item.kind === "block") {
+      const release = () => { player.isBlocking = false; };
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        if (!mobileSkillsAllowed()) return;
+        button.setPointerCapture?.(event.pointerId);
+        player.isBlocking = true;
+        player.blockStartTime = performance.now();
+      });
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("lostpointercapture", release);
+    } else {
+      button.addEventListener("click", () => {
+        if (!mobileSkillsAllowed()) return;
+        if (item.kind === "skill") executeSkillByKey(item.key);
+        else if (item.kind === "dash") dash();
+        else if (item.kind === "haki") toggleHaki();
+        else if (item.kind === "foresight") toggleObservationHaki();
+        else if (item.kind === "flash") flashStep();
+        updateHud();
+      });
+    }
+    bar.append(button);
+    return { button, item };
+  });
+}
+
+// Called every frame; does nothing unless the touch controls are on screen.
+function updateMobileSkills() {
+  const bar = document.getElementById("mobile-skills");
+  // Skip the work unless the touch controls are on screen (an empty bar is hidden itself).
+  if (!bar || !bar.parentElement?.offsetParent) return;
+  const items = mobileSkillItems();
+  const sig = `${currentLanguage || "en"}|${items.map((i) => i.kind + i.key).join(",")}`;
+  if (sig !== mobileSkillSig) {
+    mobileSkillSig = sig;
+    buildMobileSkills(bar, items);
+  }
+  mobileSkillButtons.forEach(({ button, item }) => {
+    let fraction = 0;
+    if (item.kind === "skill") fraction = (skillCooldowns[item.id] || 0) / item.cd;
+    button.style.setProperty("--cd", Math.max(0, Math.min(1, fraction)).toFixed(3));
+    if (item.kind === "haki") button.classList.toggle("is-on", !!player.haki?.active);
+    if (item.kind === "foresight") button.classList.toggle("is-on", !!player.observationHaki?.active);
+    if (item.kind === "block") button.classList.toggle("is-on", !!player.isBlocking);
+  });
+}
+
+// ── 39-settings-and-saves.js ─ Remembered audio/graphics settings, automatic graphics, save backup.
+var SETTINGS_KEY = "sea-legends-settings";
+var gameSettings = { volume: 50, music: 100, effects: 100, graphics: 5, autoGraphics: true };
+try { Object.assign(gameSettings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch (err) { /* storage unavailable */ }
+
+function storeSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(gameSettings)); } catch (err) { /* storage unavailable */ }
+}
+
+function bindSlider(sliderId, labelId, key, apply, suffix = "%") {
+  const slider = document.getElementById(sliderId);
+  const label = document.getElementById(labelId);
+  if (!slider) return;
+  slider.value = gameSettings[key];
+  if (label) label.textContent = `${gameSettings[key]}${suffix}`;
+  apply(gameSettings[key]);
+  slider.addEventListener("input", () => {
+    gameSettings[key] = parseInt(slider.value, 10);
+    if (label) label.textContent = `${gameSettings[key]}${suffix}`;
+    apply(gameSettings[key]);
+    storeSettings();
+  });
+}
+
+bindSlider("volume-slider", "volume-val", "volume", (v) => audio.setVolume(v / 100));
+bindSlider("music-volume-slider", "music-volume-val", "music", (v) => { audio.musicVolume = v / 100; });
+bindSlider("effects-volume-slider", "effects-volume-val", "effects", (v) => audio.setEffectsVolume(v / 100));
+bindSlider("graphics-quality-slider", "graphics-level-val", "graphics", (v) => setGraphicsQuality(v), "");
+
+var autoGraphicsToggle = document.getElementById("esc-auto-graphics");
+if (autoGraphicsToggle) {
+  autoGraphicsToggle.checked = gameSettings.autoGraphics !== false;
+  autoGraphicsToggle.addEventListener("change", () => {
+    gameSettings.autoGraphics = autoGraphicsToggle.checked;
+    storeSettings();
+  });
+}
+
+// If the frame rate stays low, step graphics down one level at a time (never below 2).
+// Uses real time: the game loop caps dt, so dt alone would hide a low frame rate.
+var autoGraphicsState = { time: 0, frames: 0, slowFor: 0, cooldown: 8, last: 0 };
+function updateAutoGraphics() {
+  const s = autoGraphicsState;
+  const now = performance.now();
+  const real = s.last ? Math.min(1, (now - s.last) / 1000) : 0;
+  s.last = now;
+  if (!gameStarted || gameSettings.autoGraphics === false || escMenuOpen || document.hidden) {
+    s.time = 0;
+    s.frames = 0;
+    return;
+  }
+  s.cooldown = Math.max(0, s.cooldown - real);
+  s.time += real;
+  s.frames += 1;
+  if (s.time < 2) return;
+  const fps = s.frames / s.time;
+  s.time = 0;
+  s.frames = 0;
+  s.slowFor = fps < 26 ? s.slowFor + 2 : 0;
+  if (s.slowFor >= 6 && s.cooldown <= 0 && gameSettings.graphics > 2) {
+    gameSettings.graphics -= 1;
+    setGraphicsQuality(gameSettings.graphics);
+    const slider = document.getElementById("graphics-quality-slider");
+    const label = document.getElementById("graphics-level-val");
+    if (slider) slider.value = gameSettings.graphics;
+    if (label) label.textContent = gameSettings.graphics;
+    storeSettings();
+    log(`The game was running slowly, so graphics were lowered to level ${gameSettings.graphics}. You can change this in the Esc menu.`);
+    s.slowFor = 0;
+    s.cooldown = 12;
+  }
+}
+
+// ── Save backup ──
+var SAVE_FILE_FORMAT = "sea-legends-save";
+var SAVE_NUMBER_KEYS = ["level", "xp", "xpToNext", "money"];
+var SAVE_BOOL_KEYS = ["hasSword", "hasGun", "specialUnlocked", "hasFlamingFeet", "hasFlashStep", "observationHakiUnlocked"];
+
+function setBackupStatus(text, isError) {
+  const el = document.getElementById("save-backup-status");
+  if (!el) return;
+  el.textContent = tr(text);
+  el.classList.toggle("is-error", !!isError);
+}
+
+function readAccounts() {
+  try { return JSON.parse(localStorage.getItem("sea_legends_accounts") || "[]"); } catch (err) { return []; }
+}
+
+function exportSave() {
+  if (!currentUsername) {
+    setBackupStatus("Choose a profile first.", true);
+    return;
+  }
+  saveGame();
+  const account = readAccounts().find((a) => a.username.toLowerCase() === currentUsername.toLowerCase());
+  if (!account?.saveData) {
+    setBackupStatus("There is no progress to back up yet.", true);
+    return;
+  }
+  const file = { format: SAVE_FILE_FORMAT, version: 1, exportedAt: new Date().toISOString(), profile: account.username, saveData: account.saveData };
+  const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeName = account.username.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 32) || "profile";
+  link.href = url;
+  link.download = `sea-legends-${safeName}-level-${account.saveData.level || 1}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  setBackupStatus("Backup downloaded.");
+}
+
+// Only well-formed values are kept; anything unexpected is dropped and cheat flags are never imported.
+function cleanImportedSave(data) {
+  if (!data || typeof data !== "object") return null;
+  const clean = {};
+  const numberOk = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 1e9;
+  SAVE_NUMBER_KEYS.forEach((k) => { if (numberOk(data[k])) clean[k] = data[k]; });
+  SAVE_BOOL_KEYS.forEach((k) => { if (typeof data[k] === "boolean") clean[k] = data[k]; });
+  const numberMap = (obj) => {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return undefined;
+    const out = {};
+    Object.entries(obj).slice(0, 40).forEach(([k, v]) => { if (/^[a-zA-Z0-9_-]{1,32}$/.test(k) && numberOk(v)) out[k] = v; });
+    return out;
+  };
+  ["materials", "stats", "mastery", "masteryXp"].forEach((k) => { const m = numberMap(data[k]); if (m) clean[k] = m; });
+  if (["Pirates", "Marines", "Neutral"].includes(data.faction)) clean.faction = data.faction;
+  if (data.haki && typeof data.haki === "object") {
+    const h = data.haki;
+    clean.haki = { unlocked: h.unlocked === true, active: false, level: numberOk(h.level) ? Math.min(h.level, 100) : 0, kills: numberOk(h.kills) ? h.kills : 0, nextKills: numberOk(h.nextKills) && h.nextKills > 0 ? h.nextKills : 8 };
+  }
+  if (typeof data.selectedAvatarId === "string" && data.selectedAvatarId.length < 64) clean.selectedAvatarId = data.selectedAvatarId;
+  if (Array.isArray(data.avatars) && data.avatars.length <= 50) {
+    // Avatars are plain settings objects; strings are stripped of markup.
+    const scrub = (v, depth = 0) => {
+      if (depth > 4) return undefined;
+      if (typeof v === "string") return v.replace(/[<>]/g, "").slice(0, 120);
+      if (typeof v === "number" || typeof v === "boolean") return Number.isFinite(v) || typeof v === "boolean" ? v : undefined;
+      if (Array.isArray(v)) return v.slice(0, 50).map((x) => scrub(x, depth + 1));
+      if (v && typeof v === "object") {
+        const o = {};
+        Object.entries(v).slice(0, 60).forEach(([k, x]) => { if (/^[a-zA-Z0-9_-]{1,40}$/.test(k)) o[k] = scrub(x, depth + 1); });
+        return o;
+      }
+      return undefined;
+    };
+    clean.avatars = data.avatars.map((a) => scrub(a));
+  }
+  clean.isGodMode = false;
+  clean.isInstakill = false;
+  if (!clean.faction || !numberOk(clean.level)) return null;
+  return clean;
+}
+
+var pendingImport = null;
+function importSaveFile(file) {
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    setBackupStatus("That file is too large to be a Sea Legends backup.", true);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed = null;
+    try { parsed = JSON.parse(String(reader.result)); } catch (err) { parsed = null; }
+    const saveData = parsed?.format === SAVE_FILE_FORMAT ? cleanImportedSave(parsed.saveData) : null;
+    if (!saveData) {
+      setBackupStatus("That file is not a valid Sea Legends backup.", true);
+      return;
+    }
+    pendingImport = saveData;
+    const button = document.getElementById("save-import");
+    if (button) button.textContent = tr("Replace current progress?");
+    setBackupStatus(`${tr("Backup found")}: ${tr("Level")} ${saveData.level}, ${saveData.faction}. ${tr("Press the button again to replace this profile's progress.")}`);
+  };
+  reader.readAsText(file);
+}
+
+function applyPendingImport() {
+  if (!pendingImport || !currentUsername) return;
+  const accounts = readAccounts();
+  const account = accounts.find((a) => a.username.toLowerCase() === currentUsername.toLowerCase());
+  if (!account) {
+    setBackupStatus("Choose a profile first.", true);
+    return;
+  }
+  account.saveData = pendingImport;
+  try {
+    localStorage.setItem("sea_legends_accounts", JSON.stringify(accounts));
+  } catch (err) {
+    setBackupStatus("The backup could not be saved in this browser.", true);
+    return;
+  }
+  pendingImport = null;
+  setBackupStatus("Backup loaded. Restarting the game...");
+  // Stop the next autosave from overwriting the imported progress, then reload.
+  gameStarted = false;
+  setTimeout(() => location.reload(), 600);
+}
+
+document.getElementById("save-export")?.addEventListener("click", exportSave);
+document.getElementById("save-import")?.addEventListener("click", () => {
+  if (pendingImport) {
+    applyPendingImport();
+    return;
+  }
+  if (!currentUsername) {
+    setBackupStatus("Choose a profile first.", true);
+    return;
+  }
+  document.getElementById("save-import-file")?.click();
+});
+document.getElementById("save-import-file")?.addEventListener("change", (event) => {
+  importSaveFile(event.target.files?.[0]);
+  event.target.value = "";
+});
+
+// ── 40-world-map.js ─ World map (M) with islands, player, boat, quest target and raiders, plus the quest log.
+var MAP_ISLAND_INFO = [
+  { name: "Starter Island", levels: "1", land: "#7fb85a", shore: "#e8d9a6" },
+  { name: "Jungle Island", levels: "10–20", land: "#3f8a45", shore: "#d9c98f" },
+  { name: "Pirate Town", levels: "30–50", land: "#b58c5a", shore: "#e3cf9b" },
+  { name: "Desert Island", levels: "60–70", land: "#e0bf6c", shore: "#f1e0a8" },
+  { name: "Snowy Village", levels: "90–110", land: "#e9f1f6", shore: "#c9d8df" },
+];
+var QUEST_ISLAND = {
+  starter: 0, monkey10: 1, gorilla15: 1, gorillaKing20: 1, pirates30: 2, brutes40: 2, buggy50: 2,
+  desertBandits60: 3, desertOfficers70: 3, frozenBandits90: 4, snowmen100: 4, yeti110: 4,
+};
+var worldMapOpen = false;
+var worldMapView = null;
+var worldMapRaf = 0;
+var worldMapLast = 0;
+
+function worldMapBounds() {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  islands.forEach((isl) => {
+    minX = Math.min(minX, isl.position.x - isl.radius);
+    maxX = Math.max(maxX, isl.position.x + isl.radius);
+    minZ = Math.min(minZ, isl.position.z - isl.radius);
+    maxZ = Math.max(maxZ, isl.position.z + isl.radius);
+  });
+  const pad = 500;
+  return { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
+}
+
+function toggleWorldMap(force) {
+  const el = document.getElementById("world-map");
+  if (!el) return;
+  const open = typeof force === "boolean" ? force : !worldMapOpen;
+  if (open && !gameStarted) return;
+  worldMapOpen = open;
+  el.classList.toggle("hidden", !open);
+  if (open) {
+    renderQuestLog();
+    drawWorldMap();
+    const tick = (now) => {
+      if (!worldMapOpen) return;
+      if (now - worldMapLast > 100) {
+        worldMapLast = now;
+        drawWorldMap();
+      }
+      worldMapRaf = requestAnimationFrame(tick);
+    };
+    worldMapRaf = requestAnimationFrame(tick);
+    document.getElementById("world-map-close")?.focus({ preventScroll: true });
+  } else {
+    cancelAnimationFrame(worldMapRaf);
+    document.getElementById("game")?.focus({ preventScroll: true });
+  }
+}
+
+// Irregular island outline so islands don't look like plain circles.
+function islandBlob(ctx, cx, cy, r, seed) {
+  ctx.beginPath();
+  const steps = 36;
+  for (let i = 0; i <= steps; i += 1) {
+    const a = (i / steps) * Math.PI * 2;
+    const wobble = 1 + 0.07 * Math.sin(a * 3 + seed) + 0.05 * Math.sin(a * 5 + seed * 2.3) + 0.03 * Math.sin(a * 9 + seed * 0.7);
+    const x = cx + Math.cos(a) * r * wobble;
+    const y = cy + Math.sin(a) * r * wobble;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function drawWorldMap() {
+  const canvas = document.getElementById("world-map-canvas");
+  if (!canvas || !islands.length) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+  if (!worldMapView) worldMapView = worldMapBounds();
+  const b = worldMapView;
+  const scale = Math.min(W / (b.maxX - b.minX), H / (b.maxZ - b.minZ));
+  const ox = (W - (b.maxX - b.minX) * scale) / 2;
+  const oy = (H - (b.maxZ - b.minZ) * scale) / 2;
+  const px = (x) => ox + (x - b.minX) * scale;
+  const py = (z) => oy + (z - b.minZ) * scale;
+  const t = performance.now() * 0.001;
+
+  // Sea
+  const sea = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, Math.max(W, H) * 0.7);
+  sea.addColorStop(0, "#1f6f8f");
+  sea.addColorStop(1, "#0b3048");
+  ctx.fillStyle = sea;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 48) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // Islands
+  islands.forEach((isl) => {
+    const info = MAP_ISLAND_INFO[isl.index];
+    const cx = px(isl.position.x);
+    const cy = py(isl.position.z);
+    const r = Math.max(5, isl.radius * scale);
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = info ? info.shore : "#cdbf8f";
+    islandBlob(ctx, cx, cy, r * 1.04, isl.index * 1.7);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = info ? info.land : "#7c9a6a";
+    islandBlob(ctx, cx, cy, r * 0.9, isl.index * 1.7);
+    ctx.fill();
+    if (info) {
+      ctx.textAlign = "center";
+      ctx.font = "800 15px Outfit, Inter, sans-serif";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(5,16,25,0.85)";
+      const label = tr(info.name);
+      ctx.strokeText(label, cx, cy - r - 10);
+      ctx.fillStyle = "#fff1ce";
+      ctx.fillText(label, cx, cy - r - 10);
+      ctx.font = "700 11px Inter, sans-serif";
+      const lv = `${tr("Level")} ${info.levels}`;
+      ctx.strokeText(lv, cx, cy - r + 5);
+      ctx.fillStyle = "#9fdde8";
+      ctx.fillText(lv, cx, cy - r + 5);
+    }
+  });
+
+  // Raider ships
+  (typeof seaRaiders !== "undefined" ? seaRaiders : []).forEach((r) => {
+    if (!r.alive) return;
+    const x = px(r.group.position.x);
+    const y = py(r.group.position.z);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-r.yaw);
+    ctx.fillStyle = "#e0453a";
+    ctx.strokeStyle = "#2a0d0b";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 9);
+    ctx.lineTo(5, -6);
+    ctx.lineTo(-5, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Quest target
+  const target = getQuestTargetPosition?.();
+  if (target) {
+    const x = px(target.x);
+    const y = py(target.z);
+    const pulse = 9 + Math.sin(t * 4) * 3;
+    ctx.strokeStyle = "rgba(255,210,90,0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ffd25a";
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 === 0 ? 7 : 3;
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Your boat
+  if (activeBoat && !isHelming) {
+    const x = px(activeBoat.position.x);
+    const y = py(activeBoat.position.z);
+    ctx.fillStyle = "#59c7d8";
+    ctx.strokeStyle = "#05303a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 7, 4, -activeBoat.rotation.y + Math.PI / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // You
+  if (playerMesh) {
+    const x = px(playerMesh.position.x);
+    const y = py(playerMesh.position.z);
+    const yaw = isHelming ? boatYaw : playerMesh.rotation.y;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-yaw);
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#0b2433";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 11);
+    ctx.lineTo(7, -7);
+    ctx.lineTo(0, -3);
+    ctx.lineTo(-7, -7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function questLogEntry(q, state) {
+  const island = MAP_ISLAND_INFO[QUEST_ISLAND[q.id]];
+  const div = document.createElement("div");
+  div.className = `quest-log-item is-${state}`;
+  const title = document.createElement("strong");
+  title.textContent = tr(q.title);
+  const meta = document.createElement("span");
+  meta.textContent = `${island ? tr(island.name) : ""} · ${tr("Level")} ${q.minLevel}+`;
+  const detail = document.createElement("p");
+  detail.textContent = tr(q.detail);
+  const reward = document.createElement("small");
+  reward.textContent = `$${q.rewardMoney} · ${q.rewardXp} XP`;
+  div.append(title, meta, detail, reward);
+  if (state === "active") {
+    const done = q.id === "starter" ? quest.defeated : activeQuest?.defeated || 0;
+    const bar = document.createElement("i");
+    bar.className = "quest-log-progress";
+    bar.style.setProperty("--p", Math.min(1, done / q.target).toFixed(3));
+    const count = document.createElement("em");
+    count.textContent = `${Math.min(done, q.target)} / ${q.target}`;
+    div.append(bar, count);
+  }
+  return div;
+}
+
+function renderQuestLog() {
+  const list = document.getElementById("quest-log-list");
+  if (!list) return;
+  list.textContent = "";
+  const section = (label) => {
+    const h = document.createElement("h4");
+    h.textContent = tr(label);
+    list.append(h);
+  };
+  const all = Object.values(questCatalog);
+  const current = quest.active && !quest.complete ? questCatalog.starter : activeQuest?.active ? questCatalog[activeQuest.id] : null;
+  section("Current quest");
+  if (current) list.append(questLogEntry(current, "active"));
+  else {
+    const p = document.createElement("p");
+    p.className = "quest-log-empty";
+    p.textContent = tr("No quest yet. Visit a quest giver and press E.");
+    list.append(p);
+  }
+  const available = all.filter((q) => q !== current && q.minLevel <= player.level && !(q.id === "starter" && quest.complete));
+  if (available.length) {
+    section("Available now");
+    available.slice().reverse().forEach((q) => list.append(questLogEntry(q, "available")));
+  }
+  const upcoming = all.filter((q) => q.minLevel > player.level).slice(0, 3);
+  if (upcoming.length) {
+    section("Coming up");
+    upcoming.forEach((q) => list.append(questLogEntry(q, "locked")));
+  }
+  if (quest.complete) {
+    section("Completed");
+    list.append(questLogEntry(questCatalog.starter, "done"));
+  }
+}
+
+document.getElementById("map-open")?.addEventListener("click", () => toggleWorldMap());
+document.getElementById("world-map-close")?.addEventListener("click", () => toggleWorldMap(false));
+document.getElementById("world-map")?.addEventListener("click", (event) => {
+  if (event.target.id === "world-map") toggleWorldMap(false);
+});
+// Esc closes the map before it reaches the settings menu.
+document.addEventListener("keydown", (event) => {
+  if (worldMapOpen && event.key === "Escape") {
+    event.stopPropagation();
+    event.preventDefault();
+    toggleWorldMap(false);
+  }
+}, true);
+
+// ── 41-sea-combat.js ─ Ship cannons and raider ships that patrol the waters around each island.
+// One tier per island: raiders near harder islands are tougher and pay more.
+var RAIDER_TIERS = [
+  { hp: 180, damage: 8, money: 90, xp: 80, speed: 58, type: "sailor" },
+  { hp: 420, damage: 16, money: 160, xp: 380, speed: 64, type: "sailor" },
+  { hp: 800, damage: 28, money: 250, xp: 760, speed: 70, type: "brigade" },
+  { hp: 1400, damage: 42, money: 720, xp: 3400, speed: 74, type: "brigade" },
+  { hp: 2400, damage: 60, money: 1360, xp: 7200, speed: 78, type: "brigade" },
+];
+// Player cannons per boat: balls per volley, damage per ball, seconds between volleys.
+var BOAT_CANNONS = {
+  dinghy: { balls: 1, damage: 26, reload: 2.0 },
+  sailor: { balls: 2, damage: 30, reload: 1.7 },
+  brigade: { balls: 3, damage: 34, reload: 1.4 },
+};
+var CANNON_RANGE = 300;
+var CANNON_GRAVITY = 70;
+var seaRaiders = [];
+var cannonballs = [];
+var playerCannonReload = 0;
+var seaCombatReady = false;
+var cannonballGeo = null;
+var cannonballMat = null;
+
+function cannonDamageBonus() {
+  // Gun training helps with cannons too.
+  return 1 + Math.max(0, (player.stats?.gun || 1) - 1) * 0.04;
+}
+
+function makeRaiderHealthBar() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 20;
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sprite.scale.set(22, 3.4, 1);
+  sprite.renderOrder = 10;
+  sprite.userData.canvas = canvas;
+  return sprite;
+}
+
+function drawRaiderHealth(raider) {
+  const sprite = raider.bar;
+  const c = sprite.userData.canvas;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = "rgba(5,16,25,0.85)";
+  ctx.fillRect(0, 0, c.width, c.height);
+  const f = Math.max(0, raider.hp / raider.maxHp);
+  ctx.fillStyle = f > 0.5 ? "#e0453a" : f > 0.25 ? "#f08a3a" : "#ffd25a";
+  ctx.fillRect(3, 3, (c.width - 6) * f, c.height - 6);
+  sprite.material.map.needsUpdate = true;
+}
+
+function spawnRaider(raider) {
+  const isl = islands[raider.tierIndex];
+  const spec = BOAT_SPECS[raider.tier.type];
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const a = Math.random() * Math.PI * 2;
+    const r = isl.radius + 260 + Math.random() * 260;
+    const guess = new THREE.Vector3(isl.position.x + Math.cos(a) * r, 0, isl.position.z + Math.sin(a) * r);
+    const spot = findOpenWaterNear(guess, spec.length * 0.7, 240);
+    if (spot && spot.distanceTo(playerMesh.position) > 400) {
+      raider.home.copy(spot);
+      raider.group.position.set(spot.x, boatSurfaceY(raider.group), spot.z);
+      break;
+    }
+  }
+  raider.hp = raider.maxHp;
+  raider.alive = true;
+  raider.sinkT = 0;
+  raider.yaw = Math.random() * Math.PI * 2;
+  raider.group.rotation.set(0, raider.yaw, 0);
+  raider.group.userData.body.rotation.set(0, 0, 0);
+  raider.group.visible = true;
+  raider.reload = 2 + Math.random() * 2;
+  raider.wanderTarget = null;
+  drawRaiderHealth(raider);
+}
+
+function setupSeaCombat() {
+  if (seaCombatReady || !islands.length || !scene) return;
+  seaCombatReady = true;
+  cannonballGeo = new THREE.SphereGeometry(0.9, 10, 8);
+  cannonballMat = new THREE.MeshStandardMaterial({ color: 0x1d1f24, roughness: 0.35, metalness: 0.6 });
+  RAIDER_TIERS.forEach((tier, tierIndex) => {
+    if (!islands[tierIndex]) return;
+    const count = tierIndex === 0 ? 1 : 2;
+    for (let n = 0; n < count; n += 1) {
+      const group = createBoat(tier.type, { sailColor: "#2a1414", emblem: "#d23b2e", flagColor: 0xb3261e });
+      group.userData.isRaider = true;
+      const bar = makeRaiderHealthBar();
+      bar.position.set(0, BOAT_SPECS[tier.type].depth * 6 + 8, 0);
+      group.add(bar);
+      scene.add(group);
+      const raider = { group, bar, tier, tierIndex, maxHp: tier.hp, hp: tier.hp, alive: true, yaw: 0, speed: 0, reload: 3, home: new THREE.Vector3(), wanderTarget: null, sinkT: 0, respawn: 0 };
+      spawnRaider(raider);
+      seaRaiders.push(raider);
+    }
+  });
+}
+
+function raiderAhead(raider, dist) {
+  const p = raider.group.position;
+  return { x: p.x + Math.sin(raider.yaw) * dist, z: p.z + Math.cos(raider.yaw) * dist };
+}
+
+function steerRaider(raider, target, dt, speedFactor) {
+  const spec = raider.group.userData.spec;
+  const p = raider.group.position;
+  let want = Math.atan2(target.x - p.x, target.z - p.z);
+  // Look ahead; turn away from land.
+  const probe = raiderAhead(raider, spec.length * 0.6 + 30);
+  if (!boatSpotIsWater(probe.x, probe.z, spec.beam * 0.4)) {
+    const left = raider.yaw + 0.9;
+    const pl = { x: p.x + Math.sin(left) * 60, z: p.z + Math.cos(left) * 60 };
+    want = boatSpotIsWater(pl.x, pl.z, 4) ? left : raider.yaw - 0.9;
+    raider.wanderTarget = null;
+  }
+  let diff = want - raider.yaw;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+  const turn = Math.sign(diff) * Math.min(Math.abs(diff), 0.9 * dt);
+  raider.yaw += turn;
+  const targetSpeed = raider.tier.speed * speedFactor;
+  raider.speed += (targetSpeed - raider.speed) * Math.min(1, dt * 0.8);
+  const nx = p.x + Math.sin(raider.yaw) * raider.speed * dt;
+  const nz = p.z + Math.cos(raider.yaw) * raider.speed * dt;
+  const front = { x: nx + Math.sin(raider.yaw) * spec.length * 0.5, z: nz + Math.cos(raider.yaw) * spec.length * 0.5 };
+  if (boatSpotIsWater(front.x, front.z, spec.beam * 0.3)) {
+    p.x = nx;
+    p.z = nz;
+  } else {
+    raider.speed *= 0.3;
+  }
+  raider.group.rotation.y = raider.yaw;
+  animateBoat(raider.group, dt, raider.speed, Math.sign(turn) * Math.min(1, Math.abs(turn) / (0.9 * dt + 1e-6)));
+}
+
+function fireCannonball(from, to, damage, owner, raider) {
+  const flat = Math.hypot(to.x - from.x, to.z - from.z);
+  const time = Math.max(0.6, flat / 190);
+  const vel = new THREE.Vector3(
+    (to.x - from.x) / time,
+    (to.y - from.y + 0.5 * CANNON_GRAVITY * time * time) / time,
+    (to.z - from.z) / time,
+  );
+  const mesh = new THREE.Mesh(cannonballGeo, cannonballMat);
+  mesh.position.copy(from);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  cannonballs.push({ mesh, vel, damage, owner, raider, life: time + 1.5 });
+  // Muzzle flash and smoke
+  const flash = glowSprite(0xffb347, 7, 0.9, getStarTexture());
+  flash.position.copy(from);
+  scene.add(flash);
+  let f = 0;
+  const fade = () => {
+    f += 1;
+    flash.material.opacity = Math.max(0, 0.9 - f * 0.12);
+    flash.scale.multiplyScalar(1.06);
+    if (f < 8) requestAnimationFrame(fade); else { scene.remove(flash); flash.material.dispose(); }
+  };
+  requestAnimationFrame(fade);
+}
+
+// Where a raider will be when a ball fired now lands.
+function raiderLeadPoint(raider) {
+  const p = raider.group.position;
+  const flight = Math.max(0.6, Math.hypot(p.x - playerMesh.position.x, p.z - playerMesh.position.z) / 190);
+  return p.clone().add(new THREE.Vector3(Math.sin(raider.yaw), 0, Math.cos(raider.yaw)).multiplyScalar(raider.speed * flight));
+}
+
+// True when a point is inside a ship's hull outline (a box along its length), with a little slack.
+function pointHitsShip(point, shipPos, yaw, spec, slack = 3) {
+  const dx = point.x - shipPos.x;
+  const dz = point.z - shipPos.z;
+  const along = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+  const across = dx * Math.cos(yaw) - dz * Math.sin(yaw);
+  return Math.abs(along) < spec.length * 0.5 + slack && Math.abs(across) < spec.beam * 0.5 + slack && point.y < shipPos.y + spec.depth * 3;
+}
+
+function nearestRaider(maxDist) {
+  let best = null;
+  let bestD = maxDist;
+  seaRaiders.forEach((r) => {
+    if (!r.alive) return;
+    const d = r.group.position.distanceTo(playerMesh.position);
+    if (d < bestD) { bestD = d; best = r; }
+  });
+  return best;
+}
+
+// The spot on the sea (or the raider ship) under the pointer.
+var cannonRaycaster = null;
+function cannonAimFromPointer(x, y) {
+  if (!camera || !renderer) return null;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+  cannonRaycaster = cannonRaycaster || new THREE.Raycaster();
+  cannonRaycaster.setFromCamera(ndc, camera);
+  const ships = seaRaiders.filter((r) => r.alive).map((r) => r.group);
+  const hit = cannonRaycaster.intersectObjects(ships, true)[0];
+  if (hit) {
+    let node = hit.object;
+    while (node && !node.userData.isRaider) node = node.parent;
+    if (node) return node.position.clone();
+  }
+  const sea = new THREE.Plane(new THREE.Vector3(0, 1, 0), -OCEAN_SURFACE_Y);
+  const point = new THREE.Vector3();
+  return cannonRaycaster.ray.intersectPlane(sea, point) ? point : null;
+}
+
+// Fired with left click, R or the Attack button while at the helm.
+function fireBoatCannons(event) {
+  if (!activeBoat || playerCannonReload > 0) return;
+  const cfg = BOAT_CANNONS[activeBoat.userData.boatType] || BOAT_CANNONS.dinghy;
+  const spec = activeBoat.userData.spec;
+  // Aim at the clicked spot when it is water within range, else at the nearest raider, else straight ahead.
+  let aim = event && event.clientX !== undefined ? cannonAimFromPointer(event.clientX, event.clientY) : null;
+  if (aim && aim.distanceTo(activeBoat.position) > CANNON_RANGE * 1.3) aim = null;
+  const target = nearestRaider(CANNON_RANGE);
+  if (!aim && target) aim = raiderLeadPoint(target);
+  if (!aim) aim = activeBoat.position.clone().add(new THREE.Vector3(Math.sin(boatYaw), 0, Math.cos(boatYaw)).multiplyScalar(160));
+  aim.y = OCEAN_SURFACE_Y;
+  const toAim = new THREE.Vector3(aim.x - activeBoat.position.x, 0, aim.z - activeBoat.position.z).normalize();
+  const side = new THREE.Vector3(Math.cos(boatYaw), 0, -Math.sin(boatYaw));
+  const sideSign = side.dot(toAim) >= 0 ? 1 : -1;
+  for (let i = 0; i < cfg.balls; i += 1) {
+    const along = (i - (cfg.balls - 1) / 2) * spec.length * 0.2;
+    const from = activeBoat.position.clone()
+      .addScaledVector(side, sideSign * spec.beam * 0.5)
+      .add(new THREE.Vector3(Math.sin(boatYaw) * along, spec.depth + 1.5, Math.cos(boatYaw) * along));
+    const spread = new THREE.Vector3((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6);
+    pendingCannonShots.push({ delay: i * 0.11, from, to: aim.clone().add(spread), damage: Math.round(cfg.damage * cannonDamageBonus()) });
+  }
+  playerCannonReload = cfg.reload;
+  audio.playShot();
+  cameraShake = Math.max(cameraShake, 0.35);
+  if (!target && !seaCombatHintShown) {
+    seaCombatHintShown = true;
+    log("Cannons fire at the spot you click, or at the nearest raider ship. Raiders patrol the waters around every island.");
+  }
+}
+var seaCombatHintShown = false;
+var pendingCannonShots = [];
+
+function sinkRaider(raider) {
+  raider.alive = false;
+  raider.sinkT = 0;
+  raider.respawn = 75;
+  player.money += raider.tier.money;
+  addXp(raider.tier.xp);
+  addMasteryXp?.("gun", 40);
+  audio.playQuestComplete();
+  const pos = raider.group.position.clone().add(new THREE.Vector3(0, 14, 0));
+  createFloatingText(pos, `${tr("Raider sunk!")} +$${raider.tier.money} +${raider.tier.xp} XP`, "#ffd25a");
+  log(`${tr("Raider sunk!")} +$${raider.tier.money}, +${raider.tier.xp} XP.`);
+  updateHud();
+}
+
+function updateCannonballs(dt) {
+  for (let i = cannonballs.length - 1; i >= 0; i -= 1) {
+    const b = cannonballs[i];
+    b.vel.y -= CANNON_GRAVITY * dt;
+    b.mesh.position.addScaledVector(b.vel, dt);
+    b.life -= dt;
+    let hit = false;
+    if (b.owner === "player") {
+      for (const r of seaRaiders) {
+        if (!r.alive) continue;
+        if (pointHitsShip(b.mesh.position, r.group.position, r.yaw, r.group.userData.spec)) {
+          r.hp -= b.damage;
+          createFloatingText(b.mesh.position.clone().add(new THREE.Vector3(0, 4, 0)), `-${b.damage}`, "#ffb347");
+          createSplashEffect(b.mesh.position.clone());
+          audio.playImpact();
+          drawRaiderHealth(r);
+          if (r.hp <= 0) sinkRaider(r);
+          hit = true;
+          break;
+        }
+      }
+    } else if (isHelming && activeBoat) {
+      if (pointHitsShip(b.mesh.position, activeBoat.position, boatYaw, activeBoat.userData.spec)) {
+        createSplashEffect(b.mesh.position.clone());
+        damagePlayer(b.damage, "Raider cannon");
+        hit = true;
+      }
+    }
+    if (!hit && b.mesh.position.y <= OCEAN_SURFACE_Y) {
+      createSplashEffect(b.mesh.position.clone());
+      hit = true;
+    }
+    if (hit || b.life <= 0) {
+      scene.remove(b.mesh);
+      cannonballs.splice(i, 1);
+    }
+  }
+}
+
+function updateSeaCombat(dt) {
+  if (!gameStarted) return;
+  if (!seaCombatReady) setupSeaCombat();
+  playerCannonReload = Math.max(0, playerCannonReload - dt);
+  for (let i = pendingCannonShots.length - 1; i >= 0; i -= 1) {
+    const s = pendingCannonShots[i];
+    s.delay -= dt;
+    if (s.delay <= 0) {
+      pendingCannonShots.splice(i, 1);
+      if (activeBoat) fireCannonball(s.from, s.to, s.damage, "player");
+    }
+  }
+  updateCannonballs(dt);
+  const helmPos = isHelming && activeBoat ? activeBoat.position : null;
+  seaRaiders.forEach((raider) => {
+    const g = raider.group;
+    if (!raider.alive) {
+      if (raider.sinkT < 5) {
+        raider.sinkT += dt;
+        g.position.y -= dt * 3.2;
+        g.userData.body.rotation.z = Math.min(1.1, g.userData.body.rotation.z + dt * 0.3);
+        if (raider.sinkT >= 5) g.visible = false;
+      }
+      raider.respawn -= dt;
+      if (raider.respawn <= 0) spawnRaider(raider);
+      return;
+    }
+    const distToPlayer = helmPos ? g.position.distanceTo(helmPos) : Infinity;
+    // Skip far-away raiders that nobody can see; they wait where they are.
+    if (!helmPos && g.position.distanceTo(playerMesh.position) > 1600) return;
+    if (distToPlayer < 380) {
+      // Circle the player at cannon range and fire.
+      const toPlayer = Math.atan2(helmPos.x - g.position.x, helmPos.z - g.position.z);
+      const orbit = toPlayer + (distToPlayer > 170 ? 0.5 : 1.45);
+      const target = { x: g.position.x + Math.sin(orbit) * 100, z: g.position.z + Math.cos(orbit) * 100 };
+      steerRaider(raider, target, dt, 0.85);
+      raider.reload -= dt;
+      if (raider.reload <= 0 && distToPlayer < CANNON_RANGE) {
+        raider.reload = 2.6 + Math.random() * 1.2;
+        const spec = g.userData.spec;
+        const lead = new THREE.Vector3(Math.sin(boatYaw), 0, Math.cos(boatYaw)).multiplyScalar(boatVelocity * 1.1);
+        const aim = helmPos.clone().add(lead).add(new THREE.Vector3((Math.random() - 0.5) * 22, 0, (Math.random() - 0.5) * 22));
+        aim.y = OCEAN_SURFACE_Y + 1;
+        const from = g.position.clone().add(new THREE.Vector3(0, spec.depth + 2, 0));
+        fireCannonball(from, aim, raider.tier.damage, "raider", raider);
+        audio.playShot();
+      }
+    } else {
+      // Patrol near home.
+      if (!raider.wanderTarget || g.position.distanceTo(raider.wanderTarget) < 40) {
+        const a = Math.random() * Math.PI * 2;
+        raider.wanderTarget = raider.home.clone().add(new THREE.Vector3(Math.cos(a) * 180, 0, Math.sin(a) * 180));
+      }
+      steerRaider(raider, raider.wanderTarget, dt, 0.45);
+    }
+  });
+}
+
+// ── 42-move-effects.js ─ Parry and executions, block pose, running style, water effects,
+//    take-off/landing dust and activation effects for abilities, level-ups and quests.
+
+var PARRY_WINDOW_MS = 280;      // block this soon before a blow lands to parry it
+var EXECUTE_THRESHOLD = 0.1;    // parrying an enemy below 10% health executes it
+
+// ===== Shared effect helpers =====
+function puffSprite(color, size, opacity = 0.7) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getGlowTexture(), color, transparent: true, opacity, depthWrite: false,
+  }));
+  sprite.scale.setScalar(size);
+  return sprite;
+}
+
+function flatRing(color, opacity = 0.8, thin = false) {
+  const geo = fxGeometry(thin ? "flatRingThin" : "flatRing", () => {
+    const g = new THREE.RingGeometry(thin ? 0.93 : 0.82, 1, 48);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  });
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+}
+
+function expandingRing(position, color, from, to, life, opacity = 0.8, thin = false) {
+  const ring = flatRing(color, opacity, thin);
+  ring.position.copy(position);
+  addTimedEffect(ring, life, (mesh, p) => {
+    mesh.scale.setScalar(from + (to - from) * (1 - (1 - p) ** 2));
+    mesh.material.opacity = opacity * (1 - p);
+  });
+  return ring;
+}
+
+// Small balls thrown up that fall back under gravity (droplets, debris, confetti).
+function burstParticles(origin, count, color, opts = {}) {
+  const geo = fxGeometry(opts.flat ? "confetti" : "droplet", () => (opts.flat ? new THREE.PlaneGeometry(0.6, 0.35) : new THREE.SphereGeometry(0.28, 6, 4)));
+  for (let i = 0; i < count; i += 1) {
+    const c = Array.isArray(color) ? color[i % color.length] : color;
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1, side: THREE.DoubleSide, depthWrite: false }));
+    const a = Math.random() * Math.PI * 2;
+    const out = (opts.spread || 10) * (0.4 + Math.random() * 0.6);
+    const vel = new THREE.Vector3(Math.cos(a) * out, (opts.up || 22) * (0.6 + Math.random() * 0.6), Math.sin(a) * out);
+    const spin = new THREE.Vector3(Math.random() * 8, Math.random() * 8, Math.random() * 8);
+    mesh.position.copy(origin);
+    const size = (opts.size || 1) * (0.6 + Math.random() * 0.7);
+    mesh.scale.setScalar(size);
+    const floor = opts.floor ?? -Infinity;
+    addTimedEffect(mesh, opts.life || 0.9, (m, p, dt) => {
+      vel.y -= (opts.gravity || 60) * dt;
+      m.position.addScaledVector(vel, dt);
+      if (m.position.y < floor) { m.position.y = floor; vel.set(0, 0, 0); }
+      if (opts.flat) { m.rotation.x += spin.x * dt; m.rotation.y += spin.y * dt; m.rotation.z += spin.z * dt; }
+      m.material.opacity = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
+    });
+  }
+}
+
+function groundDustColor() {
+  const island = typeof getIslandUnderPlayer === "function" ? getIslandUnderPlayer() : null;
+  return [0xb7a27a, 0x7d6a48, 0xc7ad80, 0xe6cf93, 0xf4f8fb][island?.index ?? 0] ?? 0xb7a27a;
+}
+
+function dustPuff(position, size = 3, color = groundDustColor(), drift = null) {
+  const puff = puffSprite(color, size, 0.55);
+  puff.position.copy(position);
+  const d = drift || new THREE.Vector3((Math.random() - 0.5) * 4, 2.5, (Math.random() - 0.5) * 4);
+  addTimedEffect(puff, 0.6, (m, p, dt) => {
+    m.position.addScaledVector(d, dt);
+    m.scale.setScalar(size * (1 + p * 1.4));
+    m.material.opacity = 0.55 * (1 - p);
+  });
+}
+
+// ===== Parry and executions =====
+PLAYER_ACTIONS.parry = {
+  dur: 0.42, blendIn: 0.04, blendOut: 0.2, events: { clash: 0.12 },
+  keys: [
+    { t: 0.12, ease: "out", rAx: -1.75, rAz: -0.55, rF: -0.6, rH: 0.4, lAx: -1.1, lAz: 0.35, lF: -1.6, yaw: 0.35, tX: -0.12, hX: -0.1, dip: 0.35 },
+    { t: 0.45, ease: "smooth", rAx: -0.9, rAz: 0.6, rF: -0.4, lAx: -0.6, lF: -1.2, yaw: -0.4, tX: 0.08, lunge: 0.4, dip: 0.25 },
+    { t: 0.8, rAx: -0.7, rF: -0.9, lAx: -0.6, lF: -1.4, yaw: 0, dip: 0.2 },
+  ],
+};
+
+PLAYER_ACTIONS.execute = {
+  dur: 0.62, blendIn: 0.05, blendOut: 0.25, events: { impact: 0.5 },
+  keys: [
+    { t: 0.25, ease: "smooth", rAx: -2.6, rAz: 0.3, rF: -0.5, lAx: -2.2, lAz: -0.3, lF: -0.6, tX: -0.3, hX: -0.15, rise: 1.4, yaw: 0.2 },
+    { t: 0.5, ease: "out", rAx: 0.5, rAz: -0.1, rF: -0.05, lAx: 0.3, lF: -0.2, tX: 0.55, lunge: 2.2, dip: 0.6, yaw: -0.15 },
+    { t: 0.85, rAx: 0.2, rF: -0.3, lAx: 0.1, tX: 0.35, dip: 0.45 },
+  ],
+};
+
+function parryClashPoint(attacker) {
+  const head = playerMesh.position.clone().add(new THREE.Vector3(0, 7, 0));
+  if (!attacker) return head.add(facingVector().multiplyScalar(4));
+  const to = attacker.mesh.position.clone().setY(head.y).sub(head);
+  return head.add(to.multiplyScalar(0.45));
+}
+
+function parryClashFx(point, gold) {
+  const core = glowSprite(0xffffff, 9, 1, getStarTexture());
+  core.position.copy(point);
+  addTimedEffect(core, 0.28, (m, p) => {
+    m.scale.setScalar(9 * (1 + p * 1.6));
+    m.material.opacity = 1 - p;
+    m.material.rotation = p * 1.2;
+  });
+  const halo = glowSprite(gold ? 0xffc94a : 0x9fe8ff, 16, 0.8);
+  halo.position.copy(point);
+  addTimedEffect(halo, 0.4, (m, p) => {
+    m.scale.setScalar(16 * (0.6 + p));
+    m.material.opacity = 0.8 * (1 - p);
+  });
+  const ring = new THREE.Mesh(
+    fxGeometry("parryRing", () => new THREE.TorusGeometry(1, 0.07, 6, 48)),
+    new THREE.MeshBasicMaterial({ color: 0xfff2c4, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  ring.position.copy(point);
+  ring.lookAt(camera.position);
+  addTimedEffect(ring, 0.35, (m, p) => {
+    m.scale.setScalar(1 + p * 9);
+    m.material.opacity = (1 - p) ** 1.5;
+  });
+  for (let i = 0; i < 16; i += 1) {
+    const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.9 - 0.2, Math.random() - 0.5).normalize();
+    spawnStreak(point, dir, i % 3 === 0 ? 0xffffff : 0xffc94a, 2 + Math.random() * 1.5, 55 + Math.random() * 35, 0.3, 0.14);
+  }
+}
+
+function performParry(attacker, amount) {
+  const point = parryClashPoint(attacker);
+  playPlayerAction("parry");
+  audio.playHaki();
+  audio.playImpact();
+  parryClashFx(point, true);
+  hitStopTimer = Math.max(hitStopTimer, 0.18);
+  cameraShake = Math.max(cameraShake, 0.6);
+  flashScreen("parry");
+  player.blockStartTime = -Infinity; // one parry per block press
+
+  if (!attacker) {
+    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), tr("PARRY!"), "#ffe08a");
+    return;
+  }
+  // Below 10% health: an execution.
+  if (attacker.health / attacker.maxHealth < EXECUTE_THRESHOLD) {
+    executeEnemy(attacker);
+    return;
+  }
+  createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), tr("PERFECT PARRY!"), "#ffe08a");
+  // The attacker reels back, open to a counter-attack.
+  attacker.parryStun = 1.1;
+  const anim = enemyAnimState(attacker);
+  anim.pending = null;
+  anim.attackT = -1;
+  anim.flinchT = 0.7;
+  const away = attacker.mesh.position.clone().sub(playerMesh.position).setY(0);
+  if (away.lengthSq() > 1e-4) anim.knock = away.normalize().multiplyScalar(HEAVY_ENEMY_TYPES.has(attacker.type) ? 6 : 16);
+  triggerHitFlash(attacker.mesh);
+  const dizzy = glowSprite(0xffe27a, 3, 0.9, getStarTexture());
+  addTimedEffect(dizzy, 1.1, (m, p) => {
+    const a = p * Math.PI * 6;
+    m.position.copy(attacker.mesh.position).add(new THREE.Vector3(Math.cos(a) * 3, 13 * attacker.mesh.scale.y, Math.sin(a) * 3));
+    m.material.opacity = 0.9 * (1 - p);
+  });
+  // Defense mastery 5+: part of the blow is turned back on the attacker.
+  if (player.mastery.defense >= 5 && amount > 0) {
+    const reflected = Math.round(amount * 0.4);
+    attacker.health -= reflected;
+    createFloatingText(attacker.mesh.position.clone().add(new THREE.Vector3(0, 9, 0)), `${tr("Reflected")} -${reflected}`, "#ffe08a");
+    if (attacker.health <= 0) defeatEnemy(attacker);
+  }
+}
+
+function executeEnemy(enemy) {
+  enemy.parryStun = 2;
+  const anim = enemyAnimState(enemy);
+  anim.pending = null;
+  anim.attackT = -1;
+  const toEnemy = enemy.mesh.position.clone().sub(playerMesh.position).setY(0);
+  if (toEnemy.lengthSq() > 1e-4) faceAttackDirection(toEnemy.clone().normalize(), 0.8);
+  hitStopTimer = Math.max(hitStopTimer, 0.22);
+  createFloatingText(enemy.mesh.position.clone().add(new THREE.Vector3(0, 13, 0)), tr("EXECUTION!"), "#ff5a4a");
+  playPlayerAction("execute", {
+    impact: () => {
+      if (!enemy.alive) return;
+      const hit = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+      // A crimson X slash, a shock ring and a burst of embers.
+      [0.75, -0.75].forEach((roll) => {
+        const slash = new THREE.Mesh(
+          fxGeometry("execSlash", () => new THREE.PlaneGeometry(18, 1.4)),
+          new THREE.MeshBasicMaterial({ color: 0xff3b2f, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+        );
+        slash.position.copy(hit);
+        slash.lookAt(camera.position);
+        slash.rotateZ(roll);
+        addTimedEffect(slash, 0.45, (m, p) => {
+          m.scale.set(0.3 + p * 1.2, 1 - p * 0.6, 1);
+          m.material.opacity = 1 - p;
+        });
+      });
+      parryClashFx(hit, false);
+      expandingRing(enemy.mesh.position.clone().add(new THREE.Vector3(0, 0.4, 0)), 0xff5a4a, 2, 26, 0.6, 0.9);
+      burstParticles(hit, 22, [0xff5a3a, 0xffb347, 0xffe08a], { spread: 18, up: 26, life: 0.9, size: 0.8 });
+      cameraShake = Math.max(cameraShake, 1.2);
+      flashScreen("execute");
+      audio.playImpact();
+      audio.playLevelUp();
+      enemy.health = 0;
+      defeatEnemy(enemy);
+      log(tr("Execution! A perfect parry finished the enemy off."));
+    },
+  });
+}
+
+// ===== Block pose and shield =====
+var blockShield = null;
+function applyBlockPose(model, anim, dt) {
+  const parts = model.userData.parts;
+  const blocking = player.isBlocking && !player.isSwimming && !isHelming && player.health > 0;
+  anim.blockW = THREE.MathUtils.lerp(anim.blockW || 0, blocking ? 1 : 0, 1 - Math.exp(-(blocking ? 18 : 10) * dt));
+  const w = anim.blockW;
+  if (w > 0.01) {
+    const mix = (v, to) => v + (to - v) * w;
+    const weapon = player.weapon;
+    if (weapon === "sword") {
+      // Blade held across the body.
+      parts.rightArm.rotation.x = mix(parts.rightArm.rotation.x, -1.45);
+      parts.rightArm.rotation.z = mix(parts.rightArm.rotation.z, -0.55);
+      parts.rightForearm.rotation.x = mix(parts.rightForearm.rotation.x, -1.1);
+      parts.leftArm.rotation.x = mix(parts.leftArm.rotation.x, -0.9);
+      parts.leftForearm.rotation.x = mix(parts.leftForearm.rotation.x, -1.6);
+    } else {
+      // Forearms crossed in front of the face.
+      parts.rightArm.rotation.x = mix(parts.rightArm.rotation.x, -1.55);
+      parts.rightArm.rotation.z = mix(parts.rightArm.rotation.z, -0.35);
+      parts.leftArm.rotation.x = mix(parts.leftArm.rotation.x, -1.55);
+      parts.leftArm.rotation.z = mix(parts.leftArm.rotation.z, 0.35);
+      parts.rightForearm.rotation.x = mix(parts.rightForearm.rotation.x, -1.9);
+      parts.leftForearm.rotation.x = mix(parts.leftForearm.rotation.x, -1.9);
+    }
+    parts.torso.rotation.x = mix(parts.torso.rotation.x, 0.12);
+    parts.leftShin.rotation.x = mix(parts.leftShin.rotation.x, 0.35);
+    parts.rightShin.rotation.x = mix(parts.rightShin.rotation.x, 0.35);
+  }
+  // A shimmering shield disc in front of the player.
+  if (!blockShield) {
+    const geo = new THREE.CircleGeometry(5.5, 40);
+    blockShield = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0x8fdcff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    }));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(5.5, 0.12, 6, 48), new THREE.MeshBasicMaterial({ color: 0xd8f6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    blockShield.add(rim);
+    blockShield.userData.rim = rim;
+    scene.add(blockShield);
+  }
+  const fresh = player.isBlocking && performance.now() - player.blockStartTime < PARRY_WINDOW_MS;
+  blockShield.visible = w > 0.02;
+  if (blockShield.visible) {
+    const f = facingVector();
+    blockShield.position.copy(playerMesh.position).add(new THREE.Vector3(f.x * 4.5, 6.5, f.z * 4.5));
+    blockShield.rotation.set(0, playerMesh.rotation.y, 0);
+    const pulse = 0.5 + Math.sin(performance.now() * 0.012) * 0.5;
+    blockShield.material.opacity = w * (fresh ? 0.35 : 0.12 + pulse * 0.05);
+    blockShield.material.color.setHex(fresh ? 0xffe08a : 0x8fdcff);
+    blockShield.userData.rim.material.opacity = w * (fresh ? 1 : 0.55);
+    blockShield.userData.rim.material.color.setHex(fresh ? 0xfff2c4 : 0xd8f6ff);
+    blockShield.scale.setScalar(0.7 + w * 0.3);
+  }
+}
+
+// ===== Running style and footstep dust =====
+var runFx = { stepSide: null };
+function applyRunStyle(model, anim, moving, groundSpeed, dt) {
+  const parts = model.userData.parts;
+  const grounded = isGrounded && !player.isSwimming && (anim.air || 0) < 0.3;
+  const runTarget = moving && grounded ? THREE.MathUtils.clamp((groundSpeed - 32) / 38, 0, 1) : 0;
+  anim.runW = THREE.MathUtils.lerp(anim.runW || 0, runTarget, 1 - Math.exp(-8 * dt));
+  const w = anim.runW;
+  if (w > 0.01 && !(anim.attackTimer > 0) && !(anim.blockW > 0.3)) {
+    const ph = anim.walkPhase;
+    // Lean into the run, pump the arms with bent elbows, lift the knees.
+    parts.torso.rotation.x += 0.2 * w;
+    parts.head.rotation.x = (parts.head.rotation.x || 0) - 0.12 * w;
+    const pump = Math.sin(ph + Math.PI) * 0.55 * w;
+    parts.leftArm.rotation.x += pump;
+    parts.rightArm.rotation.x -= pump;
+    parts.leftForearm.rotation.x -= 0.55 * w;
+    parts.rightForearm.rotation.x -= anim.attackTimer > 0 ? 0 : 0.55 * w;
+    parts.leftLeg.rotation.x -= Math.max(0, -Math.sin(ph)) * 0.35 * w;
+    parts.rightLeg.rotation.x -= Math.max(0, Math.sin(ph)) * 0.35 * w;
+    parts.torso.position.y += Math.abs(Math.sin(ph)) * 0.25 * w;
+  }
+  // Kick up dust with each footfall when moving fast.
+  const side = Math.sin(anim.walkPhase) > 0;
+  if (runFx.stepSide !== null && side !== runFx.stepSide && grounded && groundSpeed > 40) {
+    const footSide = side ? 1 : -1;
+    const f = facingVector();
+    const right = new THREE.Vector3(f.z, 0, -f.x);
+    const foot = playerMesh.position.clone().addScaledVector(right, footSide * 1.2).add(new THREE.Vector3(0, 0.6, 0));
+    if (playerMesh.position.y > OCEAN_SURFACE_Y + 1.2) {
+      dustPuff(foot, 2 + w * 1.5, groundDustColor(), f.clone().multiplyScalar(-6).add(new THREE.Vector3(0, 2, 0)));
+    }
+  }
+  runFx.stepSide = side;
+}
+
+// ===== Take-off and landing =====
+var moveFx = { takeoff: 0, landing: 0, wasSwimming: false, fallSpeed: 0, rippleT: 0, foamT: 0, wadeT: 0, haki: false, foresight: false, weapon: null, level: null };
+function updateMoveFx(dt) {
+  if (!gameStarted || !playerMesh) return;
+  const feet = playerMesh.position.clone().add(new THREE.Vector3(0, 0.4, 0));
+  if (jumpState.takeoffTimer > moveFx.takeoff + 0.01 && !player.isSwimming) {
+    for (let i = 0; i < 4; i += 1) {
+      const a = (i / 4) * Math.PI * 2;
+      dustPuff(feet, 2.2, groundDustColor(), new THREE.Vector3(Math.cos(a) * 7, 1.5, Math.sin(a) * 7));
+    }
+  }
+  if (jumpState.landingTimer > moveFx.landing + 0.01 && !player.isSwimming && playerMesh.position.y > OCEAN_SURFACE_Y + 1.2) {
+    const s = jumpState.landingStrength || 0.5;
+    expandingRing(feet, 0xf2ead8, 1, 6 + s * 8, 0.4, 0.45 * s + 0.2, true);
+    const count = Math.round(4 + s * 6);
+    for (let i = 0; i < count; i += 1) {
+      const a = (i / count) * Math.PI * 2;
+      dustPuff(feet, 2 + s * 2, groundDustColor(), new THREE.Vector3(Math.cos(a) * (8 + s * 8), 1 + s * 2, Math.sin(a) * (8 + s * 8)));
+    }
+  }
+  moveFx.takeoff = jumpState.takeoffTimer;
+  moveFx.landing = jumpState.landingTimer;
+  if (!player.isSwimming && !isGrounded) moveFx.fallSpeed = Math.max(0, -verticalVelocity);
+  updateWaterFx(dt);
+  updateAbilityFx();
+}
+
+// ===== Water: entry splash, swimming wake, wading ripples =====
+function waterSplashSound(size) {
+  if (!audio.enabled || !audio.ctx || typeof audio.noiseBurst !== "function") return;
+  const now = audio.ctx.currentTime;
+  audio.noiseBurst(now, 0.35 + size * 0.25, 0.12 + size * 0.12, "lowpass", 900 + size * 500, audio.ctx.destination);
+  audio.noiseBurst(now + 0.05, 0.25, 0.05 + size * 0.05, "highpass", 2500, audio.ctx.destination);
+}
+
+function waterSplash(position, size = 1) {
+  const surface = new THREE.Vector3(position.x, OCEAN_SURFACE_Y + 0.15, position.z);
+  // Crown of water thrown up around the entry point.
+  const crown = new THREE.Mesh(
+    fxGeometry("splashCrown", () => new THREE.CylinderGeometry(1.25, 1, 1, 24, 1, true)),
+    new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  crown.position.copy(surface);
+  addTimedEffect(crown, 0.55, (m, p) => {
+    const r = (1.5 + p * 4.5) * size;
+    m.scale.set(r, (6 * Math.sin(p * Math.PI)) * size + 0.1, r);
+    m.position.y = surface.y + m.scale.y / 2;
+    m.material.opacity = 0.85 * (1 - p);
+  });
+  burstParticles(surface.clone().add(new THREE.Vector3(0, 1, 0)), Math.round(18 + size * 16), [0xffffff, 0xd6f6ff, 0x9fe3f5], { spread: 9 * size, up: 26 * Math.sqrt(size), life: 1.0, gravity: 55, size: 1.1 * size, floor: OCEAN_SURFACE_Y });
+  // A column of water shooting up from the centre, then collapsing.
+  const column = new THREE.Mesh(
+    fxGeometry("splashColumn", () => new THREE.SphereGeometry(1, 12, 10)),
+    new THREE.MeshBasicMaterial({ color: 0xf4fdff, transparent: true, opacity: 0.9, depthWrite: false }),
+  );
+  column.position.copy(surface);
+  addTimedEffect(column, 0.7, (m, p) => {
+    const h = Math.sin(Math.min(1, p * 1.4) * Math.PI) * 9 * size;
+    m.scale.set(1.3 * size * (1 - p * 0.5), Math.max(0.2, h), 1.3 * size * (1 - p * 0.5));
+    m.position.y = surface.y + h * 0.5;
+    m.material.opacity = 0.9 * (1 - p * p);
+  });
+  // White foam left on the surface.
+  const foam = new THREE.Mesh(
+    fxGeometry("splashFoam", () => { const g = new THREE.CircleGeometry(1, 28); g.rotateX(-Math.PI / 2); return g; }),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  foam.position.copy(surface).add(new THREE.Vector3(0, 0.05, 0));
+  addTimedEffect(foam, 2.2, (m, p) => {
+    m.scale.setScalar((3 + p * 6) * size);
+    m.material.opacity = 0.55 * (1 - p);
+  });
+  const mist = puffSprite(0xf2fcff, 11 * size, 0.6);
+  mist.position.copy(surface).add(new THREE.Vector3(0, 2, 0));
+  addTimedEffect(mist, 0.8, (m, p) => {
+    m.scale.setScalar(11 * size * (1 + p));
+    m.position.y = surface.y + 2 + p * 3;
+    m.material.opacity = 0.6 * (1 - p);
+  });
+  [0, 0.12, 0.26].forEach((delay, i) => {
+    setTimeout(() => expandingRing(surface, 0xffffff, 2 * size, (12 + i * 5) * size, 1.1, 0.7 - i * 0.15), delay * 1000);
+  });
+  waterSplashSound(size);
+}
+
+function updateWaterFx(dt) {
+  if (isHelming) { moveFx.wasSwimming = false; return; }
+  const pos = playerMesh.position;
+  const swimming = player.isSwimming;
+  // Entering the water: a splash sized by how fast you were falling.
+  if (swimming && !moveFx.wasSwimming) {
+    const size = THREE.MathUtils.clamp(0.6 + moveFx.fallSpeed / 70, 0.6, 2.2);
+    waterSplash(pos, size);
+    cameraShake = Math.max(cameraShake, Math.min(0.5, size * 0.2));
+  }
+  if (!swimming && moveFx.wasSwimming) {
+    // Climbing out: water streams off.
+    burstParticles(pos.clone().add(new THREE.Vector3(0, 5, 0)), 10, [0xd6f6ff, 0xffffff], { spread: 4, up: 6, life: 0.6, size: 0.6 });
+  }
+  moveFx.wasSwimming = swimming;
+  if (swimming) moveFx.fallSpeed = 0;
+  const moving = playerMoveState.velocity.lengthSq() > 30 || (swimming && (keys.has("KeyW") || keys.has("KeyA") || keys.has("KeyS") || keys.has("KeyD")));
+  const surface = new THREE.Vector3(pos.x, OCEAN_SURFACE_Y + 0.12, pos.z);
+  moveFx.rippleT -= dt;
+  moveFx.foamT -= dt;
+  if (swimming) {
+    if (moveFx.rippleT <= 0) {
+      moveFx.rippleT = moving ? 0.28 : 0.95;
+      expandingRing(surface, 0xffffff, 2, moving ? 7 : 9, moving ? 0.9 : 1.6, moving ? 0.5 : 0.35, true);
+    }
+    if (moving && moveFx.foamT <= 0) {
+      moveFx.foamT = 0.12;
+      const f = facingVector();
+      const side = new THREE.Vector3(f.z, 0, -f.x).multiplyScalar((Math.random() - 0.5) * 3);
+      const foam = puffSprite(0xffffff, 2.4, 0.6);
+      foam.position.copy(surface).addScaledVector(f, -2).add(side).add(new THREE.Vector3(0, 0.4, 0));
+      addTimedEffect(foam, 0.9, (m, p) => {
+        m.scale.setScalar(2.4 * (1 + p * 1.5));
+        m.material.opacity = 0.6 * (1 - p);
+      });
+      // Arm strokes throw a few drops.
+      if (Math.random() < 0.35) burstParticles(surface.clone().addScaledVector(f, 2).add(new THREE.Vector3(0, 0.8, 0)), 4, 0xe8fbff, { spread: 4, up: 8, life: 0.5, size: 0.5, floor: OCEAN_SURFACE_Y });
+    }
+    return;
+  }
+  // Wading through shallow water: ripples and small splashes at the feet.
+  const wading = pos.y < OCEAN_SURFACE_Y + 1.4 && groundHeightAt(pos.x, pos.z) <= OCEAN_SURFACE_Y + 0.05;
+  if (wading && moving && isGrounded) {
+    moveFx.wadeT -= dt;
+    if (moveFx.wadeT <= 0) {
+      moveFx.wadeT = 0.2;
+      expandingRing(surface, 0xffffff, 1.5, 6, 0.8, 0.5, true);
+      burstParticles(surface.clone().add(new THREE.Vector3(0, 0.6, 0)), 5, [0xffffff, 0xd6f6ff], { spread: 5, up: 10, life: 0.5, size: 0.55, floor: OCEAN_SURFACE_Y });
+    }
+  }
+}
+
+// ===== Activation effects for abilities, weapons, level-ups and quests =====
+function auraBurst(color, ringColor, power = 1) {
+  const center = playerMesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+  const flash = glowSprite(color, 14 * power, 0.9);
+  flash.position.copy(center);
+  addTimedEffect(flash, 0.5, (m, p) => { m.scale.setScalar(14 * power * (0.6 + p)); m.material.opacity = 0.9 * (1 - p); });
+  expandingRing(playerMesh.position.clone().add(new THREE.Vector3(0, 0.5, 0)), ringColor, 2, 22 * power, 0.6, 0.85);
+  for (let i = 0; i < 14; i += 1) {
+    const a = (i / 14) * Math.PI * 2;
+    spawnStreak(center, new THREE.Vector3(Math.cos(a), 0.15 + Math.random() * 0.4, Math.sin(a)), ringColor, 2.4, 50, 0.35, 0.16);
+  }
+}
+
+function levelUpFx() {
+  const base = playerMesh.position.clone();
+  const pillar = new THREE.Mesh(
+    fxGeometry("lvlPillar", () => new THREE.CylinderGeometry(3.2, 3.2, 1, 24, 1, true)),
+    new THREE.MeshBasicMaterial({ color: 0xffd25a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  addTimedEffect(pillar, 1.4, (m, p) => {
+    m.position.copy(playerMesh.position).add(new THREE.Vector3(0, 0, 0));
+    const h = 40 * Math.min(1, p * 3);
+    m.scale.set(1 - p * 0.4, h, 1 - p * 0.4);
+    m.position.y += h / 2;
+    m.material.opacity = 0.6 * (1 - p);
+  });
+  [0, 0.2, 0.4].forEach((d) => setTimeout(() => expandingRing(playerMesh.position.clone().add(new THREE.Vector3(0, 0.5, 0)), 0xffd25a, 2, 18, 0.9, 0.9), d * 1000));
+  for (let i = 0; i < 24; i += 1) {
+    const mote = glowSprite(i % 2 ? 0xffe08a : 0xffffff, 1.6, 1, getStarTexture());
+    const a = Math.random() * Math.PI * 2;
+    const r = 2 + Math.random() * 4;
+    addTimedEffect(mote, 1.2 + Math.random() * 0.6, (m, p) => {
+      m.position.copy(playerMesh.position).add(new THREE.Vector3(Math.cos(a + p * 4) * r, p * 26, Math.sin(a + p * 4) * r));
+      m.material.opacity = 1 - p;
+    });
+  }
+  flashScreen("level");
+}
+
+function questCompleteFx() {
+  burstParticles(playerMesh.position.clone().add(new THREE.Vector3(0, 12, 0)), 40, [0xffd25a, 0x59c7d8, 0xe0453a, 0x7be08f, 0xffffff], { flat: true, spread: 16, up: 20, gravity: 22, life: 2.2, size: 1.4 });
+  auraBurst(0xffe08a, 0xffd25a, 0.8);
+}
+
+function weaponDrawFx() {
+  const hand = playerHandWorldPosition?.("right");
+  if (!hand) return;
+  const glint = glowSprite(0xffffff, 3.5, 1, getStarTexture());
+  glint.position.copy(hand);
+  addTimedEffect(glint, 0.35, (m, p) => {
+    m.position.copy(playerHandWorldPosition("right"));
+    m.scale.setScalar(3.5 * (1 + Math.sin(p * Math.PI)));
+    m.material.opacity = 1 - p;
+    m.material.rotation = p * 3;
+  });
+}
+
+// Watches state each frame, so the effects fire however the change happened (key, button or skill).
+function updateAbilityFx() {
+  const hakiOn = !!player.haki?.active;
+  if (hakiOn && !moveFx.haki) auraBurst(0x6b3bd1, 0xb48cff, 1);
+  moveFx.haki = hakiOn;
+  const foresightOn = !!player.observationHaki?.active;
+  if (foresightOn && !moveFx.foresight) {
+    const eye = playerMesh.position.clone().add(new THREE.Vector3(0, 9, 0));
+    const ring = new THREE.Mesh(
+      fxGeometry("eyeRing", () => new THREE.TorusGeometry(1, 0.06, 6, 48)),
+      new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    ring.position.copy(eye);
+    ring.lookAt(camera.position);
+    addTimedEffect(ring, 0.7, (m, p) => { m.scale.setScalar(1 + p * 30); m.material.opacity = 1 - p; });
+    auraBurst(0x2fb7d8, 0x7fe9ff, 0.7);
+  }
+  moveFx.foresight = foresightOn;
+  if (moveFx.weapon !== null && moveFx.weapon !== player.weapon) weaponDrawFx();
+  moveFx.weapon = player.weapon;
+  if (moveFx.level !== null && player.level > moveFx.level) levelUpFx();
+  moveFx.level = player.level;
+}
+
+// Quest completion and enemy defeats get their own effects.
+var __completeQuest = completeQuest;
+completeQuest = function () { const r = __completeQuest.apply(this, arguments); questCompleteFx(); return r; };
+var __completeMajorQuest = completeMajorQuest;
+completeMajorQuest = function () { const r = __completeMajorQuest.apply(this, arguments); questCompleteFx(); return r; };
+var __defeatEnemy = defeatEnemy;
+defeatEnemy = function (enemy) {
+  const r = __defeatEnemy.apply(this, arguments);
+  if (enemy?.mesh) {
+    const at = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6, 0));
+    const big = HEAVY_ENEMY_TYPES.has(enemy.type);
+    const burst = glowSprite(big ? 0xffb347 : 0xfff0c8, big ? 16 : 8, 0.9, getStarTexture());
+    burst.position.copy(at);
+    addTimedEffect(burst, 0.4, (m, p) => { m.scale.setScalar((big ? 16 : 8) * (0.5 + p)); m.material.opacity = 0.9 * (1 - p); });
+    for (let i = 0; i < (big ? 10 : 5); i += 1) {
+      const wisp = glowSprite(0xcfe8ff, 1.8, 0.8);
+      const a = Math.random() * Math.PI * 2;
+      addTimedEffect(wisp, 1.1 + Math.random() * 0.4, (m, p) => {
+        m.position.copy(at).add(new THREE.Vector3(Math.cos(a) * (1 + p * 3), p * 14, Math.sin(a) * (1 + p * 3)));
+        m.material.opacity = 0.8 * (1 - p);
+      });
+    }
+  }
+  return r;
+};
+
+// ===== Screen flashes (styled in 57-polish.css) =====
+var screenFlashEl = null;
+function flashScreen(kind) {
+  if (!screenFlashEl) {
+    screenFlashEl = document.createElement("div");
+    screenFlashEl.className = "screen-flash";
+    screenFlashEl.setAttribute("aria-hidden", "true");
+    document.body.append(screenFlashEl);
+  }
+  screenFlashEl.className = "screen-flash";
+  void screenFlashEl.offsetWidth; // restart the animation
+  screenFlashEl.classList.add(`is-${kind}`);
+}
+
+// ===== Dash: lean pose, afterimages along the path and speed streaks =====
+PLAYER_ACTIONS["dash-lunge"] = {
+  dur: 0.3, blendIn: 0.03, blendOut: 0.2,
+  keys: [
+    { t: 0.2, ease: "out", tX: 0.45, rAx: 0.7, lAx: 0.7, rAz: 0.3, lAz: -0.3, rF: -0.3, lF: -0.3, rLx: 0.5, lLx: -0.7, lS: 0.9, dip: 0.4 },
+    { t: 1, tX: 0, rAx: -0.2, lAx: -0.2, dip: 0 },
+  ],
+};
+var __dash = dash;
+dash = function () {
+  const start = playerMesh.position.clone();
+  const before = player.dashCooldown;
+  const r = __dash.apply(this, arguments);
+  if (player.dashCooldown > before && playerMesh.position.distanceToSquared(start) > 1) {
+    const end = playerMesh.position.clone();
+    const dir = end.clone().sub(start).setY(0).normalize();
+    playPlayerAction("dash-lunge");
+    [0.25, 0.5, 0.75].forEach((f) => createFlashStepAfterimage(start.clone().lerp(end, f)));
+    for (let i = 0; i < 8; i += 1) {
+      const p = start.clone().lerp(end, Math.random()).add(new THREE.Vector3((Math.random() - 0.5) * 3, 2 + Math.random() * 8, (Math.random() - 0.5) * 3));
+      spawnStreak(p, dir.clone().negate(), 0xe8f6ff, 4 + Math.random() * 3, 30, 0.25, 0.1);
+    }
+    audio.playFlashStep?.();
+  }
+  return r;
+};
+
+// ===== Enemy swings: a visible arc as the blow lands =====
+function enemySwingFx(enemy, landed) {
+  const s = enemy.mesh.scale.y || 1;
+  const center = enemy.mesh.position.clone().add(new THREE.Vector3(0, 6 * s, 0));
+  const toPlayer = playerMesh.position.clone().sub(enemy.mesh.position).setY(0);
+  if (toPlayer.lengthSq() < 1e-4) return;
+  toPlayer.normalize();
+  const arc = new THREE.Mesh(
+    fxGeometry("enemyArc", () => new THREE.RingGeometry(4.2, 5.6, 28, 1, -Math.PI * 0.45, Math.PI * 0.9)),
+    new THREE.MeshBasicMaterial({ color: landed ? 0xff6a4a : 0xdfe7ea, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  arc.position.copy(center);
+  arc.lookAt(center.clone().add(new THREE.Vector3(0, 1, 0)));
+  arc.rotateZ(Math.atan2(toPlayer.x, toPlayer.z) - Math.PI / 2);
+  arc.scale.setScalar(s);
+  addTimedEffect(arc, 0.25, (m, p) => {
+    m.rotation.z += 0.12;
+    m.material.opacity = 0.85 * (1 - p);
+  });
+  if (landed && player.health > 0) {
+    const chest = playerMesh.position.clone().add(new THREE.Vector3(0, 6.5, 0));
+    createFistImpact(chest, toPlayer, 0.7, 0xff6a4a);
+  }
+}
+
+// ── 43-hud-polish.js ─ Health damage trail, low-health warning, level/money pops, message entrance.
+var hudPolish = { health: null, level: null, money: null, ready: false, trail: null };
+
+function setupHudPolish() {
+  if (hudPolish.ready) return;
+  const container = document.querySelector(".hud-bar-container.health");
+  if (!container) return;
+  hudPolish.ready = true;
+  // A pale bar behind the health fill that drains a moment later, showing how much was lost.
+  const trail = document.createElement("span");
+  trail.className = "hud-bar-trail";
+  container.prepend(trail);
+  hudPolish.trail = trail;
+}
+
+function retrigger(el, cls) {
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
+function updateHudPolish() {
+  setupHudPolish();
+  const frac = Math.max(0, Math.min(1, player.health / player.maxHealth));
+  if (hudPolish.trail) {
+    const trailFrac = parseFloat(hudPolish.trail.dataset.f || "1");
+    // Healing snaps the trail; damage lets it drain behind the bar.
+    hudPolish.trail.classList.toggle("is-healing", frac > trailFrac);
+    hudPolish.trail.style.transform = `scaleX(${frac.toFixed(3)})`;
+    hudPolish.trail.dataset.f = frac.toFixed(3);
+  }
+  const low = gameStarted && player.health > 0 && frac < 0.3;
+  document.body.classList.toggle("is-low-health", low);
+  document.querySelector(".hud-bar-container.health")?.classList.toggle("is-low", low);
+  if (hudPolish.level !== null && player.level > hudPolish.level) retrigger(document.getElementById("level-readout"), "is-pop");
+  hudPolish.level = player.level;
+  if (hudPolish.money !== null && player.money !== hudPolish.money) retrigger(document.getElementById("money-readout"), player.money > hudPolish.money ? "is-gain" : "is-spend");
+  hudPolish.money = player.money;
+}
+
+var __updateHud = updateHud;
+updateHud = function () {
+  const r = __updateHud.apply(this, arguments);
+  updateHudPolish();
+  return r;
+};
+
+var __log = log;
+log = function (message) {
+  const r = __log.apply(this, arguments);
+  retrigger(document.getElementById("message-log"), "is-new");
+  return r;
+};
 
 // ── 99-init.js ─ Startup sequence and closes the game closure.
 // Initialization
@@ -18186,8 +19891,11 @@ if (introSection && introButton && !introButton.dataset.ready) {
   closeButton.addEventListener("click", closeIntro);
   backdrop.addEventListener("click", closeIntro);
   // "Play the game above" inside the intro just closes the panel.
-  introSection.querySelectorAll('a[href="#game-root"]').forEach((link) => {
-    link.addEventListener("click", (event) => { event.preventDefault(); closeIntro(); });
+  // Delegated, so it keeps working when the intro text is swapped for a translation.
+  introSection.addEventListener("click", (event) => {
+    if (!event.target.closest?.('a[href="#game-root"]')) return;
+    event.preventDefault();
+    closeIntro();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && introSection.classList.contains("is-panel-open")) {

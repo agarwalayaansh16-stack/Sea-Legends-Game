@@ -1,4 +1,5 @@
 import ContentLayout from "../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
@@ -9,6 +10,47 @@ export const metadata = {
 };
 
 const updates = [
+  {
+    date: "November 22, 2026",
+    title: "Parries, executions and a new look in motion",
+    items: [
+      "Anyone can now parry: block just before a blow lands to take no damage and stagger the attacker. Parry an enemy below 10% health to execute it.",
+      "A real block pose with a shield shimmer, and a running style with a forward lean, pumping arms and dust at your feet.",
+      "Water comes alive: a big splash when you dive in, ripples and foam as you swim, and splashes when you wade through shallows.",
+      "New effects for dashes, jumps and landings, Iron Aura, Foresight, weapon switching, level-ups, quest completion, enemy swings and defeats.",
+      "Polished HUD: glossy bars with a damage trail, a pulsing warning at low health, a level badge and animated messages.",
+    ],
+  },
+  {
+    date: "November 22, 2026",
+    title: "Sea combat, world map and save backups",
+    items: [
+      "Raider ships now patrol the waters around every island. Click while at the helm to fire your cannons; sinking a raider pays money and XP.",
+      "A world map (M, or the Map button) shows the islands, your boat, raiders and your quest target, next to a quest log.",
+      "Download a backup of your progress from the Esc menu and load it on another browser or device.",
+      "Separate music and sound effect volume. Volume and graphics settings are now remembered.",
+      "Graphics lower themselves automatically if the game runs slowly (you can turn this off).",
+      "Touch screens get buttons for every unlocked skill, dash, block and trained ability.",
+    ],
+  },
+  {
+    date: "November 21, 2026",
+    title: "Translated site pages",
+    items: [
+      "The About, Contact, guide, update and legal pages now follow your language choice: English, Hindi, Spanish, French or Portuguese.",
+      "A language menu at the bottom of every page. The choice is shared with the game.",
+    ],
+  },
+  {
+    date: "November 20, 2026",
+    title: "Rebuilt boats",
+    items: [
+      "New boat models with curved hulls, filled sails, flags in your faction's colours and a ship's wheel. The brigade has two masts and cannons.",
+      "Choosing a boat at the dock launches it at the nearest open water and puts you at the helm.",
+      "Boats no longer jump around near the shore. Running into land stops the boat, and G takes you ashore.",
+      "A new dock menu and a sailing gauge that shows your speed and heading.",
+    ],
+  },
   {
     date: "November 19, 2026",
     title: "Languages and new guides",
@@ -81,7 +123,7 @@ const updates = [
 ];
 
 export default function UpdatesPage() {
-  return <ContentLayout eyebrow="WHAT'S NEW">
+  return <Localized><ContentLayout eyebrow="WHAT'S NEW">
     <h1>Update notes</h1>
     <p className="content-lead">Sea Legends is updated regularly. This page lists what changed in each update, newest first.</p>
     {updates.map((update) => <section key={update.date} aria-labelledby={`u-${update.date}`}>
@@ -90,5 +132,5 @@ export default function UpdatesPage() {
       <ul>{update.items.map((item) => <li key={item}>{item}</li>)}</ul>
     </section>)}
     <p><a className="content-button" href="/#game-root">Play the latest version</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

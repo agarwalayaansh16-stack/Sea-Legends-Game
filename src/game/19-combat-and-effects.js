@@ -1,7 +1,10 @@
 
 // ── 19-combat-and-effects.js ─ Attacks, projectiles, hazards and combat visual effects.
 function attack(event = null) {
-  if (!gameStarted || attackCooldown > 0) return;
+  if (!gameStarted) return;
+  // At the helm, attacking fires the ship's cannons (41-sea-combat.js).
+  if (isHelming) { fireBoatCannons(event); return; }
+  if (attackCooldown > 0) return;
   // The special weapon's basic attack is Spirit Bolt (31-combat-animations.js).
   if (player.weapon === "special") {
     castSpiritBolt(event);

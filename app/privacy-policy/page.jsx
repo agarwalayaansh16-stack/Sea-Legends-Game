@@ -1,4 +1,5 @@
 import ContentLayout from "../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function PrivacyPage() {
-  return <ContentLayout eyebrow="PRIVACY">
+  return <Localized><ContentLayout eyebrow="PRIVACY">
     <h1>Privacy policy</h1><p className="content-updated">Last updated: November 19, 2026</p>
     <p className="content-lead">This policy explains what information Sea Legends stores, what third-party services the site uses, and the choices you have.</p>
 
@@ -33,5 +34,5 @@ export default function PrivacyPage() {
 
     <h2>Changes and contact</h2>
     <p>We will update this page if the site's data practices change. For questions about privacy, use the details on the <a href="/contact">Contact page</a>.</p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

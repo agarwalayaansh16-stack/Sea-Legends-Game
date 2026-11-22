@@ -325,6 +325,10 @@ function updatePlayer(dt) {
     player.stamina = player.maxStamina;
   }
   updateBoatUi(dt);
+  updateMobileSkills();
+  updateAutoGraphics();
+  updateSeaCombat(dt);
+  updateMoveFx(dt);
   if (isHelming) {
     playerMoveState.velocity.set(0, 0, 0);
     updateBoat(dt);
@@ -752,6 +756,7 @@ function updateTeleport(dt) {
   const wasActive = homeTeleportCountdown > 0;
   homeTeleportCountdown = Math.max(0, homeTeleportCountdown - dt);
 
+  teleportStatus.classList.toggle("is-counting", homeTeleportCountdown > 0);
   if (homeTeleportCountdown > 0) {
     teleportStatus.textContent = `Teleporting in ${Math.ceil(homeTeleportCountdown)}s...`;
     return;
@@ -994,9 +999,11 @@ function updatePlayerAnimation(dt) {
   }
 
   applyLimbBends(model, anim, moving, groundSpeed);
+  applyRunStyle(model, anim, moving, groundSpeed, dt);
   // Held weapons, combat stance and keyframed attacks/skills (31-combat-animations.js).
   updateHeldWeapons(model);
   applyPlayerActions(model, anim, dt);
+  applyBlockPose(model, anim, dt);
 
   // Squash & stretch: stretch on take-off, squash on landing.
   if (!model.userData.baseScale) model.userData.baseScale = model.scale.clone();

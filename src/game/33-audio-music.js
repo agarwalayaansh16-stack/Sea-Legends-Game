@@ -114,7 +114,7 @@ Object.assign(audio, {
     const ctx = this.ctx;
     this.musicGain = ctx.createGain();
     this.musicGain.gain.value = 0;
-    this.musicGain.connect(ctx.destination);
+    this.musicGain.connect(this.masterGain || ctx.destination);
     // Ocean: looping low noise whose level follows how close the shore is.
     this.ambienceGain = ctx.createGain();
     this.ambienceGain.gain.value = 0;
@@ -197,7 +197,7 @@ function updateMusic(dt) {
   const changing = musicState.theme !== musicState.wanted;
   const targetFade = playing && !changing ? 1 : 0;
   musicState.fade += THREE.MathUtils.clamp(targetFade - musicState.fade, -dt / 1.2, dt / 1.5);
-  audio.musicGain.gain.setTargetAtTime(musicState.fade * (night ? 0.55 : 0.8), now, 0.1);
+  audio.musicGain.gain.setTargetAtTime(musicState.fade * (night ? 0.55 : 0.8) * (audio.musicVolume ?? 1), now, 0.1);
   if (changing && musicState.fade <= 0.02) {
     musicState.theme = musicState.wanted;
     musicState.step = 0;

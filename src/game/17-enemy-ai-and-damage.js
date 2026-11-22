@@ -33,6 +33,11 @@ function updateEnemies(dt) {
     }
 
     enemy.hitTimer = Math.max(0, enemy.hitTimer - dt);
+    // Parried enemies reel for a moment and can't act (42-move-effects.js).
+    if (enemy.parryStun > 0) {
+      enemy.parryStun -= dt;
+      return;
+    }
 
     // Captain Jester split-apart animation
     if (enemy.type === "buggy" && enemy.parts) {
@@ -584,6 +589,15 @@ function damagePlayer(amount, source) {
     return 0; // Completely dodge attack!
   }
 
+  // Perfect Parry: block just before the blow lands. Anyone can parry; it takes no damage,
+  // staggers the attacker and executes it below 10% health (42-move-effects.js).
+  if (player.isBlocking && performance.now() - player.blockStartTime < PARRY_WINDOW_MS) {
+    const attacker = enemyStrikeResolving ? enemyStrikeAttacker : enemyUpdateContext;
+    addMasteryXp("defense", 12);
+    performParry(attacker && attacker.alive ? attacker : null, amount);
+    return 0;
+  }
+
   const isHeadshot = Math.random() < 0.20;
   if (isHeadshot) {
     amount = Math.round(amount * 1.5);
@@ -599,26 +613,6 @@ function damagePlayer(amount, source) {
 
   let block = player.isBlocking ? 0.45 : 1;
   let parried = false;
-
-  // Perfect Parry: Block within 0.25s of keydown
-  if (player.isBlocking && player.mastery.defense >= 5 && (performance.now() - player.blockStartTime < 250)) {
-    block = 0; // Immune!
-    parried = true;
-    createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), "PERFECT PARRY!", "#7ce0b4");
-    audio.playHaki(); // Clang sound effect
-
-    // Reflect 40% damage to closest enemy
-    const closest = enemies
-      .filter((e) => e.alive && e.mesh.position.distanceTo(playerMesh.position) < 80)
-      .sort((a, b) => a.mesh.position.distanceTo(playerMesh.position) - b.mesh.position.distanceTo(playerMesh.position))[0];
-    if (closest) {
-      const reflectedDmg = Math.round(amount * 0.4);
-      closest.health -= reflectedDmg;
-      triggerHitFlash(closest.mesh);
-      createFloatingText(closest.mesh.position.clone().add(new THREE.Vector3(0, 8, 0)), `Reflected -${reflectedDmg}`, "#7ce0b4");
-      if (closest.health <= 0) defeatEnemy(closest);
-    }
-  }
 
   const haki = player.haki.active ? Math.max(0.35, 1 - player.haki.level * 0.1) : 1;
   const finalDamage = Math.max(0, Math.round(amount * block * haki));
@@ -637,6 +631,7 @@ function damagePlayer(amount, source) {
   player.health = Math.max(0, player.health - finalDamage);
   cameraShake = Math.max(cameraShake, finalDamage / 25);
   if (finalDamage > 0) {
+    flashScreen("hurt");
     if (isHeadshot) {
       createFloatingText(playerMesh.position.clone().add(new THREE.Vector3(0, 10, 0)), `HEADSHOT! -${finalDamage}`, "#ff3333");
       log(`⚠️ HEADSHOT! Taken 1.5x damage from ${source || "an enemy"}.`);

@@ -97,9 +97,11 @@
           <div><button type="button" data-touch-key="KeyA" aria-label="Move left">◀</button><button type="button" data-touch-key="KeyS" aria-label="Move backward">▼</button><button type="button" data-touch-key="KeyD" aria-label="Move right">▶</button></div>
         </div>
         <div class="mobile-actions" aria-label="Actions">
+          <div id="mobile-skills" class="mobile-skills" aria-label="Skills"></div>
           <button type="button" data-touch-action="attack" aria-label="Attack">Attack</button>
           <button type="button" data-touch-action="jump" aria-label="Jump">Jump</button>
           <button type="button" data-touch-action="interact" aria-label="Interact">Interact</button>
+          <button type="button" data-touch-action="map" aria-label="World map">Map</button>
           <div class="mobile-weapons" aria-label="Select weapon">
             <button type="button" data-touch-weapon="melee" aria-label="Select melee">1</button>
             <button type="button" data-touch-weapon="sword" aria-label="Select sword">2</button>
@@ -310,6 +312,7 @@
               <span id="multiplayer-status" role="status" aria-live="polite">Multiplayer offline</span>
               <button id="multiplayer-open" type="button">Servers</button>
             </div>
+            <button id="map-open" class="map-open-btn" type="button" aria-label="Open world map (M)">🗺 Map</button>
             <label class="toggle">
               <input id="controls-toggle" type="checkbox" checked>
               <span>Controls</span>
@@ -444,6 +447,29 @@
 
         <button id="boat-board" class="boat-board hidden" type="button"><kbd>G</kbd><span>Board your boat</span></button>
 
+        <section id="world-map" class="world-map hidden" role="dialog" aria-modal="true" aria-labelledby="world-map-title">
+          <div class="world-map-panel">
+            <header class="world-map-head">
+              <div>
+                <p class="world-map-eyebrow">First Sea</p>
+                <h2 id="world-map-title">World Map</h2>
+              </div>
+              <span class="world-map-hint"><kbd>M</kbd> <span>Close</span></span>
+              <button id="world-map-close" class="world-map-close" type="button" aria-label="Close map">✕</button>
+            </header>
+            <div class="world-map-body">
+              <div class="world-map-canvas-wrap"><canvas id="world-map-canvas" width="960" height="680" aria-label="Map of the First Sea"></canvas></div>
+              <aside class="quest-log" aria-labelledby="quest-log-title">
+                <h3 id="quest-log-title">Quest Log</h3>
+                <div id="quest-log-list"></div>
+              </aside>
+            </div>
+            <footer class="world-map-legend">
+              <span><i class="lg-you"></i>You</span><span><i class="lg-boat"></i>Your boat</span><span><i class="lg-quest"></i>Quest target</span><span><i class="lg-raider"></i>Raider ship</span>
+            </footer>
+          </div>
+        </section>
+
         <div id="sail-hud" class="sail-hud hidden" aria-live="off">
           <div class="sail-hud-top">
             <span class="sail-hud-icon" aria-hidden="true">⚓</span>
@@ -452,7 +478,8 @@
           </div>
           <div class="sail-speed"><span id="sail-speed-value">0</span><small>knots</small></div>
           <div class="sail-bar"><i id="sail-speed-fill"></i></div>
-          <div class="sail-keys"><span><kbd>W</kbd><kbd>S</kbd> Sail</span><span><kbd>A</kbd><kbd>D</kbd> Steer</span></div>
+          <div class="sail-cannon"><span>Cannons</span><div class="sail-cannon-bar"><i id="sail-cannon-fill"></i></div></div>
+          <div class="sail-keys"><span><kbd>W</kbd><kbd>S</kbd> Sail</span><span><kbd>A</kbd><kbd>D</kbd> Steer</span><span><kbd>Click</kbd> Fire</span></div>
           <button id="sail-ashore" class="sail-ashore" type="button"><kbd>G</kbd> Go ashore</button>
         </div>
 
@@ -519,6 +546,12 @@
                 <input id="graphics-quality-slider" type="range" min="1" max="5" value="5" step="1">
               </div>
               <small class="esc-help">Low levels disable shadows and lower resolution to boost performance.</small>
+              <div class="esc-row">
+                <label class="toggle">
+                  <input id="esc-auto-graphics" type="checkbox" checked>
+                  <span>Lower graphics automatically if the game runs slowly</span>
+                </label>
+              </div>
             </div>
 
             <div class="esc-section">
@@ -530,6 +563,31 @@
                 </div>
                 <input id="volume-slider" type="range" min="0" max="100" value="50" step="5">
               </div>
+              <div class="esc-row volume-slider-row">
+                <div>
+                  <span>Music</span>
+                  <strong id="music-volume-val">100%</strong>
+                </div>
+                <input id="music-volume-slider" type="range" min="0" max="100" value="100" step="5">
+              </div>
+              <div class="esc-row volume-slider-row">
+                <div>
+                  <span>Sound effects</span>
+                  <strong id="effects-volume-val">100%</strong>
+                </div>
+                <input id="effects-volume-slider" type="range" min="0" max="100" value="100" step="5">
+              </div>
+            </div>
+
+            <div class="esc-section">
+              <h3>Save backup</h3>
+              <small class="esc-help">Your progress lives in this browser only. Download a backup file to keep it safe or to move it to another browser or device.</small>
+              <div class="esc-row save-backup-row">
+                <button id="save-export" class="save-backup-btn" type="button">Download backup</button>
+                <button id="save-import" class="save-backup-btn" type="button">Load backup</button>
+                <input id="save-import-file" type="file" accept=".json,application/json" hidden>
+              </div>
+              <p id="save-backup-status" class="save-backup-status" role="status"></p>
             </div>
 
             <div class="esc-section">

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import Script from "next/script";
+import HomeLocalized from "./home-localized";
 import { siteUrl } from "./site-config";
 
 export const metadata = {
@@ -64,6 +65,7 @@ export default function Home() {
         suppressHydrationWarning
       />
       <main className="home-content" aria-labelledby="home-title">
+        <HomeLocalized>
         <div className="home-content-inner">
           <p className="content-eyebrow">A FREE BROWSER GAME</p>
           <h1 id="home-title">Explore the First Sea in Sea Legends</h1>
@@ -111,7 +113,7 @@ export default function Home() {
 
           <section aria-labelledby="boats-title">
             <h2 id="boats-title">Boats, travel and inventory</h2>
-            <p>The Boat Dealer at the Starter Island dock lets you summon a dinghy, a sailor boat or a brigade to sail between islands. Teleporter pads offer a faster route once you have reached the right level. Your inventory keeps your melee styles, swords, guns, special abilities and items in separate tabs, and its mastery tab shows how far each fighting style has progressed.</p>
+            <p>The Boat Dealer at the Starter Island dock launches a dinghy, a sailor boat or a brigade at the nearest open water and puts you at the helm, ready to sail between islands. Teleporter pads offer a faster route once you have reached the right level. Your inventory keeps your melee styles, swords, guns, special abilities and items in separate tabs, and its mastery tab shows how far each fighting style has progressed.</p>
           </section>
 
           <section aria-labelledby="controls-title">
@@ -140,6 +142,7 @@ export default function Home() {
             <a href="/about">About Sea Legends</a><a href="/game-guide">Game Guide</a><a href="/privacy-policy">Privacy Policy</a><a href="/terms">Terms &amp; Conditions</a><a href="/disclaimer">Disclaimer</a><a href="/contact">Contact</a>
           </nav>
         </div>
+        </HomeLocalized>
       </main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData() }} />
       <Script src="/game.js" strategy="afterInteractive" />

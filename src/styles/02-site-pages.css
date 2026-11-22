@@ -27,6 +27,8 @@
 .site-footer-nav { display: flex; flex-wrap: wrap; gap: 10px 20px; }
 .site-footer-nav a { color: #edf5f4; text-underline-offset: 3px; }
 .site-footer p { grid-column: 1 / -1; margin: 0; color: #b6c8cc; font-size: .88rem; }
+.site-footer-language { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 10px; justify-self: start; color: #b6c8cc; font-size: .88rem; font-weight: 700; }
+.site-footer-language select { padding: 6px 30px 6px 12px; color: #edf5f4; font: 700 .9rem "Inter", sans-serif; border: 1px solid rgba(255,214,122,.4); border-radius: 999px; background: #0b2433 url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M0 0l5 6 5-6z%27 fill=%27%23f2c14e%27/%3E%3C/svg%3E") no-repeat right 12px center; appearance: none; cursor: pointer; }
 .ad-reservation { min-height: 290px; max-width: 970px; margin: 32px auto; padding: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(255,255,255,.025); }
 .ad-label { display: block; margin-bottom: 8px; color: #b6c8cc; font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; }
 .ad-unit { min-height: 250px; }

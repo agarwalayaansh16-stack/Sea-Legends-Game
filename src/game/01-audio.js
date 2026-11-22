@@ -14,12 +14,16 @@ const audio = {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      // Sound effects get their own level; music connects to masterGain directly.
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.setValueAtTime(this.effectsVolume ?? 1, this.ctx.currentTime);
+      this.sfxGain.connect(this.masterGain);
       
       const originalConnect = AudioNode.prototype.connect;
       const self = this;
       AudioNode.prototype.connect = function(destination, output, input) {
         if (destination === self.ctx.destination) {
-          return originalConnect.call(this, self.masterGain, output, input);
+          return originalConnect.call(this, self.sfxGain, output, input);
         }
         return originalConnect.call(this, destination, output, input);
       };
@@ -29,6 +33,10 @@ const audio = {
     } catch (e) {
       console.warn("Web Audio API not supported", e);
     }
+  },
+  setEffectsVolume(val) {
+    this.effectsVolume = clamp(val, 0, 1);
+    if (this.sfxGain && this.ctx) this.sfxGain.gain.setValueAtTime(this.effectsVolume, this.ctx.currentTime);
   },
   setVolume(val) {
     this.volume = clamp(val, 0, 1);

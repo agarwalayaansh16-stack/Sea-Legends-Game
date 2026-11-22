@@ -1,4 +1,5 @@
 import ContentLayout from "../../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../../site-config";
 
 export const metadata = {
@@ -9,12 +10,12 @@ export const metadata = {
 };
 
 export default function EnemyGuidePage() {
-  return <ContentLayout eyebrow="BESTIARY">
+  return <Localized><ContentLayout eyebrow="BESTIARY">
     <h1>Enemies and bosses</h1>
     <p className="content-lead">Each island in the First Sea has its own enemies, and three of them guard a boss. This guide explains how each enemy fights and how to beat it. Health values are each enemy's starting health before your weapon and stat bonuses are applied.</p>
 
     <h2>How enemies fight</h2>
-    <p>Enemies notice you when you come close and chase you down. Before an ordinary melee strike, an enemy raises its weapon and a <strong>red flash</strong> appears above its head. The blow lands just under half a second later, and only if you are still in reach, so stepping back, dashing (<kbd>Q</kbd>) or blocking (<kbd>F</kbd>) at the right moment avoids the damage completely. Blocking just before a hit lands is a <strong>Perfect Parry</strong> once your defense mastery is high enough, and reflects part of the damage back.</p>
+    <p>Enemies notice you when you come close and chase you down. Before an ordinary melee strike, an enemy raises its weapon and a <strong>red flash</strong> appears above its head. The blow lands just under half a second later, and only if you are still in reach, so stepping back, dashing (<kbd>Q</kbd>) or blocking (<kbd>F</kbd>) at the right moment avoids the damage completely. Blocking (<kbd>F</kbd>) about a quarter of a second before the blow lands is a <strong>Perfect Parry</strong>: you take no damage and the enemy reels back, open to a counter-attack. Parry an enemy that is below 10% health and you <strong>execute</strong> it on the spot, bosses included.</p>
     <p>Your hits make enemies flinch and stagger backwards, which can interrupt their approach. Heavy enemies (brutes and bosses) are not pushed back. Defeated enemies fall over and come back a few seconds later; bosses take 45 seconds to return.</p>
 
     <h2>Regular enemies</h2>
@@ -60,5 +61,5 @@ export default function EnemyGuidePage() {
       <li>If you are defeated, you respawn at the Starter Island dock with your progress intact.</li>
     </ul>
     <p><a className="content-button" href="/#game-root">Play Sea Legends</a> <a href="/guides/islands">Island guide</a> · <a href="/guides/weapons-and-skills">Weapons and skills</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

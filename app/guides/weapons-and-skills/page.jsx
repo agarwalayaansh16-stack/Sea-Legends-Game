@@ -1,4 +1,5 @@
 import ContentLayout from "../../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function WeaponsGuidePage() {
-  return <ContentLayout eyebrow="COMBAT GUIDE">
+  return <Localized><ContentLayout eyebrow="COMBAT GUIDE">
     <h1>Weapons and skills</h1>
     <p className="content-lead">Sea Legends has four fighting styles: fists, sword, gun and special abilities. Each one levels up separately through <strong>mastery</strong>, which you earn by landing hits with that style. Higher mastery unlocks passive bonuses and active skills.</p>
 
@@ -57,7 +58,7 @@ export default function WeaponsGuidePage() {
     <h2>Defense</h2>
     <p>Defense is a stat rather than a weapon, but it has mastery bonuses too. Hold <kbd>F</kbd> to block.</p>
     <ul>
-      <li><strong>Perfect Parry</strong> (mastery 5): blocking within 0.2 seconds of a hit reflects 40% of the damage back to the attacker.</li>
+      <li><strong>Perfect Parry</strong> (everyone): block about a quarter of a second before a blow lands to take no damage and stagger the attacker. An attacker below 10% health is executed instantly. From mastery 5, a parry also reflects 40% of the damage back.</li>
       <li><strong>Iron Bastion</strong> (mastery 20): while blocking, you slowly regenerate 3.5 health per second.</li>
     </ul>
 
@@ -69,5 +70,5 @@ export default function WeaponsGuidePage() {
       <li><strong>Foresight</strong> (<kbd>K</kbd>): from the Foresight Master in Snowy Village, level 80, $7,500. Automatically dodges a limited number of attacks, recharging one dodge every few seconds.</li>
     </ul>
     <p><a className="content-button" href="/#game-root">Play Sea Legends</a> <a href="/guides/islands">Island guide</a> · <a href="/guides/enemies-and-bosses">Enemy and boss guide</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

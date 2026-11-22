@@ -1,0 +1,120 @@
+/* ── 56-features.css ─ Mobile skill bar, save backup, world map and quest log, sea combat HUD. */
+
+/* Mobile skill bar */
+.mobile-skills { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; max-width: min(360px, 62vw); }
+.mobile-skills:empty { display: none; }
+#mobile-controls .mobile-skill {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  min-width: 52px;
+  min-height: 46px;
+  padding: 4px 6px;
+  overflow: hidden;
+  border-color: rgba(var(--gold-rgb), .5);
+  background: linear-gradient(180deg, rgba(10, 32, 48, .9), rgba(5, 16, 25, .92));
+}
+#mobile-controls .mobile-skill kbd { font: 900 .9rem "Outfit", "Inter", sans-serif; color: var(--gold-bright); }
+#mobile-controls .mobile-skill span { max-width: 64px; overflow: hidden; font-size: .56rem; font-weight: 700; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+#mobile-controls .mobile-skill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: bottom;
+  transform: scaleY(var(--cd, 0));
+  background: rgba(0, 0, 0, .58);
+  pointer-events: none;
+}
+#mobile-controls .mobile-skill.is-on { border-color: var(--sea-bright); box-shadow: 0 0 0 2px rgba(var(--sea-rgb), .45), 0 0 18px rgba(var(--sea-rgb), .35); }
+body.is-sailing #mobile-skills { display: none; }
+@media (max-width: 420px) and (pointer: coarse) { #mobile-controls .mobile-skill { min-width: 46px; min-height: 42px; } }
+
+/* Save backup */
+.save-backup-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.save-backup-btn {
+  flex: 1 1 140px;
+  padding: 10px 14px;
+  font: 800 .85rem "Outfit", "Inter", sans-serif;
+  color: var(--paper);
+  border: 1px solid rgba(var(--gold-rgb), .45);
+  border-radius: 12px;
+  background: rgba(var(--gold-rgb), .12);
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+.save-backup-btn:hover { background: rgba(var(--gold-rgb), .24); transform: translateY(-1px); }
+.save-backup-status { min-height: 1.2em; margin: 6px 0 0; font-size: .78rem; color: var(--sea-bright); }
+.save-backup-status.is-error { color: var(--coral); }
+
+/* World map and quest log */
+.mobile-actions { grid-template-columns: repeat(4, auto); }
+.map-open-btn { min-height: 36px; padding: 7px 12px; border: 1px solid rgba(var(--gold-rgb), .5); border-radius: 10px; color: var(--gold-bright); background: rgba(var(--gold-rgb), .12); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; pointer-events: auto; }
+.map-open-btn:hover { background: rgba(var(--gold-rgb), .25); }
+.world-map { position: fixed; inset: 0; z-index: 20500; display: grid; place-items: center; padding: 18px; background: rgba(2, 10, 16, .62); backdrop-filter: blur(6px); pointer-events: auto; animation: wm-fade .25s ease both; }
+.world-map.hidden { display: none; }
+@keyframes wm-fade { from { opacity: 0; } }
+.world-map-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid rgba(var(--gold-rgb), .32);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(10, 32, 48, .96), rgba(5, 16, 25, .98));
+  box-shadow: 0 30px 100px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .07);
+  animation: wm-rise .4s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes wm-rise { from { opacity: 0; transform: translateY(16px) scale(.98); } }
+.world-map-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px 10px; }
+.world-map-head > div { flex: 1; }
+.world-map-eyebrow { margin: 0; font-size: .68rem; font-weight: 800; letter-spacing: .3em; text-transform: uppercase; color: var(--sea-bright); }
+.world-map-head h2 { margin: 2px 0 0; font: 900 1.5rem "Outfit", "Inter", sans-serif; background: linear-gradient(180deg, var(--gold-bright), var(--gold) 60%, var(--gold-deep)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.world-map-hint { font-size: .78rem; color: var(--text-muted); }
+.world-map-hint kbd { padding: 1px 6px; border-radius: 6px; font: 800 .72rem Inter, sans-serif; color: var(--paper); background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); }
+.world-map-close { width: 38px; height: 38px; border: 1px solid rgba(var(--paper-rgb), .2); border-radius: 50%; color: var(--paper); background: rgba(255,255,255,.06); font-size: 1rem; cursor: pointer; }
+.world-map-close:hover { background: rgba(255,255,255,.14); }
+.world-map-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; min-height: 0; padding: 0 20px; }
+.world-map-canvas-wrap { min-height: 0; overflow: hidden; border: 1px solid rgba(var(--sea-rgb), .3); border-radius: 18px; background: #0b3048; }
+#world-map-canvas { display: block; width: 100%; height: auto; max-height: calc(100vh - 190px); object-fit: contain; }
+.quest-log { min-height: 0; max-height: calc(100vh - 190px); overflow-y: auto; padding-right: 4px; color: var(--paper); }
+.quest-log h3 { margin: 0 0 6px; font: 800 1rem "Outfit", "Inter", sans-serif; color: var(--gold-bright); }
+.quest-log h4 { margin: 14px 0 6px; font-size: .68rem; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); }
+.quest-log-empty { margin: 0; font-size: .82rem; color: var(--text-muted); }
+.quest-log-item { position: relative; display: grid; gap: 2px; margin-bottom: 8px; padding: 10px 12px; border: 1px solid rgba(var(--paper-rgb), .1); border-radius: 14px; background: rgba(255,255,255,.035); animation: wm-rise .35s ease both; }
+.quest-log-item strong { font: 800 .92rem "Outfit", "Inter", sans-serif; }
+.quest-log-item span { font-size: .72rem; font-weight: 700; color: var(--sea-bright); }
+.quest-log-item p { margin: 2px 0 0; font-size: .78rem; line-height: 1.35; color: var(--text-muted); }
+.quest-log-item small { font-size: .74rem; font-weight: 800; color: var(--gold); }
+.quest-log-item.is-active { border-color: rgba(var(--gold-rgb), .6); background: linear-gradient(180deg, rgba(var(--gold-rgb), .14), rgba(var(--gold-rgb), .04)); }
+.quest-log-item.is-locked { opacity: .55; }
+.quest-log-item.is-done strong::after { content: " ✓"; color: #7be08f; }
+.quest-log-progress { display: block; height: 6px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.08); }
+.quest-log-progress::after { content: ""; display: block; height: 100%; transform-origin: left; transform: scaleX(var(--p)); background: linear-gradient(90deg, var(--sea), var(--gold)); }
+.quest-log-item em { justify-self: end; font-style: normal; font-size: .72rem; font-weight: 800; color: var(--paper); }
+.world-map-legend { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 20px 16px; font-size: .76rem; color: var(--text-muted); }
+.world-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.world-map-legend i { display: inline-block; width: 12px; height: 12px; }
+.lg-you { background: #fff; clip-path: polygon(50% 100%, 100% 0, 50% 30%, 0 0); }
+.lg-boat { border-radius: 50%; background: #59c7d8; }
+.lg-quest { background: #ffd25a; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.lg-raider { background: #e0453a; clip-path: polygon(50% 100%, 100% 0, 0 0); }
+@media (max-width: 860px) {
+  .world-map { padding: 8px; }
+  .world-map-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .quest-log { max-height: none; }
+  #world-map-canvas { max-height: 48vh; }
+  .world-map-hint { display: none; }
+}
+
+/* Cannon reload bar in the sailing panel */
+.sail-cannon { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin-top: 10px; font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+.sail-cannon-bar { height: 6px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .08); }
+.sail-cannon-bar i { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, #a33a2c, #e0453a); }
+.sail-cannon-bar i.is-ready { background: linear-gradient(90deg, var(--gold), var(--gold-bright)); box-shadow: 0 0 10px rgba(var(--gold-rgb), .6); }
+
+/* Keep the top bar from overlapping on laptop-width screens: passive status texts give way. */
+@media (max-width: 1500px) {
+  #teleport-status:not(.is-counting), #multiplayer-status { display: none; }
+}

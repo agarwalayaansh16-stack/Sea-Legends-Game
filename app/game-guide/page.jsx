@@ -1,4 +1,5 @@
 import ContentLayout from "../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function GuidePage() {
-  return <ContentLayout eyebrow="PLAYER GUIDE">
+  return <Localized><ContentLayout eyebrow="PLAYER GUIDE">
     <h1>Sea Legends game guide</h1>
     <p className="content-lead">Everything you need to get started in Sea Legends: controls, factions, your first quest, combat, travel, and saving. Content and balance are updated as the game develops.</p>
 
@@ -39,12 +40,16 @@ export default function GuidePage() {
       <tr><td>H / K / T</td><td>Iron Aura / Foresight / Flash Step, once trained</td></tr>
       <tr><td>R</td><td>Attack</td></tr>
       <tr><td>G</td><td>Board or leave a boat when close to it</td></tr>
+      <tr><td>M</td><td>Open the world map and quest log</td></tr>
       <tr><td>Esc</td><td>Open or close the pause/settings menu</td></tr>
     </tbody></table></div>
-    <p>On touch screens, use the on-screen pad for movement, attack, jump, interaction, and weapon selection; drag across the scene to rotate the view. Some later skills use Z, X, C, V, or B after unlocking and still require a keyboard. With the gun on a touch screen, tap where you want to shoot, or press Attack to aim at the nearest enemy in view.</p>
+    <p>On touch screens, use the on-screen pad for movement, attack, jump, interaction, and weapon selection; drag across the scene to rotate the view. Unlocked skills, dash, block and trained abilities get their own buttons above the attack button, and the Map button opens the world map. With the gun on a touch screen, tap where you want to shoot, or press Attack to aim at the nearest enemy in view.</p>
 
     <h2>Exploration and travel</h2>
-    <p>The First Sea contains a chain of islands with different terrain and enemy groups. Use the quest compass and marker to orient yourself; the <a href="/guides/islands">island guide</a> describes each island. At a dock, interact with the Boat Dealer, choose a dinghy, sailor boat, or brigade, then approach it and press G to helm it. Use W, A, S, and D to steer; press G again to disembark near the boat.</p>
+    <p>The First Sea contains a chain of islands with different terrain and enemy groups. Use the quest compass and marker to orient yourself; the <a href="/guides/islands">island guide</a> describes each island. At the dock, talk to the Boat Dealer and choose a dinghy, sailor boat, or brigade. It launches at the nearest open water and you take the helm straight away. W and S sail forward and back, A and D steer, and G takes you ashore. When you are near your boat again, press G or the Board button to climb back aboard. Press M, or the Map button in the top bar, for a world map that shows the islands, your boat and your quest target, next to a quest log of current, available and upcoming quests.</p>
+
+    <h2>Sea combat</h2>
+    <p>Raider ships patrol the waters around every island. While you are at the helm, click to fire your cannons at the spot you click or at the nearest raider (on touch screens, press Attack). A dinghy fires one ball per volley, a sailor boat two and a brigade three. Raiders circle you and fire back, so keep moving. Sinking one pays money and XP; raiders near harder islands are tougher and pay more, and sunk raiders return after a while.</p>
 
     <h2>Combat and enemies</h2>
     <p>Select melee, sword, or gun with 1, 2, or 3, then attack with a left click or R. Clicking again quickly chains attacks into a combo: jab, cross, hook and uppercut with fists, or three sword slashes. The gun fires at the spot under your cursor and scores a 1.5× headshot when you click an enemy's head; bullets stop at walls, trees and rocks.</p>
@@ -60,10 +65,10 @@ export default function GuidePage() {
     <p>If multiplayer is enabled for the site, entering the game connects you to an available First Sea server. Use <strong>Servers</strong> in the in-game settings bar to see room occupancy or join another server. Each room holds at most ten players. Players in the same room can see each other's avatars and movement. Enemies, combat, quest progress, currency, inventory, and saves are still independent in each browser. If multiplayer is not configured or the service is offline, the game remains playable in local mode.</p>
 
     <h2>Saves and profiles</h2>
-    <p>Profile names, avatar selections, and game progress are kept in this browser’s local storage. They do not sync to a server and cannot be recovered through email. Use the same browser profile to continue. Clearing site data or using a different browser or device can remove or hide progress. Do not enter real passwords or sensitive personal information.</p>
+    <p>Profile names, avatar selections, and game progress are kept in this browser’s local storage. They do not sync to a server and cannot be recovered through email. Use the same browser profile to continue. Clearing site data or using a different browser or device can remove or hide progress. Do not enter real passwords or sensitive personal information. To keep your progress safe or move it to another browser or device, open the Esc menu, choose <strong>Download backup</strong>, then use <strong>Load backup</strong> on the other device.</p>
 
     <h2>Language, music and settings</h2>
-    <p>The game can be played in English, Hindi, Spanish, French or Portuguese. Choose a language on the loading screen or with the language menu in the top bar; your choice is remembered in this browser. The top bar also has switches for background music, the controls panel and the quest panel, and the Esc menu holds graphics quality and volume settings.</p>
+    <p>The game can be played in English, Hindi, Spanish, French or Portuguese. Choose a language on the loading screen, with the language menu in the top bar, or at the bottom of these pages; your choice is remembered in this browser and applies to the game and the site. The top bar also has switches for background music, the controls panel and the quest panel, and the Esc menu holds graphics quality, which lowers itself if the game runs slowly unless you turn that off, plus separate volume, music and sound effect levels. These settings are remembered in this browser.</p>
 
     <h2>Troubleshooting</h2>
     <ul>
@@ -73,5 +78,5 @@ export default function GuidePage() {
       <li><strong>Slow or unstable rendering:</strong> close other graphics-heavy tabs and lower the graphics quality in the in-game settings.</li>
     </ul>
     <p><a className="content-button" href="/#game-root">Play Sea Legends</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

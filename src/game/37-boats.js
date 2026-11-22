@@ -138,8 +138,8 @@ function createBoatSail(width, height, color, emblem) {
   return sail;
 }
 
-function createBoat(type) {
-  const spec = BOAT_SPECS[type] || BOAT_SPECS.dinghy;
+function createBoat(type, look = null) {
+  const spec = look?.spec || BOAT_SPECS[type] || BOAT_SPECS.dinghy;
   const boat = new THREE.Group();
   boat.userData.boatType = BOAT_SPECS[type] ? type : "dinghy";
   boat.userData.spec = spec;
@@ -227,9 +227,9 @@ function createBoat(type) {
 
   // Masts, yards and sails.
   const faction = String(player?.faction || "");
-  const sailColor = faction.startsWith("Marine") ? "#f4f1ea" : faction.startsWith("Pirate") ? "#2b2a2f" : "#efe3c8";
-  const emblem = faction.startsWith("Marine") ? "#2f6db3" : faction.startsWith("Pirate") ? "#efe6d6" : null;
-  const flagColor = faction.startsWith("Marine") ? 0x2f6db3 : faction.startsWith("Pirate") ? 0x141414 : 0xc23b2e;
+  const sailColor = look?.sailColor || (faction.startsWith("Marine") ? "#f4f1ea" : faction.startsWith("Pirate") ? "#2b2a2f" : "#efe3c8");
+  const emblem = look?.emblem || (faction.startsWith("Marine") ? "#2f6db3" : faction.startsWith("Pirate") ? "#efe6d6" : null);
+  const flagColor = look?.flagColor ?? (faction.startsWith("Marine") ? 0x2f6db3 : faction.startsWith("Pirate") ? 0x141414 : 0xc23b2e);
   const mastSpots = spec.masts === 2 ? [0.12, -0.16] : spec.masts === 1 ? [0.06] : [];
   mastSpots.forEach((f, idx) => {
     const mastH = spec.depth * (idx === 0 ? 5.2 : 4.4);
@@ -550,6 +550,7 @@ function updateBoatUi(dt) {
       fill: document.getElementById("sail-speed-fill"),
       heading: document.getElementById("sail-heading"),
       ashore: document.getElementById("sail-ashore"),
+      cannon: document.getElementById("sail-cannon-fill"),
     };
     boatUiRefs.board?.addEventListener("click", () => { if (gameStarted && !isHelming) toggleHelm(); });
     boatUiRefs.ashore?.addEventListener("click", () => { if (gameStarted && isHelming) unhelmBoat(); });
@@ -571,6 +572,12 @@ function updateBoatUi(dt) {
   if (refs.speed && refs.speed.textContent !== String(knots)) refs.speed.textContent = String(knots);
   if (refs.fill) refs.fill.style.transform = `scaleX(${Math.min(1, Math.abs(boatVelocity) / spec.maxSpeed).toFixed(3)})`;
   refs.hud.classList.toggle("is-reversing", boatVelocity < -1);
+  if (refs.cannon && typeof BOAT_CANNONS !== "undefined") {
+    const cfg = BOAT_CANNONS[activeBoat.userData.boatType] || BOAT_CANNONS.dinghy;
+    const ready = 1 - Math.min(1, playerCannonReload / cfg.reload);
+    refs.cannon.style.transform = `scaleX(${ready.toFixed(3)})`;
+    refs.cannon.classList.toggle("is-ready", ready >= 1);
+  }
   if (refs.heading) {
     const deg = ((Math.atan2(Math.sin(boatYaw), -Math.cos(boatYaw)) * 180) / Math.PI + 360) % 360;
     const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];

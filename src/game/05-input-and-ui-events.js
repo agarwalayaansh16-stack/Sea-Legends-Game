@@ -186,6 +186,10 @@ window.addEventListener("keydown", (event) => {
   if (code === "KeyE") {
     interact();
   }
+  if (code === "KeyM") {
+    event.preventDefault();
+    toggleWorldMap();
+  }
   if (code === "Digit1") setWeapon("melee");
   if (code === "Digit2") setWeapon("sword");
   if (code === "Digit3") setWeapon("gun");
@@ -311,6 +315,7 @@ document.querySelectorAll("#mobile-controls [data-touch-action]").forEach((butto
     if (button.dataset.touchAction === "attack") attack(player.weapon === "gun" || player.weapon === "special" ? { autoAim: true } : null);
     if (button.dataset.touchAction === "jump") jump();
     if (button.dataset.touchAction === "interact") interact();
+    if (button.dataset.touchAction === "map") toggleWorldMap();
   });
 });
 

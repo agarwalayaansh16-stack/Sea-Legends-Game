@@ -10,6 +10,7 @@
 
 let enemyUpdateContext = null;   // the enemy whose AI is running right now
 let enemyStrikeResolving = false; // true while a wound-up strike is being applied
+let enemyStrikeAttacker = null;   // the enemy whose wound-up strike is being applied
 
 const ENEMY_WINDUP = 0.42;        // seconds between the wind-up starting and the blow landing
 const ENEMY_ATTACK_DURATION = 0.8;
@@ -139,9 +140,13 @@ function updateEnemyAnimations(dt) {
         anim.pending = null;
         if (group.position.distanceTo(playerMesh.position) <= strike.reach && player.health > 0) {
           enemyStrikeResolving = true;
-          try { damagePlayer(strike.amount, strike.source); } finally { enemyStrikeResolving = false; }
+          enemyStrikeAttacker = enemy;
+          let dealt;
+          try { dealt = damagePlayer(strike.amount, strike.source); } finally { enemyStrikeResolving = false; enemyStrikeAttacker = null; }
+          enemySwingFx(enemy, dealt !== 0);
           updateHud();
         } else {
+          enemySwingFx(enemy, false);
           createFloatingText(group.position.clone().add(new THREE.Vector3(0, 10, 0)), "Miss", "#cfd8dc");
         }
       }

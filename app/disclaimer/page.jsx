@@ -1,4 +1,5 @@
 import ContentLayout from "../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function DisclaimerPage() {
-  return <ContentLayout eyebrow="DISCLAIMER">
+  return <Localized><ContentLayout eyebrow="DISCLAIMER">
     <h1>Disclaimer</h1><p className="content-updated">Last updated: November 19, 2026</p>
     <p className="content-lead">Sea Legends is a free browser game made for entertainment. Please read this disclaimer together with the <a href="/terms">Terms &amp; Conditions</a> and the <a href="/privacy-policy">Privacy Policy</a>.</p>
 
@@ -33,5 +34,5 @@ export default function DisclaimerPage() {
 
     <h2>Contact</h2>
     <p>If you notice a mistake in a guide or have a question about this disclaimer, use the details on the <a href="/contact">Contact page</a>.</p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

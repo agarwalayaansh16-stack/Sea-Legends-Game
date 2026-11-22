@@ -1,4 +1,5 @@
 import ContentLayout from "../content-layout";
+import Localized from "./localized";
 import { siteUrl } from "../site-config";
 
 export const metadata = {
@@ -9,7 +10,7 @@ export const metadata = {
 };
 
 export default function AboutPage() {
-  return <ContentLayout eyebrow="ABOUT THE PROJECT">
+  return <Localized><ContentLayout eyebrow="ABOUT THE PROJECT">
     <h1>About Sea Legends</h1>
     <p className="content-lead">Sea Legends is a free browser-based 3D action RPG built around island exploration, character customization, and quest-driven combat, with optional multiplayer world servers.</p>
     <h2>Choose a faction and make an avatar</h2>
@@ -23,5 +24,5 @@ export default function AboutPage() {
     <h2>Local profiles and saves</h2>
     <p>Profile names, avatars, and progress are saved in your current browser, so no sign-up is needed. Because saves are local, they don't sync across devices. Sea Legends is actively developed, and features and balance are updated over time.</p>
     <p><a className="content-button" href="/#game-root">Open the game</a> <a href="/game-guide">Read the player guide</a></p>
-  </ContentLayout>;
+  </ContentLayout></Localized>;
 }

@@ -1,0 +1,131 @@
+/* ── 57-polish.css ─ HUD polish: richer bars, badges, panel entrances, screen flashes, low-health warning. */
+
+/* ---------- Health / energy / XP bars ---------- */
+.hud-bar-container {
+  height: 24px !important;
+  border: 1px solid rgba(var(--gold-rgb), .35) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, rgba(2, 10, 16, .85), rgba(6, 22, 32, .9)) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06) !important;
+}
+.hud-bar-container .hud-bar-fill { position: relative; z-index: 1; }
+.hud-bar-container.health .hud-bar-fill {
+  background: linear-gradient(180deg, #5ff0a6 0%, #2fc27f 45%, #1f9a64 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 12px rgba(95, 240, 166, .35) !important;
+}
+.hud-bar-container.energy .hud-bar-fill {
+  background: linear-gradient(180deg, #7fd0ff 0%, #3d9be6 45%, #2a6fc4 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 12px rgba(127, 208, 255, .35) !important;
+}
+/* Glossy sweep across the bars */
+.hud-bar-container .hud-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .35) 45%, transparent 60%) no-repeat;
+  background-size: 250% 100%;
+  animation: hud-sheen 4.5s ease-in-out infinite;
+}
+.hud-bar-container.energy .hud-bar-fill::after { animation-delay: 1.2s; }
+@keyframes hud-sheen { 0%, 55% { background-position: 140% 0; } 100% { background-position: -120% 0; } }
+/* Damage trail: drains a moment after a hit */
+.hud-bar-trail {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transform-origin: left;
+  background: linear-gradient(180deg, #fff2c4, #f0a85a);
+  opacity: .85;
+  transition: transform .7s cubic-bezier(.2, .8, .2, 1) .28s;
+}
+.hud-bar-trail.is-healing { transition: none; }
+.hud-bar-label { z-index: 2; letter-spacing: .04em; text-shadow: 0 1px 2px rgba(0, 0, 0, .9), 0 0 6px rgba(0, 0, 0, .6) !important; }
+.hud-bar-container.health.is-low { animation: hud-low 1s ease-in-out infinite; }
+.hud-bar-container.health.is-low .hud-bar-fill { background: linear-gradient(180deg, #ff8a6a 0%, #e0453a 50%, #a8231b 100%) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 14px rgba(224, 69, 58, .55) !important; }
+@keyframes hud-low { 50% { box-shadow: 0 0 0 2px rgba(224, 69, 58, .55), 0 0 22px rgba(224, 69, 58, .55); } }
+
+.hud-xp-wrap { height: 14px !important; width: 220px !important; border: 1px solid rgba(var(--gold-rgb), .3) !important; }
+#xp-bar { display: block; height: 100%; background: linear-gradient(90deg, #8b5cf6, #c084fc 55%, #f0abfc) !important; box-shadow: 0 0 12px rgba(192, 132, 252, .55); transition: width .45s cubic-bezier(.2, .8, .2, 1); }
+.hud-xp-text { font-size: 9px !important; letter-spacing: .06em; }
+
+/* ---------- Money and level badge ---------- */
+.hud-money { font-family: "Outfit", "Inter", sans-serif; letter-spacing: .01em; }
+.hud-money.is-gain { animation: money-gain .6s cubic-bezier(.2, .8, .2, 1); }
+.hud-money.is-spend { animation: money-spend .5s ease; }
+@keyframes money-gain { 30% { transform: scale(1.18) translateY(-2px); color: #fff3c4; text-shadow: 0 0 16px rgba(var(--gold-rgb), .9); } }
+@keyframes money-spend { 30% { transform: translateX(-3px); color: #ffb5a6; } 60% { transform: translateX(3px); } }
+.hud-level {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid rgba(var(--gold-rgb), .55);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(var(--gold-rgb), .28), rgba(var(--gold-rgb), .08));
+  font-family: "Outfit", "Inter", sans-serif;
+  font-size: 13px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8) !important;
+}
+.hud-level.is-pop { animation: level-pop .9s cubic-bezier(.2, .8, .2, 1); }
+@keyframes level-pop {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.35); box-shadow: 0 0 0 6px rgba(var(--gold-rgb), .35), 0 0 30px rgba(var(--gold-rgb), .8); background: rgba(var(--gold-rgb), .6); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- HUD buttons ---------- */
+.nav-btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(var(--gold-rgb), .28) !important;
+  background: linear-gradient(180deg, rgba(14, 40, 58, .92), rgba(6, 20, 30, .95)) !important;
+  letter-spacing: .08em;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease !important;
+}
+.nav-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .16) 50%, transparent 65%) no-repeat;
+  background-size: 250% 100%;
+  background-position: 140% 0;
+  transition: background-position .5s ease;
+  pointer-events: none;
+}
+.nav-btn:hover { transform: translateY(-2px); border-color: rgba(var(--gold-rgb), .7) !important; box-shadow: 0 8px 18px rgba(0, 0, 0, .4), 0 0 14px rgba(var(--gold-rgb), .2) !important; }
+.nav-btn:hover::after { background-position: -120% 0; }
+.nav-btn:active { transform: translateY(0) scale(.97); }
+.top-left-menu-btn { transition: transform .16s ease, box-shadow .16s ease; }
+.top-left-menu-btn:hover { transform: rotate(-4deg) scale(1.05); box-shadow: 0 0 16px rgba(var(--gold-rgb), .35); }
+
+/* ---------- Panels: quest card, message log, combat panel, compass ---------- */
+.quest-card { position: relative; overflow: hidden; box-shadow: 0 14px 34px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .06) !important; }
+.quest-card::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--gold-rgb), .7), transparent); }
+.message-log.is-new { animation: log-in .45s cubic-bezier(.2, .8, .2, 1); }
+@keyframes log-in { from { opacity: 0; transform: translateX(18px); } }
+.combat-hud { box-shadow: 0 18px 40px rgba(0, 0, 0, .42), 0 0 0 1px rgba(var(--gold-rgb), .18) !important; }
+.combat-weapon-icon { filter: drop-shadow(0 0 8px rgba(var(--gold-rgb), .55)); }
+.skill-row-glow .skill-key { box-shadow: 0 0 12px rgba(var(--gold-rgb), .45); }
+
+/* ---------- Screen flashes (parry, execution, damage, level up) ---------- */
+.screen-flash { position: fixed; inset: 0; z-index: 9000; pointer-events: none; opacity: 0; }
+.screen-flash.is-hurt { background: radial-gradient(ellipse at center, transparent 55%, rgba(200, 20, 20, .55) 100%); animation: flash-fade .45s ease-out; }
+.screen-flash.is-parry { background: radial-gradient(circle at center, rgba(255, 236, 170, .55), rgba(255, 210, 90, .12) 45%, transparent 70%); animation: flash-fade .35s ease-out; }
+.screen-flash.is-execute { background: radial-gradient(circle at center, rgba(255, 255, 255, .7), rgba(255, 70, 50, .35) 40%, rgba(120, 0, 0, .45) 100%); animation: flash-fade .7s ease-out; }
+.screen-flash.is-level { background: radial-gradient(circle at center bottom, rgba(255, 214, 90, .45), transparent 65%); animation: flash-fade 1.1s ease-out; }
+@keyframes flash-fade { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Low health: a slow red pulse around the screen edges */
+body.is-low-health::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 8999;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(170, 10, 10, .42) 100%);
+  animation: low-pulse 1.2s ease-in-out infinite;
+}
+@keyframes low-pulse { 50% { opacity: .45; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-bar-container .hud-bar-fill::after, .hud-bar-container.health.is-low, body.is-low-health::after, .message-log.is-new { animation: none !important; }
+}

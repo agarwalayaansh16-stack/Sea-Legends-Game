@@ -84,8 +84,11 @@ if (introSection && introButton && !introButton.dataset.ready) {
   closeButton.addEventListener("click", closeIntro);
   backdrop.addEventListener("click", closeIntro);
   // "Play the game above" inside the intro just closes the panel.
-  introSection.querySelectorAll('a[href="#game-root"]').forEach((link) => {
-    link.addEventListener("click", (event) => { event.preventDefault(); closeIntro(); });
+  // Delegated, so it keeps working when the intro text is swapped for a translation.
+  introSection.addEventListener("click", (event) => {
+    if (!event.target.closest?.('a[href="#game-root"]')) return;
+    event.preventDefault();
+    closeIntro();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && introSection.classList.contains("is-panel-open")) {
