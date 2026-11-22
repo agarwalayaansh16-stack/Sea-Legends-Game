@@ -407,6 +407,13 @@ body[data-weapon="gun"] #game {
 .loading-card > :nth-child(5) { animation-delay: 0s; }
 .loading-card > :nth-child(6) { animation-delay: 1.45s; }
 .loading-card > :nth-child(7) { animation-delay: 1.6s; }
+/* The tagline and loading status slide up without starting transparent, so the page has
+   visible text from its very first frame. */
+.loading-card > :nth-child(3), .loading-card > :nth-child(5) { animation-name: loading-up-soft; }
+@keyframes loading-up-soft {
+  from { transform: translateY(22px); }
+  to { transform: none; }
+}
 @keyframes loading-up {
   from { opacity: 0; transform: translateY(22px); }
   to { opacity: 1; transform: none; }

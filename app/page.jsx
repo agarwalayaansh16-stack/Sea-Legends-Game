@@ -145,7 +145,19 @@ export default function Home() {
         </HomeLocalized>
       </main>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData() }} />
-      <Script src="/game.js" strategy="afterInteractive" />
+      {/* Start the game only after the loading screen has been painted: building the 3D world
+          is a long blocking task, and starting it earlier left the page blank to browsers
+          and to Google's PageSpeed test (NO_FCP). */}
+      <Script id="game-loader" strategy="afterInteractive">{`(function () {
+  function load() {
+    if (document.getElementById("game-script")) return;
+    var s = document.createElement("script");
+    s.id = "game-script";
+    s.src = "/game.js";
+    document.body.appendChild(s);
+  }
+  requestAnimationFrame(function () { requestAnimationFrame(function () { setTimeout(load, 60); }); });
+})();`}</Script>
     </>
   );
 }
